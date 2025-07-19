@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block title %}レポート - 工数管理システム{% endblock %}
+
+{% block page_title %}レポート・統計{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <!-- 統計カード -->
+    <div class="col-sm-6 col-xl-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div>
+                        <span class="text-muted d-block">総工数</span>
+                        <span class="h3 mb-0">{{ total_hours|default:0 }}</span>
+                        <small class="text-muted">時間</small>
+                    </div>
+                    <i class="bi bi-clock text-primary" style="font-size: 2rem;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-sm-6 col-xl-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div>
+                        <span class="text-muted d-block">アクティブプロジェクト</span>
+                        <span class="h3 mb-0">{{ total_projects }}</span>
+                        <small class="text-muted">件</small>
+                    </div>
+                    <i class="bi bi-folder text-success" style="font-size: 2rem;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-sm-6 col-xl-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div>
+                        <span class="text-muted d-block">あなたの総工数</span>
+                        <span class="h3 mb-0">{{ user_workloads.total|default:0 }}</span>
+                        <small class="text-muted">時間</small>
+                    </div>
+                    <i class="bi bi-person-clock text-info" style="font-size: 2rem;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-sm-6 col-xl-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div>
+                        <span class="text-muted d-block">あなたの工数記録数</span>
+                        <span class="h3 mb-0">{{ user_workloads.count|default:0 }}</span>
+                        <small class="text-muted">件</small>
+                    </div>
+                    <i class="bi bi-list-check text-warning" style="font-size: 2rem;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-bar-chart"></i> レポート機能
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card border">
+                            <div class="card-body text-center">
+                                <i class="bi bi-calendar-month text-primary" style="font-size: 3rem;"></i>
+                                <h6 class="mt-3">月次レポート</h6>
+                                <p class="text-muted small">月別の工数集計とプロジェクト進捗</p>
+                                <button class="btn btn-primary btn-sm" disabled>
+                                    準備中
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="card border">
+                            <div class="card-body text-center">
+                                <i class="bi bi-folder-check text-success" style="font-size: 3rem;"></i>
+                                <h6 class="mt-3">プロジェクト別レポート</h6>
+                                <p class="text-muted small">プロジェクト毎の詳細分析</p>
+                                <button class="btn btn-success btn-sm" disabled>
+                                    準備中
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="card border">
+                            <div class="card-body text-center">
+                                <i class="bi bi-people text-info" style="font-size: 3rem;"></i>
+                                <h6 class="mt-3">ユーザー別レポート</h6>
+                                <p class="text-muted small">チームメンバーの工数分析</p>
+                                <button class="btn btn-info btn-sm" disabled>
+                                    準備中
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

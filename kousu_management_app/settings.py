@@ -114,7 +114,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # カスタムユーザーモデルの指定（必須）
 AUTH_USER_MODEL = 'users.CustomUser'
 
-# ログイン・ログアウト設定
+# ログイン/ログアウト関連の設定
 LOGIN_URL = '/login/'
-LOGIN_REDIRECT_URL = '/'
+LOGIN_REDIRECT_URL = '/'  # ホームビューで権限チェック後適切にリダイレクト
 LOGOUT_REDIRECT_URL = '/login/'

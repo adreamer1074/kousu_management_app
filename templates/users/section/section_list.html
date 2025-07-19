@@ -10,6 +10,9 @@
         <a href="{% url 'users:section_create' %}" class="btn btn-sm btn-primary">
             <i class="bi bi-plus-circle"></i> 新規課作成
         </a>
+        <a href="{% url 'users:department_list' %}" class="btn btn-sm btn-secondary">
+            <i class="bi bi-building"></i> 部署管理
+        </a>
     </div>
 </div>
 {% endblock %}
@@ -33,52 +36,60 @@
                                     <th scope="col">課名</th>
                                     <th scope="col">所属部署</th>
                                     <th scope="col">課長</th>
-                                    <th scope="col">所属ユーザー数</th>
+                                    <th scope="col">所属人数</th>
                                     <th scope="col">ステータス</th>
                                     <th scope="col">操作</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% regroup sections by department as department_list %}
-                                {% for department in department_list %}
-                                    {% for section in department.list %}
-                                    <tr>
-                                        <td>
-                                            <i class="bi bi-diagram-3 me-2 text-primary"></i>
+                                {% for section in sections %}
+                                <tr>
+                                    <td>
+                                        <div>
                                             <strong>{{ section.name }}</strong>
-                                        </td>
-                                        <td>
-                                            <span class="badge bg-info">{{ section.department.name }}</span>
-                                        </td>
-                                        <td>
-                                            {% if section.manager %}
+                                            {% if section.description %}
+                                                <br>
+                                                <small class="text-muted">{{ section.description|truncatechars:50 }}</small>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'users:department_detail' section.department.pk %}">
+                                            {{ section.department.name }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        {% if section.manager %}
+                                            <a href="{% url 'users:user_detail' section.manager.pk %}">
                                                 {{ section.manager.username }}
-                                            {% else %}
-                                                <span class="text-muted">未設定</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            <span class="badge bg-secondary">{{ section.user_count }} 人</span>
-                                        </td>
-                                        <td>
-                                            {% if section.is_active %}
-                                                <span class="badge bg-success">アクティブ</span>
-                                            {% else %}
-                                                <span class="badge bg-secondary">非アクティブ</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            <div class="btn-group btn-group-sm">
-                                                <a href="{% url 'users:section_detail' section.pk %}" class="btn btn-outline-info">
-                                                    <i class="bi bi-eye"></i>
-                                                </a>
-                                                <a href="{% url 'users:section_edit' section.pk %}" class="btn btn-outline-primary">
-                                                    <i class="bi bi-pencil"></i>
-                                                </a>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted">未設定</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ section.user_count }}人</span>
+                                    </td>
+                                    <td>
+                                        {% if section.is_active %}
+                                            <span class="badge bg-success">アクティブ</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">非アクティブ</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'users:section_detail' section.pk %}" 
+                                               class="btn btn-outline-info" title="詳細">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                            <a href="{% url 'users:section_edit' section.pk %}" 
+                                               class="btn btn-outline-primary" title="編集">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
                                 {% endfor %}
                             </tbody>
                         </table>

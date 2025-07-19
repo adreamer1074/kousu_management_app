@@ -11,41 +11,48 @@
             <i class="bi bi-plus-circle"></i> 新規部署作成
         </a>
     </div>
-    <div class="btn-group">
-        <button type="button" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-download"></i> エクスポート
-        </button>
-    </div>
 </div>
 {% endblock %}
 
 {% block content %}
-<!-- 検索・フィルター -->
-<div class="row mb-3">
-    <div class="col-md-12">
+<!-- 統計カード -->
+<div class="row mb-4">
+    <div class="col-sm-6 col-xl-4">
         <div class="card">
             <div class="card-body">
-                <form method="get" class="row g-3">
-                    <div class="col-md-6">
-                        <label for="search" class="form-label">検索</label>
-                        <input type="text" class="form-control" id="search" name="search" 
-                               placeholder="部署名、説明で検索" 
-                               value="{{ request.GET.search }}">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div>
+                        <span class="text-muted d-block">総部署数</span>
+                        <span class="h3 mb-0">{{ stats.total }}</span>
                     </div>
-                    <div class="col-md-4">
-                        <label for="is_active" class="form-label">ステータス</label>
-                        <select class="form-select" id="is_active" name="is_active">
-                            <option value="">全て</option>
-                            <option value="true" {% if request.GET.is_active == 'true' %}selected{% endif %}>アクティブ</option>
-                            <option value="false" {% if request.GET.is_active == 'false' %}selected{% endif %}>非アクティブ</option>
-                        </select>
+                    <i class="bi bi-building text-primary" style="font-size: 2rem;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div>
+                        <span class="text-muted d-block">アクティブ</span>
+                        <span class="h3 mb-0 text-success">{{ stats.active }}</span>
                     </div>
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-search"></i> 検索
-                        </button>
+                    <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div>
+                        <span class="text-muted d-block">非アクティブ</span>
+                        <span class="h3 mb-0 text-secondary">{{ stats.inactive }}</span>
                     </div>
-                </form>
+                    <i class="bi bi-x-circle text-secondary" style="font-size: 2rem;"></i>
+                </div>
             </div>
         </div>
     </div>
@@ -57,7 +64,7 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="bi bi-building"></i> 部署一覧 
+                    <i class="bi bi-building"></i> 部署一覧
                     <span class="badge bg-secondary">{{ departments|length }} 件</span>
                 </h5>
             </div>
@@ -67,14 +74,11 @@
                         <table class="table table-hover mb-0">
                             <thead class="table-light">
                                 <tr>
-                                    <th scope="col">
-                                        <input type="checkbox" class="form-check-input" id="selectAll">
-                                    </th>
                                     <th scope="col">部署名</th>
-                                    <th scope="col">マネージャー</th>
-                                    <th scope="col">所属ユーザー数</th>
+                                    <th scope="col">部署長</th>
+                                    <th scope="col">所属人数</th>
+                                    <th scope="col">課数</th>
                                     <th scope="col">ステータス</th>
-                                    <th scope="col">作成日</th>
                                     <th scope="col">操作</th>
                                 </tr>
                             </thead>
@@ -82,75 +86,46 @@
                                 {% for department in departments %}
                                 <tr>
                                     <td>
-                                        <input type="checkbox" class="form-check-input" name="selected_departments" value="{{ department.id }}">
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <i class="bi bi-diagram-3 me-2 text-primary"></i>
-                                            <div>
-                                                <strong>{{ department.name }}</strong>
-                                                {% if department.description %}
-                                                    <br>
-                                                    <small class="text-muted">{{ department.description|truncatewords:10 }}</small>
-                                                {% endif %}
-                                            </div>
+                                        <div>
+                                            <strong>{{ department.name }}</strong>
+                                            {% if department.description %}
+                                                <br>
+                                                <small class="text-muted">{{ department.description|truncatechars:50 }}</small>
+                                            {% endif %}
                                         </div>
                                     </td>
                                     <td>
                                         {% if department.manager %}
-                                            <div class="d-flex align-items-center">
-                                                <i class="bi bi-person-badge me-2 text-success"></i>
-                                                <div>
-                                                    <strong>{{ department.manager.username }}</strong>
-                                                    {% if department.manager.get_full_name %}
-                                                        <br>
-                                                        <small class="text-muted">{{ department.manager.get_full_name }}</small>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
+                                            <a href="{% url 'users:user_detail' department.manager.pk %}">
+                                                {{ department.manager.username }}
+                                            </a>
                                         {% else %}
                                             <span class="text-muted">未設定</span>
                                         {% endif %}
                                     </td>
                                     <td>
-                                        <span class="badge bg-info">
-                                            <i class="bi bi-people"></i> {{ department.user_count }} 人
-                                        </span>
+                                        <span class="badge bg-info">{{ department.user_count }}人</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ department.section_count }}課</span>
                                     </td>
                                     <td>
                                         {% if department.is_active %}
-                                            <span class="badge bg-success">
-                                                <i class="bi bi-check-circle"></i> アクティブ
-                                            </span>
+                                            <span class="badge bg-success">アクティブ</span>
                                         {% else %}
-                                            <span class="badge bg-secondary">
-                                                <i class="bi bi-pause-circle"></i> 非アクティブ
-                                            </span>
+                                            <span class="badge bg-secondary">非アクティブ</span>
                                         {% endif %}
                                     </td>
                                     <td>
-                                        <small class="text-muted">
-                                            {{ department.created_at|date:"Y/m/d" }}
-                                        </small>
-                                    </td>
-                                    <td>
-                                        <div class="btn-group btn-group-sm" role="group">
+                                        <div class="btn-group btn-group-sm">
                                             <a href="{% url 'users:department_detail' department.pk %}" 
-                                               class="btn btn-outline-info" 
-                                               title="詳細">
+                                               class="btn btn-outline-info" title="詳細">
                                                 <i class="bi bi-eye"></i>
                                             </a>
                                             <a href="{% url 'users:department_edit' department.pk %}" 
-                                               class="btn btn-outline-primary" 
-                                               title="編集">
+                                               class="btn btn-outline-primary" title="編集">
                                                 <i class="bi bi-pencil"></i>
                                             </a>
-                                            <button type="button" 
-                                                    class="btn btn-outline-danger" 
-                                                    title="削除"
-                                                    onclick="confirmDelete('{{ department.name }}', {{ department.pk }})">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -162,7 +137,6 @@
                     <div class="text-center py-5">
                         <i class="bi bi-building text-muted" style="font-size: 3rem;"></i>
                         <h5 class="text-muted mt-3">部署が見つかりません</h5>
-                        <p class="text-muted">検索条件を変更するか、新しい部署を作成してください。</p>
                         <a href="{% url 'users:department_create' %}" class="btn btn-primary">
                             <i class="bi bi-plus-circle"></i> 新規部署作成
                         </a>
@@ -172,105 +146,4 @@
         </div>
     </div>
 </div>
-
-<!-- 統計情報 -->
-{% if departments %}
-<div class="row mt-4">
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <h3 class="text-primary">{{ departments|length }}</h3>
-                <small class="text-muted">総部署数</small>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <h3 class="text-success">
-                    {% widthratio departments|length 1 1 %}
-                    {% comment %}
-                    実際の計算はビューで行う
-                    {{ active_departments_count }}
-                    {% endcomment %}
-                </h3>
-                <small class="text-muted">アクティブ部署</small>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <h3 class="text-info">
-                    {% comment %}
-                    実際の計算はビューで行う
-                    {{ total_users_count }}
-                    {% endcomment %}
-                    0
-                </h3>
-                <small class="text-muted">総所属ユーザー数</small>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <h3 class="text-warning">
-                    {% comment %}
-                    実際の計算はビューで行う
-                    {{ departments_without_manager }}
-                    {% endcomment %}
-                    0
-                </h3>
-                <small class="text-muted">マネージャー未設定</small>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
-{% endblock %}
-
-{% block extra_js %}
-<script>
-// 全選択機能
-document.getElementById('selectAll').addEventListener('change', function() {
-    const checkboxes = document.querySelectorAll('input[name="selected_departments"]');
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = this.checked;
-    });
-});
-
-// 削除確認
-function confirmDelete(departmentName, departmentId) {
-    if (confirm(`部署「${departmentName}」を削除しますか？\n所属ユーザーの部署設定は解除されます。\nこの操作は取り消せません。`)) {
-        // 削除フォームを送信
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = `/users/departments/${departmentId}/delete/`;
-        
-        const csrfToken = document.createElement('input');
-        csrfToken.type = 'hidden';
-        csrfToken.name = 'csrfmiddlewaretoken';
-        csrfToken.value = document.querySelector('[name=csrfmiddlewaretoken]').value;
-        
-        form.appendChild(csrfToken);
-        document.body.appendChild(form);
-        form.submit();
-    }
-}
-
-// 一括操作
-function bulkAction(action) {
-    const selected = document.querySelectorAll('input[name="selected_departments"]:checked');
-    if (selected.length === 0) {
-        alert('操作する部署を選択してください。');
-        return;
-    }
-    
-    if (confirm(`選択した ${selected.length} 件の部署に対して「${action}」を実行しますか？`)) {
-        // TODO: 一括操作の実装
-        console.log(`Bulk ${action} for`, Array.from(selected).map(cb => cb.value));
-    }
-}
-</script>
 {% endblock %}

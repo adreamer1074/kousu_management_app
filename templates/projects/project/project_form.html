@@ -1,0 +1,294 @@
+{% extends 'base.html' %}
+
+{% block title %}
+    {% if object %}
+        {{ object.name }} - プロジェクト編集
+    {% else %}
+        新規プロジェクト作成
+    {% endif %} - 工数管理システム
+{% endblock %}
+
+{% block page_title %}
+    {% if object %}
+        <i class="bi bi-pencil"></i> プロジェクト編集
+    {% else %}
+        <i class="bi bi-plus-circle"></i> 新規プロジェクト作成
+    {% endif %}
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-toolbar mb-2 mb-md-0">
+    <div class="btn-group me-2">
+        <a href="{% url 'projects:project_list' %}" class="btn btn-sm btn-secondary">
+            <i class="bi bi-arrow-left"></i> 一覧に戻る
+        </a>
+        {% if object %}
+            <a href="{% url 'projects:project_detail' object.pk %}" class="btn btn-sm btn-outline-info">
+                <i class="bi bi-eye"></i> 詳細表示
+            </a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    {% if object %}
+                        <i class="bi bi-pencil"></i> {{ object.name }} の編集
+                    {% else %}
+                        <i class="bi bi-plus-circle"></i> 新規プロジェクト作成
+                    {% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if form.errors %}
+                    <div class="alert alert-danger">
+                        <h6><i class="bi bi-exclamation-triangle"></i> 入力エラーがあります:</h6>
+                        <ul class="mb-0">
+                            {% for field in form %}
+                                {% for error in field.errors %}
+                                    <li>{{ field.label }}: {{ error }}</li>
+                                {% endfor %}
+                            {% endfor %}
+                            {% for error in form.non_field_errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <!-- 基本情報 -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6 class="text-muted border-bottom pb-2 mb-3">
+                                <i class="bi bi-info-circle"></i> 基本情報
+                            </h6>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.name.id_for_label }}" class="form-label">
+                                    プロジェクト名 <span class="text-danger">*</span>
+                                </label>
+                                {{ form.name }}
+                                {% if form.name.errors %}
+                                    <div class="text-danger small">{{ form.name.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.code.id_for_label }}" class="form-label">
+                                    プロジェクトコード <span class="text-danger">*</span>
+                                </label>
+                                {{ form.code }}
+                                {% if form.code.errors %}
+                                    <div class="text-danger small">{{ form.code.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">例: PROJ-2025-001</div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="mb-3">
+                                <label for="{{ form.description.id_for_label }}" class="form-label">
+                                    プロジェクト説明
+                                </label>
+                                {{ form.description }}
+                                {% if form.description.errors %}
+                                    <div class="text-danger small">{{ form.description.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.client.id_for_label }}" class="form-label">
+                                    クライアント
+                                </label>
+                                {{ form.client }}
+                                {% if form.client.errors %}
+                                    <div class="text-danger small">{{ form.client.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ステータス・優先度 -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6 class="text-muted border-bottom pb-2 mb-3">
+                                <i class="bi bi-flag"></i> ステータス・優先度
+                            </h6>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.status.id_for_label }}" class="form-label">
+                                    ステータス <span class="text-danger">*</span>
+                                </label>
+                                {{ form.status }}
+                                {% if form.status.errors %}
+                                    <div class="text-danger small">{{ form.status.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.priority.id_for_label }}" class="form-label">
+                                    優先度 <span class="text-danger">*</span>
+                                </label>
+                                {{ form.priority }}
+                                {% if form.priority.errors %}
+                                    <div class="text-danger small">{{ form.priority.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 期間・予算 -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6 class="text-muted border-bottom pb-2 mb-3">
+                                <i class="bi bi-calendar-range"></i> 期間・予算
+                            </h6>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.start_date.id_for_label }}" class="form-label">
+                                    開始日
+                                </label>
+                                {{ form.start_date }}
+                                {% if form.start_date.errors %}
+                                    <div class="text-danger small">{{ form.start_date.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.end_date.id_for_label }}" class="form-label">
+                                    終了日
+                                </label>
+                                {{ form.end_date }}
+                                {% if form.end_date.errors %}
+                                    <div class="text-danger small">{{ form.end_date.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.budget.id_for_label }}" class="form-label">
+                                    予算（円）
+                                </label>
+                                {{ form.budget }}
+                                {% if form.budget.errors %}
+                                    <div class="text-danger small">{{ form.budget.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.estimated_hours.id_for_label }}" class="form-label">
+                                    予定工数（時間）
+                                </label>
+                                {{ form.estimated_hours }}
+                                {% if form.estimated_hours.errors %}
+                                    <div class="text-danger small">{{ form.estimated_hours.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 組織・担当者 -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6 class="text-muted border-bottom pb-2 mb-3">
+                                <i class="bi bi-people"></i> 組織・担当者
+                            </h6>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.manager.id_for_label }}" class="form-label">
+                                    プロジェクトマネージャー
+                                </label>
+                                {{ form.manager }}
+                                {% if form.manager.errors %}
+                                    <div class="text-danger small">{{ form.manager.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.department.id_for_label }}" class="form-label">
+                                    担当部署
+                                </label>
+                                {{ form.department }}
+                                {% if form.department.errors %}
+                                    <div class="text-danger small">{{ form.department.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- その他設定 -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6 class="text-muted border-bottom pb-2 mb-3">
+                                <i class="bi bi-gear"></i> その他設定
+                            </h6>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                {{ form.is_active }}
+                                <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                                    アクティブ
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ボタン -->
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'projects:project_list' %}" class="btn btn-secondary me-md-2">
+                            <i class="bi bi-x-circle"></i> キャンセル
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> 
+                            {% if object %}更新{% else %}作成{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 日付入力のバリデーション
+document.addEventListener('DOMContentLoaded', function() {
+    const startDate = document.getElementById('{{ form.start_date.id_for_label }}');
+    const endDate = document.getElementById('{{ form.end_date.id_for_label }}');
+    
+    if (startDate && endDate) {
+        startDate.addEventListener('change', function() {
+            if (this.value && endDate.value && this.value > endDate.value) {
+                alert('開始日は終了日より前に設定してください。');
+                this.value = '';
+            }
+        });
+        
+        endDate.addEventListener('change', function() {
+            if (this.value && startDate.value && this.value < startDate.value) {
+                alert('終了日は開始日より後に設定してください。');
+                this.value = '';
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

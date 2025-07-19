@@ -1,17 +1,14 @@
 {% extends 'base.html' %}
 
-{% block title %}{{ user_obj.username }} - ユーザー編集 - 工数管理システム{% endblock %}
+{% block title %}ユーザー登録 - 工数管理システム{% endblock %}
 
-{% block page_title %}ユーザー編集{% endblock %}
+{% block page_title %}新規ユーザー登録{% endblock %}
 
 {% block page_actions %}
 <div class="btn-toolbar mb-2 mb-md-0">
     <div class="btn-group me-2">
-        <a href="{% url 'users:user_detail' user_obj.pk %}" class="btn btn-sm btn-secondary">
-            <i class="bi bi-arrow-left"></i> ユーザー詳細に戻る
-        </a>
-        <a href="{% url 'users:user_list' %}" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-list"></i> ユーザー一覧
+        <a href="{% url 'users:user_list' %}" class="btn btn-sm btn-secondary">
+            <i class="bi bi-arrow-left"></i> ユーザー一覧に戻る
         </a>
     </div>
 </div>
@@ -23,23 +20,10 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="bi bi-pencil"></i> {{ user_obj.username }} の編集
-                    {% if is_editing_superuser %}
-                        <span class="badge bg-danger">スーパーユーザー</span>
-                    {% elif user_obj.is_staff %}
-                        <span class="badge bg-warning">スタッフ</span>
-                    {% endif %}
+                    <i class="bi bi-person-plus"></i> 新規ユーザー登録
                 </h5>
             </div>
             <div class="card-body">
-                {% if not can_edit_permissions and is_editing_superuser %}
-                    <div class="alert alert-warning">
-                        <i class="bi bi-exclamation-triangle"></i>
-                        <strong>注意:</strong> スーパーユーザーの権限編集には、スーパーユーザー権限が必要です。
-                        基本情報のみ編集可能です。
-                    </div>
-                {% endif %}
-
                 {% if form.errors %}
                     <div class="alert alert-danger">
                         <h6><i class="bi bi-exclamation-triangle"></i> 入力エラーがあります:</h6>
@@ -77,6 +61,9 @@
                                 {{ form.username }}
                                 {% if form.username.errors %}
                                     <div class="text-danger small">{{ form.username.errors.0 }}</div>
+                                {% endif %}
+                                {% if form.username.help_text %}
+                                    <div class="form-text">{{ form.username.help_text }}</div>
                                 {% endif %}
                             </div>
                         </div>
@@ -118,6 +105,46 @@
                         </div>
                     </div>
 
+                    <!-- パスワードセクション -->
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h6 class="text-primary border-bottom pb-2 mb-3 mt-4">
+                                <i class="bi bi-lock"></i> パスワード設定
+                            </h6>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.password1.id_for_label }}" class="form-label">
+                                    パスワード <span class="text-danger">*</span>
+                                </label>
+                                {{ form.password1 }}
+                                {% if form.password1.errors %}
+                                    <div class="text-danger small">{{ form.password1.errors.0 }}</div>
+                                {% endif %}
+                                {% if form.password1.help_text %}
+                                    <div class="form-text">{{ form.password1.help_text }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.password2.id_for_label }}" class="form-label">
+                                    パスワード確認 <span class="text-danger">*</span>
+                                </label>
+                                {{ form.password2 }}
+                                {% if form.password2.errors %}
+                                    <div class="text-danger small">{{ form.password2.errors.0 }}</div>
+                                {% endif %}
+                                {% if form.password2.help_text %}
+                                    <div class="form-text">{{ form.password2.help_text }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- 所属情報セクション -->
                     <div class="row">
                         <div class="col-md-12">
@@ -153,79 +180,51 @@
                     </div>
 
                     <!-- 権限設定セクション -->
-                    {% if can_edit_permissions %}
-                        <div class="row">
-                            <div class="col-md-12">
-                                <h6 class="text-primary border-bottom pb-2 mb-3 mt-4">
-                                    <i class="bi bi-shield-check"></i> 権限設定
-                                </h6>
-                            </div>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h6 class="text-primary border-bottom pb-2 mb-3 mt-4">
+                                <i class="bi bi-shield-check"></i> 権限設定
+                            </h6>
                         </div>
+                    </div>
 
-                        <div class="row">
-                            <div class="col-md-4">
-                                <div class="mb-3">
-                                    <div class="form-check">
-                                        {{ form.is_active }}
-                                        <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
-                                            アクティブ
-                                        </label>
-                                    </div>
-                                    <div class="form-text">システムにログインできるかどうか</div>
-                                    {% if form.is_active.errors %}
-                                        <div class="text-danger small">{{ form.is_active.errors.0 }}</div>
-                                    {% endif %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    {{ form.is_staff }}
+                                    <label class="form-check-label" for="{{ form.is_staff.id_for_label }}">
+                                        スタッフ権限
+                                    </label>
                                 </div>
+                                <div class="form-text">管理画面へのアクセスとユーザー管理権限</div>
+                                {% if form.is_staff.errors %}
+                                    <div class="text-danger small">{{ form.is_staff.errors.0 }}</div>
+                                {% endif %}
                             </div>
-                            <div class="col-md-4">
-                                <div class="mb-3">
-                                    <div class="form-check">
-                                        {{ form.is_staff }}
-                                        <label class="form-check-label" for="{{ form.is_staff.id_for_label }}">
-                                            スタッフ権限
-                                        </label>
-                                    </div>
-                                    <div class="form-text">管理画面アクセスとユーザー管理</div>
-                                    {% if form.is_staff.errors %}
-                                        <div class="text-danger small">{{ form.is_staff.errors.0 }}</div>
-                                    {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    {{ form.is_active }}
+                                    <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                                        アクティブ
+                                    </label>
                                 </div>
+                                <div class="form-text">ユーザーがシステムにログインできるかどうか</div>
+                                {% if form.is_active.errors %}
+                                    <div class="text-danger small">{{ form.is_active.errors.0 }}</div>
+                                {% endif %}
                             </div>
-                            {% if user.is_superuser %}
-                                <div class="col-md-4">
-                                    <div class="mb-3">
-                                        <div class="form-check">
-                                            {{ form.is_superuser }}
-                                            <label class="form-check-label" for="{{ form.is_superuser.id_for_label }}">
-                                                <span class="text-danger">スーパーユーザー権限</span>
-                                            </label>
-                                        </div>
-                                        <div class="form-text text-warning">
-                                            <i class="bi bi-exclamation-triangle"></i> 
-                                            すべての権限を持つ最高管理者
-                                        </div>
-                                        {% if form.is_superuser.errors %}
-                                            <div class="text-danger small">{{ form.is_superuser.errors.0 }}</div>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            {% endif %}
                         </div>
-                    {% else %}
-                        <div class="alert alert-info">
-                            <i class="bi bi-info-circle"></i>
-                            <strong>権限情報:</strong> 
-                            現在のユーザー権限では、権限設定の変更はできません。
-                            基本情報と所属情報のみ編集可能です。
-                        </div>
-                    {% endif %}
+                    </div>
 
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
-                        <a href="{% url 'users:user_detail' user_obj.pk %}" class="btn btn-secondary me-md-2">
+                        <a href="{% url 'users:user_list' %}" class="btn btn-secondary me-md-2">
                             <i class="bi bi-x-circle"></i> キャンセル
                         </a>
                         <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-check-circle"></i> 変更を保存
+                            <i class="bi bi-person-plus"></i> ユーザーを登録
                         </button>
                     </div>
                 </form>
@@ -253,20 +252,5 @@ function loadSections(departmentId) {
             .catch(error => console.error('Error:', error));
     }
 }
-
-// ページ読み込み時に部署に応じた課を読み込み
-document.addEventListener('DOMContentLoaded', function() {
-    const departmentSelect = document.getElementById('id_department');
-    if (departmentSelect && departmentSelect.value) {
-        loadSections(departmentSelect.value);
-        // 現在の課を選択状態に
-        setTimeout(() => {
-            const currentSection = '{{ user_obj.section.id|default:"" }}';
-            if (currentSection) {
-                document.getElementById('id_section').value = currentSection;
-            }
-        }, 500);
-    }
-});
 </script>
 {% endblock %}

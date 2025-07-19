@@ -19,7 +19,7 @@ class Department(models.Model):
         null=True,
         blank=True,
         related_name='managed_departments',
-        verbose_name="マネージャー"
+        verbose_name="部署長"
     )
     is_active = models.BooleanField(
         default=True,
@@ -43,17 +43,17 @@ class Department(models.Model):
         return self.name
 
     @property
-    def user_count(self):
-        """所属ユーザー数を返す"""
+    def active_users_count(self):
+        """アクティブユーザー数"""
         return self.users.filter(is_active=True).count()
 
     @property
-    def section_count(self):
-        """所属課数を返す"""
+    def sections_count(self):
+        """課の数"""
         return self.sections.filter(is_active=True).count()
 
 class Section(models.Model):
-    """課モデル - 部署の下位組織"""
+    """課モデル"""
     name = models.CharField(
         max_length=100,
         verbose_name="課名"
@@ -64,6 +64,11 @@ class Section(models.Model):
         related_name='sections',
         verbose_name="所属部署"
     )
+    description = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="説明"
+    )
     manager = models.ForeignKey(
         'CustomUser',
         on_delete=models.SET_NULL,
@@ -71,11 +76,6 @@ class Section(models.Model):
         blank=True,
         related_name='managed_sections',
         verbose_name="課長"
-    )
-    description = models.TextField(
-        blank=True,
-        null=True,
-        verbose_name="説明"
     )
     is_active = models.BooleanField(
         default=True,
@@ -93,21 +93,16 @@ class Section(models.Model):
     class Meta:
         verbose_name = "課"
         verbose_name_plural = "課"
-        unique_together = ['department', 'name']  # 同じ部署内で課名は一意
-        ordering = ['department__name', 'name']
+        ordering = ['department', 'name']
+        unique_together = ['department', 'name']
 
     def __str__(self):
         return f"{self.department.name} - {self.name}"
 
     @property
-    def user_count(self):
-        """所属ユーザー数を返す"""
+    def active_users_count(self):
+        """アクティブユーザー数"""
         return self.users.filter(is_active=True).count()
-
-    @property
-    def full_name(self):
-        """部署名を含む完全な課名を返す"""
-        return f"{self.department.name} {self.name}"
 
 class CustomUser(AbstractUser):
     """カスタムユーザーモデル"""
@@ -127,22 +122,19 @@ class CustomUser(AbstractUser):
         related_name='users',
         verbose_name="所属課"
     )
-    
+
     class Meta:
         verbose_name = "ユーザー"
         verbose_name_plural = "ユーザー"
-    
-    def __str__(self):
-        return self.username
 
     @property
     def full_organization(self):
-        """完全な所属組織名を返す"""
+        """所属組織の完全名"""
         if self.section:
-            return f"{self.department.name} {self.section.name}"
+            return f"{self.department.name} - {self.section.name}"
         elif self.department:
             return self.department.name
-        return "未所属"
+        return "未設定"
 
 class UserProfile(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE)

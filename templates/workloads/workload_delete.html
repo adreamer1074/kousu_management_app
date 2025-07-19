@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+
+{% block title %}工数削除 - 工数管理システム{% endblock %}
+
+{% block page_title %}工数削除{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-exclamation-triangle"></i> 工数削除の確認
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-3">以下の工数を削除してもよろしいですか？</p>
+                
+                <div class="alert alert-light">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">日付:</dt>
+                        <dd class="col-sm-8">{{ workload.date|date:"Y年m月d日" }}</dd>
+                        
+                        <dt class="col-sm-4">プロジェクト:</dt>
+                        <dd class="col-sm-8">{{ workload.project.name }}</dd>
+                        
+                        <dt class="col-sm-4">タスク:</dt>
+                        <dd class="col-sm-8">{{ workload.task }}</dd>
+                        
+                        <dt class="col-sm-4">工数:</dt>
+                        <dd class="col-sm-8">{{ workload.hours }}時間</dd>
+                        
+                        {% if workload.description %}
+                            <dt class="col-sm-4">説明:</dt>
+                            <dd class="col-sm-8">{{ workload.description }}</dd>
+                        {% endif %}
+                    </dl>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>注意:</strong> この操作は取り消すことができません。
+                </div>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'workloads:workload_detail' workload.pk %}" class="btn btn-secondary me-md-2">
+                            <i class="bi bi-x-circle"></i> キャンセル
+                        </a>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-trash"></i> 削除
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

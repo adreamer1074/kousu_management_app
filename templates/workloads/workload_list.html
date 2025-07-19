@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+
+{% block title %}
+    {% if user_view %}
+        マイ工数管理 - 工数管理システム
+    {% else %}
+        工数一覧 - 工数管理システム
+    {% endif %}
+{% endblock %}
+
+{% block page_title %}
+    {% if user_view %}
+        <i class="bi bi-person-clock"></i> マイ工数管理
+    {% else %}
+        <i class="bi bi-clock"></i> 工数管理
+    {% endif %}
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-toolbar mb-2 mb-md-0">
+    <div class="btn-group me-2">
+        <a href="{% url 'workloads:workload_create' %}" class="btn btn-sm btn-primary">
+            <i class="bi bi-plus-circle"></i> 工数入力
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    {% if user_view %}
+                        <i class="bi bi-person-clock"></i> あなたの工数一覧
+                    {% else %}
+                        <i class="bi bi-clock"></i> 全体工数一覧
+                    {% endif %}
+                    <span class="badge bg-secondary">{{ total_workloads }} 件</span>
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                {% if workloads %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>日付</th>
+                                    {% if not user_view %}
+                                        <th>ユーザー</th>
+                                    {% endif %}
+                                    <th>プロジェクト</th>
+                                    <th>タスク</th>
+                                    <th>工数</th>
+                                    <th>説明</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for workload in workloads %}
+                                <tr>
+                                    <td>{{ workload.date|date:"Y/m/d" }}</td>
+                                    {% if not user_view %}
+                                        <td>{{ workload.user.get_full_name|default:workload.user.username }}</td>
+                                    {% endif %}
+                                    <td>{{ workload.project.name }}</td>
+                                    <td>{{ workload.task }}</td>
+                                    <td>{{ workload.hours }}時間</td>
+                                    <td>{{ workload.description|truncatechars:50 }}</td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'workloads:workload_detail' workload.pk %}" 
+                                               class="btn btn-outline-info" title="詳細">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                            {% if workload.user == user or user.is_staff or user.is_superuser %}
+                                                <a href="{% url 'workloads:workload_edit' workload.pk %}" 
+                                                   class="btn btn-outline-primary" title="編集">
+                                                    <i class="bi bi-pencil"></i>
+                                                </a>
+                                                <a href="{% url 'workloads:workload_delete' workload.pk %}" 
+                                                   class="btn btn-outline-danger" title="削除">
+                                                    <i class="bi bi-trash"></i>
+                                                </a>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-clock text-muted" style="font-size: 3rem;"></i>
+                        <h5 class="text-muted mt-3">工数データがありません</h5>
+                        <p class="text-muted">まずは工数を入力してみましょう。</p>
+                        <a href="{% url 'workloads:workload_create' %}" class="btn btn-primary">
+                            <i class="bi bi-plus-circle"></i> 工数を入力
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
