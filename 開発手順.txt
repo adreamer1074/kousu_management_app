@@ -15,6 +15,8 @@ python manage.py makemigrations core
 python manage.py makemigrations workloads
 python manage.py makemigrations reports
 python manage.py makemigrations cost_master
+python manage.py makemigrations users
+
 
 # 6. すべてのマイグレーションを適用
 python manage.py migrate
