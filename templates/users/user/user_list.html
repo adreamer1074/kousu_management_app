@@ -2,19 +2,16 @@
 
 {% block title %}ユーザー一覧 - 工数管理システム{% endblock %}
 
-{% block page_title %}ユーザー一覧{% endblock %}
+{% block page_title %}ユーザー管理{% endblock %}
 
 {% block page_actions %}
 <div class="btn-toolbar mb-2 mb-md-0">
     <div class="btn-group me-2">
-        <a href="{% url 'register' %}" class="btn btn-sm btn-primary">
-            <i class="bi bi-person-plus"></i> 新規ユーザー登録
-        </a>
-    </div>
-    <div class="btn-group">
-        <button type="button" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-download"></i> エクスポート
-        </button>
+        {% if request.user.is_staff or request.user.is_superuser %}
+            <a href="{% url 'users:register' %}" class="btn btn-sm btn-primary">
+                <i class="bi bi-person-plus"></i> 新規ユーザー作成
+            </a>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
