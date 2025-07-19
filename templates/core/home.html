@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}ホーム - 工数管理システム{% endblock %}
+
+{% block page_title %}ダッシュボード{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="bi bi-people"></i> ユーザー管理
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">システムのユーザーを管理します。</p>
+                <a href="{% url 'users:user_list' %}" class="btn btn-primary">
+                    <i class="bi bi-arrow-right"></i> ユーザー一覧を見る
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="bi bi-clock"></i> 工数入力
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">今月の工数を入力・確認します。</p>
+                <a href="#" class="btn btn-success">
+                    <i class="bi bi-arrow-right"></i> 工数入力画面へ
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="bi bi-info-circle"></i> システム情報
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>ようこそ、<strong>{{ user.username }}</strong> さん！</p>
+                <p>最終ログイン: {{ user.last_login|date:"Y年m月d日 H:i" }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
