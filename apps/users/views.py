@@ -11,12 +11,13 @@ from .models import CustomUser, Department, Section
 from .forms import UserEditForm, ProfileEditForm, DepartmentForm, SectionForm
 
 def register(request):
+    """ユーザー登録ビュー"""
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
         if form.is_valid():
             user = form.save()
             username = form.cleaned_data.get('username')
-            messages.success(request, f'アカウント {username} が作成されました。')
+            messages.success(request, f'アカウント「{username}」が作成されました。')
             login(request, user)
             return redirect('core:home')
     else:

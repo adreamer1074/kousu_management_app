@@ -32,15 +32,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    # 自作アプリ
-    'apps.users',
-    'apps.departments', 
-    'apps.projects',
-    'apps.workloads',
     'apps.core',
+    'apps.users',
+    'apps.projects',  # 追加
+    'apps.workloads',
     'apps.reports',
     'apps.cost_master',
-    'apps.permissions',
 ]
 
 MIDDLEWARE = [
@@ -117,7 +114,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # カスタムユーザーモデルの指定（必須）
 AUTH_USER_MODEL = 'users.CustomUser'
 
-# ログイン・ログアウト後のリダイレクト先
+# ログイン・ログアウト設定
+LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
-LOGIN_URL = '/login/'
