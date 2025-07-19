@@ -3,11 +3,11 @@ from django.contrib.auth import login, authenticate
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.views.generic import TemplateView, ListView, DetailView, UpdateView
+from django.views.generic import TemplateView, ListView, DetailView, UpdateView, CreateView, DeleteView
 from django.urls import reverse_lazy
 from django.contrib import messages
-from .models import CustomUser
-from .forms import UserEditForm, ProfileEditForm
+from .models import CustomUser, Department
+from .forms import UserEditForm, ProfileEditForm, DepartmentForm 
 
 def register(request):
     if request.method == 'POST':
@@ -87,3 +87,88 @@ class ProfileEditView(LoginRequiredMixin, UpdateView):
     def form_valid(self, form):
         messages.success(self.request, 'プロフィールが更新されました。')
         return super().form_valid(form)
+
+# 部署管理ビュー
+class DepartmentListView(LoginRequiredMixin, ListView):
+    model = Department
+    template_name = 'users/department_list.html'
+    context_object_name = 'departments'
+    login_url = '/login/'
+    
+    def dispatch(self, request, *args, **kwargs):
+        """管理者権限チェック"""
+        if not (request.user.is_staff or request.user.is_superuser):
+            messages.error(request, '部署管理には管理者権限が必要です。')
+            return redirect('core:home')
+        return super().dispatch(request, *args, **kwargs)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        departments = context['departments']
+        
+        # 統計情報を追加
+        context['active_departments_count'] = departments.filter(is_active=True).count()
+        context['total_users_count'] = sum(dept.user_count for dept in departments)
+        context['departments_without_manager'] = departments.filter(manager__isnull=True).count()
+        
+        return context
+
+class DepartmentDetailView(LoginRequiredMixin, DetailView):
+    model = Department
+    template_name = 'users/department_detail.html'
+    context_object_name = 'department'
+    login_url = '/login/'
+
+class DepartmentCreateView(LoginRequiredMixin, CreateView):
+    model = Department
+    form_class = DepartmentForm
+    template_name = 'users/department_form.html'
+    success_url = reverse_lazy('users:department_list')
+    login_url = '/login/'
+    
+    def dispatch(self, request, *args, **kwargs):
+        """管理者権限チェック"""
+        if not (request.user.is_staff or request.user.is_superuser):
+            messages.error(request, '部署作成には管理者権限が必要です。')
+            return redirect('core:home')
+        return super().dispatch(request, *args, **kwargs)
+    
+    def form_valid(self, form):
+        messages.success(self.request, f'部署「{form.instance.name}」を作成しました。')
+        return super().form_valid(form)
+
+class DepartmentUpdateView(LoginRequiredMixin, UpdateView):
+    model = Department
+    form_class = DepartmentForm
+    template_name = 'users/department_form.html'
+    success_url = reverse_lazy('users:department_list')
+    login_url = '/login/'
+    
+    def dispatch(self, request, *args, **kwargs):
+        """管理者権限チェック"""
+        if not (request.user.is_staff or request.user.is_superuser):
+            messages.error(request, '部署編集には管理者権限が必要です。')
+            return redirect('core:home')
+        return super().dispatch(request, *args, **kwargs)
+    
+    def form_valid(self, form):
+        messages.success(self.request, f'部署「{form.instance.name}」を更新しました。')
+        return super().form_valid(form)
+
+class DepartmentDeleteView(LoginRequiredMixin, DeleteView):
+    model = Department
+    template_name = 'users/department_confirm_delete.html'
+    success_url = reverse_lazy('users:department_list')
+    login_url = '/login/'
+    
+    def dispatch(self, request, *args, **kwargs):
+        """管理者権限チェック"""
+        if not (request.user.is_staff or request.user.is_superuser):
+            messages.error(request, '部署削除には管理者権限が必要です。')
+            return redirect('core:home')
+        return super().dispatch(request, *args, **kwargs)
+    
+    def delete(self, request, *args, **kwargs):
+        dept_name = self.get_object().name
+        messages.success(request, f'部署「{dept_name}」を削除しました。')
+        return super().delete(request, *args, **kwargs)

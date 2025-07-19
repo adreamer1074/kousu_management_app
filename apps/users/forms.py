@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
-from .models import CustomUser
+from .models import CustomUser, Department
 
 class CustomUserForm(forms.ModelForm):
     class Meta:
@@ -38,3 +38,34 @@ class ProfileEditForm(forms.ModelForm):
             'first_name': forms.TextInput(attrs={'class': 'form-control'}),
             'last_name': forms.TextInput(attrs={'class': 'form-control'}),
         }
+
+class DepartmentForm(forms.ModelForm):
+    class Meta:
+        model = Department
+        fields = ['name', 'description', 'manager', 'is_active']
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': '部署名を入力'
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': '部署の説明を入力（任意）'
+            }),
+            'manager': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'is_active': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+        }
+        
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # マネージャーの選択肢をスタッフユーザーに限定
+        self.fields['manager'].queryset = CustomUser.objects.filter(
+            is_staff=True, is_active=True
+        )
+        self.fields['manager'].empty_label = "-- マネージャーを選択 --"
+        self.fields['manager'].required = False

@@ -22,25 +22,43 @@
         </div>
     </div>
     
+    {% if user.is_staff or user.is_superuser %}
     <div class="col-md-6">
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title">
-                    <i class="bi bi-clock"></i> 工数入力
+                    <i class="bi bi-building"></i> 部署管理
                 </h5>
             </div>
             <div class="card-body">
-                <p class="card-text">今月の工数を入力・確認します。</p>
-                <a href="#" class="btn btn-success">
+                <p class="card-text">組織の部署を管理します。</p>
+                <a href="{% url 'users:department_list' %}" class="btn btn-primary">
+                    <i class="bi bi-arrow-right"></i> 部署一覧を見る
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="bi bi-clock"></i> 工数管理
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">工数の入力・管理を行います。</p>
+                <a href="#" class="btn btn-primary">
                     <i class="bi bi-arrow-right"></i> 工数入力画面へ
                 </a>
             </div>
         </div>
     </div>
-</div>
-
-<div class="row mt-4">
-    <div class="col-md-12">
+    
+    <div class="col-md-6">
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title">
