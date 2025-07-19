@@ -1,0 +1,239 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ user.username }} - ユーザー詳細 - 工数管理システム{% endblock %}
+
+{% block page_title %}ユーザー詳細{% endblock %}
+
+{% block page_actions %}
+<div class="btn-toolbar mb-2 mb-md-0">
+    <div class="btn-group me-2">
+        <a href="{% url 'users:user_edit' user.pk %}" class="btn btn-sm btn-primary">
+            <i class="bi bi-pencil"></i> 編集
+        </a>
+        <a href="{% url 'users:user_list' %}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 一覧に戻る
+        </a>
+    </div>
+    {% if not user.is_superuser %}
+        <div class="btn-group">
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmDelete()">
+                <i class="bi bi-trash"></i> 削除
+            </button>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- 基本情報 -->
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-person-circle"></i> 基本情報
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">ユーザー名:</dt>
+                            <dd class="col-sm-8">
+                                <strong>{{ user.username }}</strong>
+                                {% if user.is_superuser %}
+                                    <span class="badge bg-danger ms-2">管理者</span>
+                                {% elif user.is_staff %}
+                                    <span class="badge bg-warning ms-2">スタッフ</span>
+                                {% endif %}
+                            </dd>
+                            
+                            <dt class="col-sm-4">氏名:</dt>
+                            <dd class="col-sm-8">
+                                {% if user.get_full_name %}
+                                    {{ user.get_full_name }}
+                                {% else %}
+                                    <span class="text-muted">未設定</span>
+                                {% endif %}
+                            </dd>
+                            
+                            <dt class="col-sm-4">メール:</dt>
+                            <dd class="col-sm-8">
+                                {% if user.email %}
+                                    <a href="mailto:{{ user.email }}" class="text-decoration-none">
+                                        {{ user.email }}
+                                    </a>
+                                {% else %}
+                                    <span class="text-muted">未設定</span>
+                                {% endif %}
+                            </dd>
+                            
+                            <dt class="col-sm-4">部署:</dt>
+                            <dd class="col-sm-8">
+                                {% if user.department %}
+                                    <span class="badge bg-info">{{ user.department.name }}</span>
+                                {% else %}
+                                    <span class="text-muted">未設定</span>
+                                {% endif %}
+                            </dd>
+                        </dl>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">ステータス:</dt>
+                            <dd class="col-sm-8">
+                                {% if user.is_active %}
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-check-circle"></i> アクティブ
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary">
+                                        <i class="bi bi-x-circle"></i> 非アクティブ
+                                    </span>
+                                {% endif %}
+                            </dd>
+                            
+                            <dt class="col-sm-4">登録日:</dt>
+                            <dd class="col-sm-8">
+                                <small class="text-muted">
+                                    {{ user.date_joined|date:"Y年m月d日 H:i" }}
+                                </small>
+                            </dd>
+                            
+                            <dt class="col-sm-4">最終ログイン:</dt>
+                            <dd class="col-sm-8">
+                                {% if user.last_login %}
+                                    <small class="text-muted">
+                                        {{ user.last_login|date:"Y年m月d日 H:i" }}
+                                    </small>
+                                {% else %}
+                                    <span class="text-muted">未ログイン</span>
+                                {% endif %}
+                            </dd>
+                            
+                            <dt class="col-sm-4">権限:</dt>
+                            <dd class="col-sm-8">
+                                <div class="d-flex flex-wrap gap-1">
+                                    {% if user.is_superuser %}
+                                        <span class="badge bg-danger">スーパーユーザー</span>
+                                    {% endif %}
+                                    {% if user.is_staff %}
+                                        <span class="badge bg-warning">スタッフ</span>
+                                    {% endif %}
+                                    {% if not user.is_superuser and not user.is_staff %}
+                                        <span class="badge bg-light text-dark">一般ユーザー</span>
+                                    {% endif %}
+                                </div>
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 統計情報 -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-bar-chart"></i> 活動統計
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center">
+                    <div class="mb-3">
+                        <h3 class="text-primary">0</h3>
+                        <small class="text-muted">参加プロジェクト数</small>
+                    </div>
+                    <div class="mb-3">
+                        <h3 class="text-success">0</h3>
+                        <small class="text-muted">今月の工数（時間）</small>
+                    </div>
+                    <div class="mb-3">
+                        <h3 class="text-info">0</h3>
+                        <small class="text-muted">今年の工数（時間）</small>
+                    </div>
+                </div>
+                <hr>
+                <div class="d-grid">
+                    <a href="#" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-clock"></i> 工数詳細を見る
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- アクション履歴 -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-clock-history"></i> 最近のアクション
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center text-muted py-3">
+                    <i class="bi bi-hourglass"></i>
+                    <p class="mb-0">データがありません</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- プロジェクト参加履歴 -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-folder"></i> プロジェクト参加履歴
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-folder-x" style="font-size: 2rem;"></i>
+                    <p class="mb-0 mt-2">参加プロジェクトがありません</p>
+                    <small>プロジェクトに参加すると、ここに表示されます。</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 工数入力履歴 -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-clock"></i> 工数入力履歴（最近6ヶ月）
+                </h5>
+                <button class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-download"></i> エクスポート
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-clock-history" style="font-size: 2rem;"></i>
+                    <p class="mb-0 mt-2">工数入力履歴がありません</p>
+                    <small>工数を入力すると、ここに表示されます。</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmDelete() {
+    if (confirm('ユーザー「{{ user.username }}」を削除しますか？\nこの操作は取り消せません。')) {
+        // TODO: 削除APIまたはフォーム送信を実装
+        console.log('Delete user {{ user.pk }}');
+        alert('削除機能は後で実装予定です。');
+    }
+}
+</script>
+{% endblock %}
