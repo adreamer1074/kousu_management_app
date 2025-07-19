@@ -1,0 +1,335 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ object.username }} - ユーザー編集 - 工数管理システム{% endblock %}
+
+{% block page_title %}ユーザー編集{% endblock %}
+
+{% block page_actions %}
+<div class="btn-toolbar mb-2 mb-md-0">
+    <div class="btn-group me-2">
+        <a href="{% url 'users:user_detail' object.pk %}" class="btn btn-sm btn-outline-info">
+            <i class="bi bi-eye"></i> 詳細表示
+        </a>
+        <a href="{% url 'users:user_list' %}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 一覧に戻る
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-pencil"></i> ユーザー情報編集
+                    <span class="badge bg-primary ms-2">{{ object.username }}</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- エラーメッセージ表示 -->
+                {% if form.errors %}
+                    <div class="alert alert-danger">
+                        <h6><i class="bi bi-exclamation-triangle"></i> 入力エラーがあります</h6>
+                        <ul class="mb-0">
+                            {% for field in form %}
+                                {% for error in field.errors %}
+                                    <li>{{ field.label }}: {{ error }}</li>
+                                {% endfor %}
+                            {% endfor %}
+                            {% for error in form.non_field_errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+
+                <form method="post" class="row g-3">
+                    {% csrf_token %}
+                    
+                    <!-- 基本情報 -->
+                    <div class="col-12">
+                        <h6 class="border-bottom pb-2">
+                            <i class="bi bi-person"></i> 基本情報
+                        </h6>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label for="{{ form.username.id_for_label }}" class="form-label">
+                            <i class="bi bi-person-circle"></i> ユーザー名 <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" 
+                               class="form-control {% if form.username.errors %}is-invalid{% endif %}" 
+                               id="{{ form.username.id_for_label }}" 
+                               name="{{ form.username.html_name }}" 
+                               value="{{ form.username.value|default:'' }}"
+                               required>
+                        {% if form.username.errors %}
+                            <div class="invalid-feedback">
+                                {{ form.username.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">
+                            ログイン時に使用するユーザー名です。
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label for="{{ form.email.id_for_label }}" class="form-label">
+                            <i class="bi bi-envelope"></i> メールアドレス
+                        </label>
+                        <input type="email" 
+                               class="form-control {% if form.email.errors %}is-invalid{% endif %}" 
+                               id="{{ form.email.id_for_label }}" 
+                               name="{{ form.email.html_name }}" 
+                               value="{{ form.email.value|default:'' }}">
+                        {% if form.email.errors %}
+                            <div class="invalid-feedback">
+                                {{ form.email.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label for="{{ form.first_name.id_for_label }}" class="form-label">
+                            <i class="bi bi-person-badge"></i> 名前（名）
+                        </label>
+                        <input type="text" 
+                               class="form-control {% if form.first_name.errors %}is-invalid{% endif %}" 
+                               id="{{ form.first_name.id_for_label }}" 
+                               name="{{ form.first_name.html_name }}" 
+                               value="{{ form.first_name.value|default:'' }}">
+                        {% if form.first_name.errors %}
+                            <div class="invalid-feedback">
+                                {{ form.first_name.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label for="{{ form.last_name.id_for_label }}" class="form-label">
+                            <i class="bi bi-person-badge"></i> 名前（姓）
+                        </label>
+                        <input type="text" 
+                               class="form-control {% if form.last_name.errors %}is-invalid{% endif %}" 
+                               id="{{ form.last_name.id_for_label }}" 
+                               name="{{ form.last_name.html_name }}" 
+                               value="{{ form.last_name.value|default:'' }}">
+                        {% if form.last_name.errors %}
+                            <div class="invalid-feedback">
+                                {{ form.last_name.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- 組織情報 -->
+                    <div class="col-12 mt-4">
+                        <h6 class="border-bottom pb-2">
+                            <i class="bi bi-building"></i> 組織情報
+                        </h6>
+                    </div>
+                    
+                    <!-- 部署選択フィールドを条件付きで表示 -->
+                    {% if can_edit_department %}
+                    <div class="col-md-6">
+                        <label for="{{ form.department.id_for_label }}" class="form-label">
+                            <i class="bi bi-diagram-3"></i> 所属部署
+                        </label>
+                        <select class="form-select {% if form.department.errors %}is-invalid{% endif %}" 
+                                id="{{ form.department.id_for_label }}" 
+                                name="{{ form.department.html_name }}">
+                            <option value="">-- 部署を選択 --</option>
+                            {% for choice in form.department.field.queryset %}
+                                <option value="{{ choice.pk }}" 
+                                        {% if form.department.value == choice.pk %}selected{% endif %}>
+                                    {{ choice.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        {% if form.department.errors %}
+                            <div class="invalid-feedback">{{ form.department.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div class="col-md-6">
+                        <label class="form-label">
+                            <i class="bi bi-diagram-3"></i> 所属部署
+                        </label>
+                        <div class="form-control-plaintext">
+                            {% if object.department %}
+                                <span class="badge bg-info">{{ object.department.name }}</span>
+                            {% else %}
+                                <span class="text-muted">未設定</span>
+                            {% endif %}
+                        </div>
+                        <div class="form-text">
+                            <i class="bi bi-shield-exclamation"></i> 
+                            部署変更には管理者権限が必要です。
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- ステータス表示（読み取り専用） -->
+                    <div class="col-md-6">
+                        <label class="form-label">
+                            <i class="bi bi-shield-check"></i> アカウント状態
+                        </label>
+                        <div class="form-control-plaintext">
+                            {% if object.is_active %}
+                                <span class="badge bg-success">
+                                    <i class="bi bi-check-circle"></i> アクティブ
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary">
+                                    <i class="bi bi-x-circle"></i> 非アクティブ
+                                </span>
+                            {% endif %}
+                            
+                            {% if object.is_superuser %}
+                                <span class="badge bg-danger ms-2">管理者</span>
+                            {% elif object.is_staff %}
+                                <span class="badge bg-warning ms-2">スタッフ</span>
+                            {% endif %}
+                        </div>
+                        <div class="form-text">
+                            権限変更は管理画面で行ってください。
+                        </div>
+                    </div>
+                    
+                    <!-- 登録情報表示（読み取り専用） -->
+                    <div class="col-12 mt-4">
+                        <h6 class="border-bottom pb-2">
+                            <i class="bi bi-info-circle"></i> 登録情報
+                        </h6>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">登録日時</label>
+                        <div class="form-control-plaintext">
+                            {{ object.date_joined|date:"Y年m月d日 H:i" }}
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">最終ログイン</label>
+                        <div class="form-control-plaintext">
+                            {% if object.last_login %}
+                                {{ object.last_login|date:"Y年m月d日 H:i" }}
+                            {% else %}
+                                <span class="text-muted">未ログイン</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- ボタン -->
+                    <div class="col-12 mt-4">
+                        <hr>
+                        <div class="d-flex gap-2 justify-content-end">
+                            <a href="{% url 'users:user_detail' object.pk %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-x-circle"></i> キャンセル
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i> 更新
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- サイドバー：追加アクション -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-gear"></i> 追加アクション
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    {% if not object.is_superuser %}
+                        <button type="button" class="btn btn-outline-warning btn-sm" onclick="resetPassword()">
+                            <i class="bi bi-key"></i> パスワードリセット
+                        </button>
+                        
+                        {% if object.is_active %}
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="deactivateUser()">
+                                <i class="bi bi-pause-circle"></i> アカウント無効化
+                            </button>
+                        {% else %}
+                            <button type="button" class="btn btn-outline-success btn-sm" onclick="activateUser()">
+                                <i class="bi bi-play-circle"></i> アカウント有効化
+                            </button>
+                        {% endif %}
+                        
+                        <hr>
+                        
+                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteUser()">
+                            <i class="bi bi-trash"></i> ユーザー削除
+                        </button>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <small>
+                                <i class="bi bi-shield-exclamation"></i>
+                                管理者アカウントのため、一部の操作は制限されています。
+                            </small>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- ヘルプ -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-question-circle"></i> ヘルプ
+                </h6>
+            </div>
+            <div class="card-body">
+                <small class="text-muted">
+                    <ul class="list-unstyled">
+                        <li><i class="bi bi-check text-success"></i> ユーザー名は英数字のみ使用可能</li>
+                        <li><i class="bi bi-check text-success"></i> メールアドレスは任意です</li>
+                        <li><i class="bi bi-check text-success"></i> 部署は後から変更できます</li>
+                    </ul>
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function resetPassword() {
+    if (confirm('パスワードをリセットしますか？\n新しいパスワードがメールで送信されます。')) {
+        // TODO: パスワードリセット機能の実装
+        alert('パスワードリセット機能は後で実装予定です。');
+    }
+}
+
+function deactivateUser() {
+    if (confirm('アカウントを無効化しますか？\nユーザーはログインできなくなります。')) {
+        // TODO: アカウント無効化機能の実装
+        alert('アカウント無効化機能は後で実装予定です。');
+    }
+}
+
+function activateUser() {
+    if (confirm('アカウントを有効化しますか？')) {
+        // TODO: アカウント有効化機能の実装
+        alert('アカウント有効化機能は後で実装予定です。');
+    }
+}
+
+function deleteUser() {
+    if (confirm('ユーザーを完全に削除しますか？\nこの操作は取り消せません。')) {
+        // TODO: ユーザー削除機能の実装
+        alert('ユーザー削除機能は後で実装予定です。');
+    }
+}
+</script>
+{% endblock %}
