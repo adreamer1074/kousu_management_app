@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ object.name }} - 部署削除確認 - 工数管理システム{% endblock %}
+
+{% block page_title %}部署削除確認{% endblock %}
+
+{% block page_actions %}
+<div class="btn-toolbar mb-2 mb-md-0">
+    <div class="btn-group me-2">
+        <a href="{% url 'users:department_detail' object.pk %}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> キャンセル
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-exclamation-triangle"></i> 部署削除確認
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-danger">
+                    <h6><i class="bi bi-exclamation-triangle"></i> 重要な警告</h6>
+                    <p class="mb-0">
+                        部署「<strong>{{ object.name }}</strong>」を削除しようとしています。
+                        この操作は<strong>取り消せません</strong>。
+                    </p>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-building"></i> 削除する部署</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>部署名:</strong> {{ object.name }}</li>
+                            <li><strong>マネージャー:</strong> 
+                                {% if object.manager %}
+                                    {{ object.manager.username }}
+                                {% else %}
+                                    未設定
+                                {% endif %}
+                            </li>
+                            <li><strong>作成日:</strong> {{ object.created_at|date:"Y年m月d日" }}</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-info-circle"></i> 影響について</h6>
+                        <ul class="list-unstyled">
+                            <li>
+                                <i class="bi bi-people text-warning"></i> 
+                                所属ユーザー: <strong>{{ object.user_count }} 人</strong>
+                            </li>
+                            <li>
+                                <i class="bi bi-arrow-right text-info"></i> 
+                                ユーザーの部署設定が解除されます
+                            </li>
+                            <li>
+                                <i class="bi bi-clock text-secondary"></i> 
+                                過去の工数データは保持されます
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                {% if object.users.exists %}
+                <hr>
+                <div class="row">
+                    <div class="col-12">
+                        <h6><i class="bi bi-people"></i> 影響を受けるユーザー</h6>
+                        <div class="alert alert-warning">
+                            <p class="mb-2">以下のユーザーの部署設定が解除されます：</p>
+                            <div class="row">
+                                {% for user in object.users.all %}
+                                    <div class="col-md-6">
+                                        <i class="bi bi-person-circle"></i> 
+                                        {{ user.username }}
+                                        {% if user.get_full_name %}
+                                            ({{ user.get_full_name }})
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <hr>
+
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="confirmDelete" required>
+                        <label class="form-check-label" for="confirmDelete">
+                            <strong>上記の内容を理解し、部署「{{ object.name }}」の削除に同意します。</strong>
+                        </label>
+                    </div>
+                    
+                    <div class="d-flex gap-2 justify-content-end">
+                        <a href="{% url 'users:department_detail' object.pk %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle"></i> キャンセル
+                        </a>
+                        <button type="submit" class="btn btn-danger" id="deleteButton" disabled>
+                            <i class="bi bi-trash"></i> 削除実行
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- サイドバー：代替案 -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-lightbulb"></i> 代替案
+                </h6>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">削除の代わりに以下をご検討ください：</p>
+                <div class="d-grid gap-2">
+                    <a href="{% url 'users:department_edit' object.pk %}" class="btn btn-outline-warning btn-sm">
+                        <i class="bi bi-pause-circle"></i> 非アクティブにする
+                    </a>
+                    <button type="button" class="btn btn-outline-info btn-sm" onclick="transferUsers()">
+                        <i class="bi bi-arrow-right"></i> ユーザーを他部署に移動
+                    </button>
+                </div>
+                
+                <hr>
+                
+                <small class="text-muted">
+                    <h6>非アクティブ化の利点：</h6>
+                    <ul>
+                        <li>データが保持される</li>
+                        <li>後で再有効化可能</li>
+                        <li>履歴が残る</li>
+                    </ul>
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 確認チェックボックスの状態で削除ボタンを制御
+document.getElementById('confirmDelete').addEventListener('change', function() {
+    document.getElementById('deleteButton').disabled = !this.checked;
+});
+
+function transferUsers() {
+    alert('ユーザー移動機能は後で実装予定です。\n現在は個別にユーザー編集ページで部署を変更してください。');
+}
+</script>
+{% endblock %}
