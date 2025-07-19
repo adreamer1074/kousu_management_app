@@ -23,26 +23,27 @@ def register(request):
         form = UserCreationForm()
     return render(request, 'users/register.html', {'form': form})
 
+# ユーザー管理ビュー
 class ProfileView(LoginRequiredMixin, TemplateView):
-    template_name = "users/profile.html"
+    template_name = "users/user/profile.html"  # 修正
     login_url = '/login/'
 
 class UserListView(LoginRequiredMixin, ListView):
     model = CustomUser
-    template_name = 'users/user_list.html'
+    template_name = 'users/user/user_list.html'  # 修正
     context_object_name = 'users'
     paginate_by = 20
     login_url = '/login/'
 
 class UserDetailView(LoginRequiredMixin, DetailView):
     model = CustomUser
-    template_name = 'users/user_detail.html'
+    template_name = 'users/user/user_detail.html'  # 修正
     context_object_name = 'user'
     login_url = '/login/'
 
 class UserEditView(LoginRequiredMixin, UpdateView):
     model = CustomUser
-    template_name = 'users/user_edit.html'
+    template_name = 'users/user/user_edit.html'  # 修正
     success_url = reverse_lazy('users:user_list')
     login_url = '/login/'
     
@@ -55,7 +56,6 @@ class UserEditView(LoginRequiredMixin, UpdateView):
     
     def dispatch(self, request, *args, **kwargs):
         """権限チェック"""
-        # 一般ユーザーが他人のプロフィールを編集しようとした場合
         if not (request.user.is_staff or request.user.is_superuser):
             if self.get_object() != request.user:
                 messages.error(request, '他のユーザーの情報は編集できません。')
@@ -73,11 +73,10 @@ class UserEditView(LoginRequiredMixin, UpdateView):
         )
         return context
 
-# プロフィール編集専用ビュー（自分のプロフィールのみ）
 class ProfileEditView(LoginRequiredMixin, UpdateView):
     model = CustomUser
     form_class = ProfileEditForm
-    template_name = 'users/profile_edit.html'
+    template_name = 'users/user/profile_edit.html'  # 修正
     success_url = reverse_lazy('users:profile')
     login_url = '/login/'
     
@@ -92,7 +91,7 @@ class ProfileEditView(LoginRequiredMixin, UpdateView):
 # 部署管理ビュー
 class DepartmentListView(LoginRequiredMixin, ListView):
     model = Department
-    template_name = 'users/department_list.html'
+    template_name = 'users/department/department_list.html'  # 修正
     context_object_name = 'departments'
     login_url = '/login/'
     
@@ -116,14 +115,14 @@ class DepartmentListView(LoginRequiredMixin, ListView):
 
 class DepartmentDetailView(LoginRequiredMixin, DetailView):
     model = Department
-    template_name = 'users/department_detail.html'
+    template_name = 'users/department/department_detail.html'  # 修正
     context_object_name = 'department'
     login_url = '/login/'
 
 class DepartmentCreateView(LoginRequiredMixin, CreateView):
     model = Department
     form_class = DepartmentForm
-    template_name = 'users/department_form.html'
+    template_name = 'users/department/department_form.html'  # 修正
     success_url = reverse_lazy('users:department_list')
     login_url = '/login/'
     
@@ -141,7 +140,7 @@ class DepartmentCreateView(LoginRequiredMixin, CreateView):
 class DepartmentUpdateView(LoginRequiredMixin, UpdateView):
     model = Department
     form_class = DepartmentForm
-    template_name = 'users/department_form.html'
+    template_name = 'users/department/department_form.html'  # 修正
     success_url = reverse_lazy('users:department_list')
     login_url = '/login/'
     
@@ -158,7 +157,7 @@ class DepartmentUpdateView(LoginRequiredMixin, UpdateView):
 
 class DepartmentDeleteView(LoginRequiredMixin, DeleteView):
     model = Department
-    template_name = 'users/department_confirm_delete.html'
+    template_name = 'users/department/department_confirm_delete.html'  # 修正
     success_url = reverse_lazy('users:department_list')
     login_url = '/login/'
     
@@ -177,7 +176,7 @@ class DepartmentDeleteView(LoginRequiredMixin, DeleteView):
 # 課管理ビュー
 class SectionListView(LoginRequiredMixin, ListView):
     model = Section
-    template_name = 'users/section_list.html'
+    template_name = 'users/section/section_list.html'  # 修正
     context_object_name = 'sections'
     login_url = '/login/'
     
@@ -195,17 +194,17 @@ class SectionListView(LoginRequiredMixin, ListView):
 
 class SectionDetailView(LoginRequiredMixin, DetailView):
     model = Section
-    template_name = 'users/section_detail.html'
+    template_name = 'users/section/section_detail.html'  # 修正
     context_object_name = 'section'
     login_url = '/login/'
 
 class SectionCreateView(LoginRequiredMixin, CreateView):
     model = Section
     form_class = SectionForm
-    template_name = 'users/section_form.html'
+    template_name = 'users/section/section_form.html'  # 修正
     success_url = reverse_lazy('users:section_list')
     login_url = '/login/'
-    
+
     def dispatch(self, request, *args, **kwargs):
         """管理者権限チェック"""
         if not (request.user.is_staff or request.user.is_superuser):
@@ -220,7 +219,7 @@ class SectionCreateView(LoginRequiredMixin, CreateView):
 class SectionUpdateView(LoginRequiredMixin, UpdateView):
     model = Section
     form_class = SectionForm
-    template_name = 'users/section_form.html'
+    template_name = 'users/section/section_form.html'  # 修正
     success_url = reverse_lazy('users:section_list')
     login_url = '/login/'
     
@@ -237,7 +236,7 @@ class SectionUpdateView(LoginRequiredMixin, UpdateView):
 
 class SectionDeleteView(LoginRequiredMixin, DeleteView):
     model = Section
-    template_name = 'users/section_confirm_delete.html'
+    template_name = 'users/section/section_confirm_delete.html'  # 修正
     success_url = reverse_lazy('users:section_list')
     login_url = '/login/'
     
