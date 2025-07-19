@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+
+{% block title %}プロフィール - 工数管理システム{% endblock %}
+
+{% block page_title %}マイプロフィール{% endblock %}
+
+{% block page_actions %}
+<div class="btn-toolbar mb-2 mb-md-0">
+    <div class="btn-group me-2">
+        <a href="{% url 'users:profile_edit' %}" class="btn btn-sm btn-primary">
+            <i class="bi bi-pencil"></i> 編集
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-person-circle"></i> {{ user.username }} のプロフィール
+                </h5>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-3">ユーザー名:</dt>
+                    <dd class="col-sm-9">{{ user.username }}</dd>
+                    
+                    <dt class="col-sm-3">氏名:</dt>
+                    <dd class="col-sm-9">{{ user.get_full_name|default:"未設定" }}</dd>
+                    
+                    <dt class="col-sm-3">メールアドレス:</dt>
+                    <dd class="col-sm-9">
+                        {% if user.email %}
+                            {{ user.email }}
+                        {% else %}
+                            未設定
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-3">所属組織:</dt>
+                    <dd class="col-sm-9">{{ user.full_organization }}</dd>
+                    
+                    <dt class="col-sm-3">最終ログイン:</dt>
+                    <dd class="col-sm-9">
+                        {% if user.last_login %}
+                            {{ user.last_login|date:"Y年m月d日 H:i" }}
+                        {% else %}
+                            未ログイン
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-3">登録日:</dt>
+                    <dd class="col-sm-9">{{ user.date_joined|date:"Y年m月d日" }}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-bar-chart"></i> 統計情報
+                </h6>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">今後、工数統計などの情報を表示予定</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

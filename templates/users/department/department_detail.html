@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}{{ department.name }} - 部署詳細 - 工数管理システム{% endblock %}
+{% block title %}{{ department.name }} - 部署詳細{% endblock %}
 
 {% block page_title %}部署詳細{% endblock %}
 
@@ -10,12 +10,7 @@
         <a href="{% url 'users:department_edit' department.pk %}" class="btn btn-sm btn-primary">
             <i class="bi bi-pencil"></i> 編集
         </a>
-        <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteDepartment()">
-            <i class="bi bi-trash"></i> 削除
-        </button>
-    </div>
-    <div class="btn-group">
-        <a href="{% url 'users:department_list' %}" class="btn btn-sm btn-outline-secondary">
+        <a href="{% url 'users:department_list' %}" class="btn btn-sm btn-secondary">
             <i class="bi bi-arrow-left"></i> 一覧に戻る
         </a>
     </div>
@@ -24,141 +19,128 @@
 
 {% block content %}
 <div class="row">
-    <!-- 部署基本情報 -->
     <div class="col-md-8">
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
                     <i class="bi bi-building"></i> {{ department.name }}
-                    {% if department.is_active %}
-                        <span class="badge bg-success ms-2">アクティブ</span>
-                    {% else %}
-                        <span class="badge bg-secondary ms-2">非アクティブ</span>
+                    {% if not department.is_active %}
+                        <span class="badge bg-secondary">非アクティブ</span>
                     {% endif %}
                 </h5>
             </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <dl class="row">
-                            <dt class="col-sm-4">部署名:</dt>
-                            <dd class="col-sm-8">
-                                <strong>{{ department.name }}</strong>
-                            </dd>
-                            
-                            <dt class="col-sm-4">マネージャー:</dt>
-                            <dd class="col-sm-8">
-                                {% if department.manager %}
-                                    <div class="d-flex align-items-center">
-                                        <i class="bi bi-person-badge me-2 text-success"></i>
-                                        <div>
-                                            <a href="{% url 'users:user_detail' department.manager.pk %}" class="text-decoration-none">
-                                                <strong>{{ department.manager.username }}</strong>
-                                            </a>
-                                            {% if department.manager.get_full_name %}
-                                                <br>
-                                                <small class="text-muted">{{ department.manager.get_full_name }}</small>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                {% else %}
-                                    <span class="text-muted">未設定</span>
-                                {% endif %}
-                            </dd>
-                            
-                            <dt class="col-sm-4">所属ユーザー:</dt>
-                            <dd class="col-sm-8">
-                                <span class="badge bg-info">
-                                    <i class="bi bi-people"></i> {{ department.user_count }} 人
-                                </span>
-                            </dd>
-                        </dl>
-                    </div>
+                <dl class="row">
+                    <dt class="col-sm-3">部署名:</dt>
+                    <dd class="col-sm-9">{{ department.name }}</dd>
                     
-                    <div class="col-md-6">
-                        <dl class="row">
-                            <dt class="col-sm-4">ステータス:</dt>
-                            <dd class="col-sm-8">
-                                {% if department.is_active %}
-                                    <span class="badge bg-success">
-                                        <i class="bi bi-check-circle"></i> アクティブ
-                                    </span>
-                                {% else %}
-                                    <span class="badge bg-secondary">
-                                        <i class="bi bi-pause-circle"></i> 非アクティブ
-                                    </span>
-                                {% endif %}
-                            </dd>
-                            
-                            <dt class="col-sm-4">作成日:</dt>
-                            <dd class="col-sm-8">
-                                <small class="text-muted">
-                                    {{ department.created_at|date:"Y年m月d日 H:i" }}
-                                </small>
-                            </dd>
-                            
-                            <dt class="col-sm-4">最終更新:</dt>
-                            <dd class="col-sm-8">
-                                <small class="text-muted">
-                                    {{ department.updated_at|date:"Y年m月d日 H:i" }}
-                                </small>
-                            </dd>
-                        </dl>
-                    </div>
-                </div>
-                
-                {% if department.description %}
-                <hr>
-                <div class="row">
-                    <div class="col-12">
-                        <h6><i class="bi bi-card-text"></i> 説明</h6>
-                        <p class="text-muted">{{ department.description|linebreaks }}</p>
-                    </div>
-                </div>
-                {% endif %}
-                
-                <hr>
-                
-                <div class="d-flex gap-2">
-                    <a href="{% url 'users:department_edit' department.pk %}" class="btn btn-primary btn-sm">
-                        <i class="bi bi-pencil"></i> 編集
+                    <dt class="col-sm-3">説明:</dt>
+                    <dd class="col-sm-9">{{ department.description|default:"未設定" }}</dd>
+                    
+                    <dt class="col-sm-3">部署長:</dt>
+                    <dd class="col-sm-9">
+                        {% if department.manager %}
+                            <a href="{% url 'users:user_detail' department.manager.pk %}">
+                                {{ department.manager.username }}
+                            </a>
+                        {% else %}
+                            未設定
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-3">ステータス:</dt>
+                    <dd class="col-sm-9">
+                        {% if department.is_active %}
+                            <span class="badge bg-success">アクティブ</span>
+                        {% else %}
+                            <span class="badge bg-secondary">非アクティブ</span>
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-3">作成日:</dt>
+                    <dd class="col-sm-9">{{ department.created_at|date:"Y年m月d日" }}</dd>
+                    
+                    <dt class="col-sm-3">最終更新:</dt>
+                    <dd class="col-sm-9">{{ department.updated_at|date:"Y年m月d日 H:i" }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        <!-- 課一覧 -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="bi bi-diagram-3"></i> 所属課
+                        <span class="badge bg-primary">{{ department.sections_count }}</span>
+                    </h6>
+                    <a href="{% url 'users:section_create' %}?department={{ department.pk }}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-plus"></i> 課を追加
                     </a>
-                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteDepartment()">
-                        <i class="bi bi-trash"></i> 削除
-                    </button>
                 </div>
+            </div>
+            <div class="card-body p-0">
+                {% if department.sections.all %}
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>課名</th>
+                                    <th>課長</th>
+                                    <th>所属人数</th>
+                                    <th>ステータス</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for section in department.sections.all %}
+                                <tr>
+                                    <td>{{ section.name }}</td>
+                                    <td>
+                                        {% if section.manager %}
+                                            {{ section.manager.username }}
+                                        {% else %}
+                                            <span class="text-muted">未設定</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ section.active_users_count }}人</td>
+                                    <td>
+                                        {% if section.is_active %}
+                                            <span class="badge bg-success">アクティブ</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">非アクティブ</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'users:section_detail' section.pk %}" 
+                                               class="btn btn-outline-info" title="詳細">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                            <a href="{% url 'users:section_edit' section.pk %}" 
+                                               class="btn btn-outline-primary" title="編集">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-diagram-3 text-muted" style="font-size: 2rem;"></i>
+                        <p class="text-muted mt-2 mb-0">課が登録されていません</p>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
-
-    <!-- サイドバー -->
+    
     <div class="col-md-4">
-        <!-- クイックアクション -->
-        <div class="card">
-            <div class="card-header">
-                <h6 class="card-title mb-0">
-                    <i class="bi bi-lightning"></i> クイックアクション
-                </h6>
-            </div>
-            <div class="card-body">
-                <div class="d-grid gap-2">
-                    <a href="{% url 'users:department_edit' department.pk %}" class="btn btn-primary btn-sm">
-                        <i class="bi bi-pencil"></i> 部署情報を編集
-                    </a>
-                    {% if department.users.exists %}
-                        <button type="button" class="btn btn-info btn-sm" onclick="exportUsers()">
-                            <i class="bi bi-download"></i> 所属ユーザーをエクスポート
-                        </button>
-                    {% endif %}
-                    <a href="{% url 'users:user_list' %}?department={{ department.pk }}" class="btn btn-outline-primary btn-sm">
-                        <i class="bi bi-people"></i> 所属ユーザー一覧
-                    </a>
-                </div>
-            </div>
-        </div>
-
         <!-- 統計情報 -->
-        <div class="card mt-3">
+        <div class="card">
             <div class="card-header">
                 <h6 class="card-title mb-0">
                     <i class="bi bi-bar-chart"></i> 統計情報
@@ -167,136 +149,49 @@
             <div class="card-body">
                 <div class="row text-center">
                     <div class="col-6">
-                        <div class="border rounded p-2">
-                            <h4 class="text-primary mb-1">{{ department.user_count }}</h4>
-                            <small class="text-muted">総ユーザー数</small>
-                        </div>
+                        <h4 class="text-primary">{{ department.active_users_count }}</h4>
+                        <small class="text-muted">所属人数</small>
                     </div>
                     <div class="col-6">
-                        <div class="border rounded p-2">
-                            <h4 class="text-success mb-1">
-                                {{ department.users.filter.is_active=True.count|default:0 }}
-                            </h4>
-                            <small class="text-muted">アクティブユーザー</small>
-                        </div>
+                        <h4 class="text-info">{{ department.sections_count }}</h4>
+                        <small class="text-muted">課数</small>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
-</div>
 
-<!-- 所属ユーザー一覧 -->
-<div class="row mt-4">
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-people"></i> 所属ユーザー一覧
-                </h5>
-                {% if department.users.exists %}
-                    <a href="{% url 'users:user_list' %}?department={{ department.pk }}" class="btn btn-sm btn-outline-primary">
-                        <i class="bi bi-arrow-right"></i> 全て見る
-                    </a>
-                {% endif %}
+        <!-- 所属ユーザー一覧 -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-people"></i> 所属ユーザー
+                </h6>
             </div>
-            <div class="card-body">
-                {% if department.users.exists %}
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th scope="col">ユーザー名</th>
-                                    <th scope="col">氏名</th>
-                                    <th scope="col">メールアドレス</th>
-                                    <th scope="col">ステータス</th>
-                                    <th scope="col">最終ログイン</th>
-                                    <th scope="col">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for user in department.users.all|slice:":10" %}
-                                <tr>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <i class="bi bi-person-circle me-2 text-muted"></i>
-                                            <strong>{{ user.username }}</strong>
-                                            {% if user.is_superuser %}
-                                                <span class="badge bg-danger ms-2">管理者</span>
-                                            {% elif user.is_staff %}
-                                                <span class="badge bg-warning ms-2">スタッフ</span>
-                                            {% endif %}
-                                        </div>
-                                    </td>
-                                    <td>{{ user.get_full_name|default:"-" }}</td>
-                                    <td>
-                                        {% if user.email %}
-                                            <a href="mailto:{{ user.email }}" class="text-decoration-none">
-                                                {{ user.email }}
-                                            </a>
-                                        {% else %}
-                                            <span class="text-muted">未設定</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if user.is_active %}
-                                            <span class="badge bg-success">アクティブ</span>
-                                        {% else %}
-                                            <span class="badge bg-secondary">非アクティブ</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if user.last_login %}
-                                            <small class="text-muted">
-                                                {{ user.last_login|date:"Y/m/d H:i" }}
-                                            </small>
-                                        {% else %}
-                                            <span class="text-muted">未ログイン</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <a href="{% url 'users:user_detail' user.pk %}" 
-                                           class="btn btn-outline-info btn-sm" 
-                                           title="詳細">
-                                            <i class="bi bi-eye"></i>
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    {% if department.users.count > 10 %}
-                        <div class="text-center mt-3">
-                            <a href="{% url 'users:user_list' %}?department={{ department.pk }}" class="btn btn-outline-primary">
-                                <i class="bi bi-arrow-right"></i> 残り {{ department.users.count|add:"-10" }} 人を見る
+            <div class="card-body p-0">
+                {% if department.users.filter.is_active %}
+                    <div class="list-group list-group-flush">
+                        {% for user in department.users.filter.is_active %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ user.username }}</strong>
+                                {% if user.section %}
+                                    <br><small class="text-muted">{{ user.section.name }}</small>
+                                {% endif %}
+                            </div>
+                            <a href="{% url 'users:user_detail' user.pk %}" class="btn btn-sm btn-outline-info">
+                                <i class="bi bi-eye"></i>
                             </a>
                         </div>
-                    {% endif %}
+                        {% endfor %}
+                    </div>
                 {% else %}
                     <div class="text-center py-4">
-                        <i class="bi bi-person-x text-muted" style="font-size: 3rem;"></i>
-                        <h5 class="text-muted mt-3">所属ユーザーがいません</h5>
-                        <p class="text-muted">この部署にはまだユーザーが所属していません。</p>
+                        <i class="bi bi-people text-muted" style="font-size: 2rem;"></i>
+                        <p class="text-muted mt-2 mb-0">所属ユーザーがいません</p>
                     </div>
                 {% endif %}
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-function deleteDepartment() {
-    if (confirm('部署「{{ department.name }}」を削除しますか？\n所属ユーザーの部署設定は解除されます。\nこの操作は取り消せません。')) {
-        window.location.href = "{% url 'users:department_delete' department.pk %}";
-    }
-}
-
-function exportUsers() {
-    alert('ユーザーエクスポート機能は後で実装予定です。');
-}
-</script>
 {% endblock %}

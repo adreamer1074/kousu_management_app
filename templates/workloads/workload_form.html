@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+
+{% block title %}
+    {% if form.instance.pk %}
+        工数編集 - 工数管理システム
+    {% else %}
+        工数入力 - 工数管理システム
+    {% endif %}
+{% endblock %}
+
+{% block page_title %}
+    {% if form.instance.pk %}
+        <i class="bi bi-pencil"></i> 工数編集
+    {% else %}
+        <i class="bi bi-plus-circle"></i> 工数入力
+    {% endif %}
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-toolbar mb-2 mb-md-0">
+    <div class="btn-group me-2">
+        <a href="{% url 'workloads:workload_list' %}" class="btn btn-sm btn-secondary">
+            <i class="bi bi-arrow-left"></i> 工数一覧に戻る
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    {% if form.instance.pk %}
+                        <i class="bi bi-pencil"></i> 工数編集
+                    {% else %}
+                        <i class="bi bi-plus-circle"></i> 新規工数入力
+                    {% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if form.errors %}
+                    <div class="alert alert-danger">
+                        <h6><i class="bi bi-exclamation-triangle"></i> 入力エラーがあります:</h6>
+                        <ul class="mb-0">
+                            {% for field in form %}
+                                {% for error in field.errors %}
+                                    <li>{{ field.label }}: {{ error }}</li>
+                                {% endfor %}
+                            {% endfor %}
+                            {% for error in form.non_field_errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.date.id_for_label }}" class="form-label">
+                                    <i class="bi bi-calendar"></i> {{ form.date.label }}
+                                </label>
+                                {{ form.date }}
+                                {% if form.date.errors %}
+                                    <div class="text-danger small">{{ form.date.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">作業を行った日付を選択してください</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.hours.id_for_label }}" class="form-label">
+                                    <i class="bi bi-clock"></i> {{ form.hours.label }}
+                                </label>
+                                {{ form.hours }}
+                                {% if form.hours.errors %}
+                                    <div class="text-danger small">{{ form.hours.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">0.5時間単位で入力してください</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.project.id_for_label }}" class="form-label">
+                            <i class="bi bi-folder"></i> {{ form.project.label }}
+                        </label>
+                        {{ form.project }}
+                        {% if form.project.errors %}
+                            <div class="text-danger small">{{ form.project.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.task.id_for_label }}" class="form-label">
+                            <i class="bi bi-check-square"></i> {{ form.task.label }}
+                        </label>
+                        {{ form.task }}
+                        {% if form.task.errors %}
+                            <div class="text-danger small">{{ form.task.errors.0 }}</div>
+                        {% endif %}
+                        <div class="form-text">実施したタスクの名前を入力してください</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.description.id_for_label }}" class="form-label">
+                            <i class="bi bi-file-text"></i> {{ form.description.label }}
+                        </label>
+                        {{ form.description }}
+                        {% if form.description.errors %}
+                            <div class="text-danger small">{{ form.description.errors.0 }}</div>
+                        {% endif %}
+                        <div class="form-text">作業内容の詳細があれば記入してください（任意）</div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>入力のポイント:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>工数は0.5時間（30分）単位で入力してください</li>
+                            <li>タスク名は具体的に記入することで、後の振り返りに役立ちます</li>
+                            <li>作業内容は詳細に記録しておくと、進捗管理に有効です</li>
+                        </ul>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'workloads:workload_list' %}" class="btn btn-secondary me-md-2">
+                            <i class="bi bi-x-circle"></i> キャンセル
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            {% if form.instance.pk %}
+                                <i class="bi bi-check-circle"></i> 変更を保存
+                            {% else %}
+                                <i class="bi bi-plus-circle"></i> 工数を登録
+                            {% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 今日の日付をデフォルトで設定
+document.addEventListener('DOMContentLoaded', function() {
+    const dateInput = document.getElementById('{{ form.date.id_for_label }}');
+    if (dateInput && !dateInput.value) {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        dateInput.value = `${year}-${month}-${day}`;
+    }
+});
+</script>
+{% endblock %}

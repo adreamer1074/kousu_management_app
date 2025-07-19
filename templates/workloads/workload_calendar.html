@@ -1,0 +1,734 @@
+{% extends 'base.html' %}
+{% load workload_extras %}
+
+{% block title %}工数入力 - 工数管理システム{% endblock %}
+
+{% block page_title %}
+    <i class="bi bi-calendar3"></i> 工数入力 
+    <span class="badge bg-primary">{{ year }}年{{ month }}月</span>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .workload-table {
+        font-size: 0.9em;
+        border-collapse: collapse;
+        table-layout: fixed;
+        width: 100%;
+        min-width: 1400px; /* 最小幅を確保 */
+    }
+    
+    .workload-table th,
+    .workload-table td {
+        border: 1px solid #dee2e6;
+        padding: 6px 4px;
+        text-align: center;
+        vertical-align: middle;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .workload-table th {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        font-weight: bold;
+        white-space: nowrap;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    /* 部署列 */
+    .department-col {
+        width: 80px;
+        min-width: 80px;
+        max-width: 80px;
+        text-align: left;
+        padding-left: 8px !important;
+        background-color: #f1f3f4;
+        position: sticky;
+        left: 0;
+        z-index: 5;
+        border-right: 2px solid #dee2e6;
+    }
+    
+    .department-col.sticky-header {
+        z-index: 15;
+        background: linear-gradient(135deg, #f1f3f4 0%, #e2e6ea 100%);
+    }
+    
+    /* 担当者列 */
+    .user-col {
+        width: 120px;
+        min-width: 120px;
+        max-width: 120px;
+        text-align: left;
+        padding-left: 8px !important;
+        background-color: #f8f9fa;
+        position: sticky;
+        left: 80px; /* 部署列の幅分ずらす */
+        z-index: 5;
+        border-right: 2px solid #dee2e6;
+    }
+    
+    .user-col.sticky-header {
+        z-index: 15;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    }
+    
+    /* 案件名列 */
+    .project-col {
+        width: 140px;
+        min-width: 140px;
+        max-width: 140px;
+        text-align: left;
+        padding-left: 8px !important;
+        background-color: #fff;
+        position: sticky;
+        left: 200px; /* 部署列 + 担当者列の幅分ずらす */
+        z-index: 5;
+        border-right: 2px solid #dee2e6;
+    }
+    
+    .project-col.sticky-header {
+        z-index: 15;
+        background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+    }
+    
+    /* 工数計列（人日）*/
+    .total-days-col {
+        width: 70px;
+        min-width: 70px;
+        max-width: 70px;
+        background-color: #e8f4f8;
+        font-weight: bold;
+        position: sticky;
+        left: 340px; /* 前の列までの合計幅 */
+        z-index: 5;
+        border-right: 2px solid #dee2e6;
+    }
+    
+    .total-days-col.sticky-header {
+        z-index: 15;
+        background: linear-gradient(135deg, #e8f4f8 0%, #d1ecf1 100%);
+    }
+    
+    /* 工数計列（人時）*/
+    .total-hours-col {
+        width: 70px;
+        min-width: 70px;
+        max-width: 70px;
+        background-color: #e8f4f8;
+        font-weight: bold;
+        position: sticky;
+        left: 410px; /* 前の列までの合計幅 */
+        z-index: 5;
+        border-right: 3px solid #007bff; /* 最後の固定列は目立たせる */
+    }
+    
+    .total-hours-col.sticky-header {
+        z-index: 15;
+        background: linear-gradient(135deg, #e8f4f8 0%, #d1ecf1 100%);
+    }
+    
+    /* 日付列 */
+/* 日付列 */
+.day-col {
+    width: 45px;
+    min-width: 45px;
+    max-width: 45px;
+    text-align: center;
+}
+
+.day-header {
+    font-size: 0.85em;
+    font-weight: bold;
+    writing-mode: horizontal-tb; /* 縦書きから横書きに変更 */
+    text-orientation: mixed; /* upright から mixed に変更 */
+    height: 40px; /* 高さを調整 */
+    line-height: 1.4;
+    padding: 8px 4px; /* パディングを調整 */
+}
+    
+    /* 操作列 */
+    .action-col {
+        width: 50px;
+        min-width: 50px;
+        max-width: 50px;
+        background-color: #f8f9fa;
+    }
+    
+    /* 入力フィールド */
+    .day-input {
+        width: 38px;
+        height: 28px;
+        border: 1px solid #ced4da;
+        text-align: center;
+        font-size: 0.85em;
+        padding: 2px;
+        border-radius: 3px;
+        background-color: #fff;
+        transition: all 0.2s ease;
+    }
+    
+    .day-input::-webkit-outer-spin-button,
+    .day-input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    
+    .day-input[type=number] {
+        -moz-appearance: textfield;
+    }
+    
+    .day-input:focus {
+        background-color: #fff3cd;
+        outline: 2px solid #ffc107;
+        border-color: #ffc107;
+        transform: scale(1.05);
+    }
+    
+    .day-input.has-value {
+        background-color: #d1ecf1;
+        font-weight: bold;
+        color: #0c5460;
+        border-color: #17a2b8;
+    }
+    
+    /* 週末のスタイル */
+    .weekend {
+        background-color: #fff5f5;
+    }
+    
+    .weekend .day-input {
+        background-color: #ffeaea;
+    }
+    
+    .weekend.has-value .day-input {
+        background-color: #ffdddd;
+    }
+    
+    /* テーブル行のスタイル */
+    .workload-table tbody tr {
+        background-color: #fff;
+    }
+    
+    .workload-table tbody tr:nth-child(odd) {
+        background-color: #f8f9fa;
+    }
+    
+    .workload-table tbody tr:hover {
+        background-color: #e2e6ea;
+    }
+    
+    .workload-table tbody tr:hover .department-col,
+    .workload-table tbody tr:hover .user-col,
+    .workload-table tbody tr:hover .project-col,
+    .workload-table tbody tr:hover .total-days-col,
+    .workload-table tbody tr:hover .total-hours-col {
+        background-color: #d6d8db;
+    }
+    
+    /* 部署バッジ */
+    .department-badge {
+        font-size: 0.7em;
+        margin-top: 2px;
+        padding: 2px 6px;
+        border-radius: 10px;
+    }
+    
+    /* テーブルコンテナ */
+    .table-responsive {
+        max-height: 75vh;
+        overflow: auto;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    /* カスタムスクロールバー */
+    .table-responsive::-webkit-scrollbar {
+        width: 12px;
+        height: 12px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 6px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 6px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+    
+    /* 新規行追加フォーム */
+    .add-row-form {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border: 2px dashed #007bff;
+        padding: 20px;
+        margin-bottom: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    /* ボタンスタイル */
+    .btn-sm {
+        padding: 4px 8px;
+        font-size: 0.75em;
+        border-radius: 4px;
+    }
+    
+    /* 統計カード */
+    .stats-card {
+        margin-top: 20px;
+    }
+    
+    .stat-item {
+        text-align: center;
+        padding: 15px;
+    }
+    
+    .stat-value {
+        font-size: 1.8rem;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    
+    .stat-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+        font-weight: 500;
+    }
+    
+    /* レスポンシブ対応 */
+    @media (max-width: 768px) {
+        .workload-table {
+            font-size: 0.8em;
+        }
+        
+        .department-col { width: 60px; min-width: 60px; }
+        .user-col { width: 80px; min-width: 80px; left: 60px; }
+        .project-col { width: 100px; min-width: 100px; left: 140px; }
+        .total-days-col { left: 240px; }
+        .total-hours-col { left: 310px; }
+        .day-col { width: 35px; min-width: 35px; }
+        .day-input { width: 30px; height: 26px; }
+    }
+</style>
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-toolbar mb-3">
+    <div class="btn-group me-2">
+        <input type="month" 
+               id="yearMonthPicker" 
+               class="form-control" 
+               value="{{ year_month }}"
+               onchange="changeYearMonth(this.value)">
+    </div>
+    {% if is_admin %}
+        <div class="btn-group me-2">
+            <select id="departmentFilter" class="form-select" onchange="filterByDepartment()">
+                <option value="">全部署</option>
+                {% for dept in departments %}
+                    <option value="{{ dept.id }}" {% if dept.id|stringformat:"s" == selected_department %}selected{% endif %}>
+                        {{ dept.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="btn-group me-2">
+            <select id="sectionFilter" class="form-select" onchange="filterBySection()">
+                <option value="">全課</option>
+                {% for section in sections %}
+                    <option value="{{ section.id }}" {% if section.id|stringformat:"s" == selected_section %}selected{% endif %}>
+                        {{ section.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+    {% endif %}
+    <div class="btn-group">
+        <button type="button" class="btn btn-success" onclick="toggleAddForm()">
+            <i class="bi bi-plus-circle"></i> 行追加
+        </button>
+        <button type="button" class="btn btn-primary" onclick="saveAllChanges()">
+            <i class="bi bi-save"></i> 一括保存
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- 新規行追加フォーム -->
+<div id="addRowForm" class="add-row-form" style="display: none;">
+    <h6><i class="bi bi-plus-circle"></i> 新しい工数行を追加</h6>
+    <div class="row g-3">
+        <div class="col-md-3">
+            <label for="newUser" class="form-label">担当者</label>
+            <select id="newUser" class="form-select" required>
+                <option value="">担当者を選択</option>
+                {% for user in all_users %}
+                    <option value="{{ user.id }}">{{ user.get_full_name|default:user.username }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label for="newProject" class="form-label">案件</label>
+            <select id="newProject" class="form-select" required>
+                <option value="">案件を選択</option>
+                {% for project in projects %}
+                    <option value="{{ project.id }}">{{ project.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label for="newYearMonth" class="form-label">年月</label>
+            <input type="month" id="newYearMonth" class="form-control" value="{{ year_month }}" required>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">&nbsp;</label>
+            <div class="d-grid gap-2 d-md-flex">
+                <button type="button" class="btn btn-success" onclick="addNewRow()">
+                    <i class="bi bi-plus"></i> 追加
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="toggleAddForm()">
+                    <i class="bi bi-x"></i> キャンセル
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 工数入力テーブル -->
+<div class="table-responsive">
+    <table class="table workload-table">
+        <thead>
+            <tr>
+                <!-- <th class="department-col sticky-header">部名</th> -->
+                <th class="department-col sticky-header">課名</th>
+                <th class="user-col sticky-header">担当者</th>
+                <th class="project-col sticky-header">案件名</th>
+                <th class="total-days-col sticky-header">工数計<br>(人日)</th>
+                <th class="total-hours-col sticky-header">工数計<br>(人時)</th>
+                {% for day in day_range %}
+                    <th class="day-col day-header">{{ day|stringformat:"02d" }}</th>
+                {% endfor %}
+                <th class="action-col">操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for workload in workloads %}
+                <tr data-workload-id="{{ workload.id }}">
+                    <!-- 部署 -->
+                    <!-- <td class="department-col">
+                        {% if workload.department %}
+                            <span class="badge bg-info department-badge">{{ workload.department.name }}</span>
+                        {% else %}
+                            <span class="text-muted">未設定</span>
+                        {% endif %}
+                    </td> -->
+                    <!-- 課名 -->
+                    <td class="department-col">
+                        {% if workload.user.section %}
+                            <span class="badge bg-info department-badge">{{ workload.user.section.name }}</span>
+                        {% elif workload.department %}
+                            <span class="badge bg-warning department-badge">{{ workload.department.name }}</span>
+                        {% else %}
+                            <span class="text-muted">未設定</span>
+                        {% endif %}
+                    </td>
+                    <td class="user-col">
+                        <strong>{{ workload.user.get_full_name|default:workload.user.username }}</strong>
+                    </td>
+                    <td class="project-col">
+                        <span class="text-primary" title="{{ workload.project.name }}">{{ workload.project.name }}</span>
+                    </td>
+                    <td class="total-days-col">
+                        <span class="total-days" data-workload-id="{{ workload.id }}">{{ workload.total_days|floatformat:1 }}</span>
+                    </td>
+                    <td class="total-hours-col">
+                        <span class="total-hours" data-workload-id="{{ workload.id }}">{{ workload.total_hours|floatformat:1 }}</span>
+                    </td>
+                    {% for day in day_range %}
+                        <td class="day-col">
+                            <input type="number" 
+                                   class="day-input {% if workload|get_day_value:day > 0 %}has-value{% endif %}"
+                                   data-workload-id="{{ workload.id }}"
+                                   data-day="{{ day }}"
+                                   value="{% if workload|get_day_value:day > 0 %}{{ workload|get_day_value:day }}{% endif %}"
+                                   step="0.5" 
+                                   min="0" 
+                                   max="24"
+                                   onchange="updateWorkload(this)"
+                                   onfocus="this.select()"
+                                   placeholder="">
+                        </td>
+                    {% endfor %}
+                    <td class="action-col">
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteWorkload({{ workload.id }})" title="削除">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="{{ day_range|length|add:6 }}" class="text-center text-muted py-4">
+                        <i class="bi bi-calendar-x fs-2 mb-2 d-block"></i>
+                        工数データがありません。<br>
+                        「行追加」ボタンから新しい工数を追加してください。
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- 統計情報 -->
+<div class="row stats-card">
+    <div class="col-md-12">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h6 class="card-title mb-3">
+                    <i class="bi bi-graph-up text-primary"></i> {{ year }}年{{ month }}月 統計
+                </h6>
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="stat-item border-end">
+                            <div class="stat-value text-primary" id="totalHours">0</div>
+                            <div class="stat-label">合計時間</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-item border-end">
+                            <div class="stat-value text-success" id="totalDays">0</div>
+                            <div class="stat-label">合計人日</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-item border-end">
+                            <div class="stat-value text-info">{{ workloads|length }}</div>
+                            <div class="stat-label">工数行数</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-item">
+                            <div class="stat-value text-warning">{{ unique_users_count }}</div>
+                            <div class="stat-label">参加者数</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function changeYearMonth(yearMonth) {
+    const url = new URL(window.location);
+    url.searchParams.set('year_month', yearMonth);
+    window.location = url;
+}
+
+function filterByDepartment() {
+    const department = document.getElementById('departmentFilter').value;
+    const url = new URL(window.location);
+    if (department) {
+        url.searchParams.set('department', department);
+    } else {
+        url.searchParams.delete('department');
+    }
+    window.location = url;
+}
+
+function filterBySection() {
+    const section = document.getElementById('sectionFilter').value;
+    const url = new URL(window.location);
+    if (section) {
+        url.searchParams.set('section', section);
+    } else {
+        url.searchParams.delete('section');
+    }
+    window.location = url;
+}
+
+function toggleAddForm() {
+    const form = document.getElementById('addRowForm');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    
+    if (form.style.display === 'block') {
+        document.getElementById('newUser').focus();
+    }
+}
+
+function addNewRow() {
+    const userId = document.getElementById('newUser').value;
+    const projectId = document.getElementById('newProject').value;
+    const yearMonth = document.getElementById('newYearMonth').value;
+    
+    if (!userId || !projectId || !yearMonth) {
+        alert('担当者、案件、年月を全て選択してください。');
+        return;
+    }
+    
+    fetch('{% url "workloads:create_workload_ajax" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            user_id: userId,
+            project_id: projectId,
+            year_month: yearMonth
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('エラー: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('エラーが発生しました。');
+    });
+}
+
+function updateWorkload(input) {
+    const workloadId = input.getAttribute('data-workload-id');
+    const day = input.getAttribute('data-day');
+    const hours = parseFloat(input.value) || 0;
+    
+    input.classList.toggle('has-value', hours > 0);
+    
+    fetch('{% url "workloads:save_workload_ajax" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            workload_id: workloadId,
+            day: parseInt(day),
+            hours: hours
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.querySelector(`.total-hours[data-workload-id="${workloadId}"]`).textContent = data.total_hours;
+            document.querySelector(`.total-days[data-workload-id="${workloadId}"]`).textContent = data.total_days;
+            updateStatistics();
+        } else {
+            alert('エラー: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('エラーが発生しました。');
+    });
+}
+
+function deleteWorkload(workloadId) {
+    if (!confirm('この工数行を削除しますか？')) {
+        return;
+    }
+    
+    fetch(`/workloads/delete/${workloadId}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => {
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('削除に失敗しました。');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('エラーが発生しました。');
+    });
+}
+
+function updateStatistics() {
+    let totalHours = 0;
+    let totalDays = 0;
+    
+    document.querySelectorAll('.total-hours').forEach(el => {
+        totalHours += parseFloat(el.textContent) || 0;
+    });
+    
+    document.querySelectorAll('.total-days').forEach(el => {
+        totalDays += parseFloat(el.textContent) || 0;
+    });
+    
+    document.getElementById('totalHours').textContent = totalHours.toFixed(1);
+    document.getElementById('totalDays').textContent = totalDays.toFixed(1);
+}
+
+function saveAllChanges() {
+    updateStatistics();
+    alert('変更は自動保存されています。');
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        toggleAddForm();
+    }
+    
+    if (e.key === 'Escape') {
+        const form = document.getElementById('addRowForm');
+        if (form.style.display === 'block') {
+            toggleAddForm();
+        }
+    }
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    updateStatistics();
+    
+    const inputs = document.querySelectorAll('.day-input');
+    inputs.forEach((input, index) => {
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const nextInput = inputs[index + 1];
+                if (nextInput) {
+                    nextInput.focus();
+                    nextInput.select();
+                }
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
