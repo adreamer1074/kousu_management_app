@@ -6,8 +6,9 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import TemplateView, ListView, DetailView, UpdateView, CreateView, DeleteView
 from django.urls import reverse_lazy
 from django.contrib import messages
-from .models import CustomUser, Department
-from .forms import UserEditForm, ProfileEditForm, DepartmentForm 
+from django.http import JsonResponse
+from .models import CustomUser, Department, Section
+from .forms import UserEditForm, ProfileEditForm, DepartmentForm, SectionForm
 
 def register(request):
     if request.method == 'POST':
@@ -172,3 +173,100 @@ class DepartmentDeleteView(LoginRequiredMixin, DeleteView):
         dept_name = self.get_object().name
         messages.success(request, f'部署「{dept_name}」を削除しました。')
         return super().delete(request, *args, **kwargs)
+
+# 課管理ビュー
+class SectionListView(LoginRequiredMixin, ListView):
+    model = Section
+    template_name = 'users/section_list.html'
+    context_object_name = 'sections'
+    login_url = '/login/'
+    
+    def dispatch(self, request, *args, **kwargs):
+        """管理者権限チェック"""
+        if not (request.user.is_staff or request.user.is_superuser):
+            messages.error(request, '課管理には管理者権限が必要です。')
+            return redirect('core:home')
+        return super().dispatch(request, *args, **kwargs)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['departments'] = Department.objects.filter(is_active=True)
+        return context
+
+class SectionDetailView(LoginRequiredMixin, DetailView):
+    model = Section
+    template_name = 'users/section_detail.html'
+    context_object_name = 'section'
+    login_url = '/login/'
+
+class SectionCreateView(LoginRequiredMixin, CreateView):
+    model = Section
+    form_class = SectionForm
+    template_name = 'users/section_form.html'
+    success_url = reverse_lazy('users:section_list')
+    login_url = '/login/'
+    
+    def dispatch(self, request, *args, **kwargs):
+        """管理者権限チェック"""
+        if not (request.user.is_staff or request.user.is_superuser):
+            messages.error(request, '課作成には管理者権限が必要です。')
+            return redirect('core:home')
+        return super().dispatch(request, *args, **kwargs)
+    
+    def form_valid(self, form):
+        messages.success(self.request, f'課「{form.instance.full_name}」を作成しました。')
+        return super().form_valid(form)
+
+class SectionUpdateView(LoginRequiredMixin, UpdateView):
+    model = Section
+    form_class = SectionForm
+    template_name = 'users/section_form.html'
+    success_url = reverse_lazy('users:section_list')
+    login_url = '/login/'
+    
+    def dispatch(self, request, *args, **kwargs):
+        """管理者権限チェック"""
+        if not (request.user.is_staff or request.user.is_superuser):
+            messages.error(request, '課編集には管理者権限が必要です。')
+            return redirect('core:home')
+        return super().dispatch(request, *args, **kwargs)
+    
+    def form_valid(self, form):
+        messages.success(self.request, f'課「{form.instance.full_name}」を更新しました。')
+        return super().form_valid(form)
+
+class SectionDeleteView(LoginRequiredMixin, DeleteView):
+    model = Section
+    template_name = 'users/section_confirm_delete.html'
+    success_url = reverse_lazy('users:section_list')
+    login_url = '/login/'
+    
+    def dispatch(self, request, *args, **kwargs):
+        """管理者権限チェック"""
+        if not (request.user.is_staff or request.user.is_superuser):
+            messages.error(request, '課削除には管理者権限が必要です。')
+            return redirect('core:home')
+        return super().dispatch(request, *args, **kwargs)
+    
+    def delete(self, request, *args, **kwargs):
+        section_name = self.get_object().full_name
+        messages.success(request, f'課「{section_name}」を削除しました。')
+        return super().delete(request, *args, **kwargs)
+
+# AJAX用ビュー
+@login_required
+def load_sections(request):
+    """部署選択時に課をロードするAJAXビュー"""
+    department_id = request.GET.get('department_id')
+    sections = Section.objects.filter(
+        department_id=department_id, 
+        is_active=True
+    ).order_by('name')
+    
+    section_list = [{'id': '', 'name': '-- 課を選択 --'}]
+    section_list.extend([
+        {'id': section.id, 'name': section.name} 
+        for section in sections
+    ])
+    
+    return JsonResponse({'sections': section_list})
