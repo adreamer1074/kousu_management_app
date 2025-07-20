@@ -1,12 +1,14 @@
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, ListView, CreateView, UpdateView, DeleteView, DetailView
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.db.models import Q
+from django.urls import reverse_lazy
+from django.contrib import messages
 import json
 import calendar
 
@@ -146,6 +148,62 @@ class WorkloadCalendarView(LoginRequiredMixin, TemplateView):
         })
         
         return context
+
+class WorkloadListView(LoginRequiredMixin, ListView):
+    """工数一覧ビュー"""
+    model = Workload
+    template_name = 'workloads/workload_list.html'
+    context_object_name = 'workloads'
+    paginate_by = 20
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff or user.is_superuser:
+            return Workload.objects.select_related(
+                'user', 'project', 'ticket'
+            ).order_by('-year_month', 'user__username')
+        else:
+            return Workload.objects.filter(user=user).select_related(
+                'project', 'ticket'
+            ).order_by('-year_month')
+
+class WorkloadCreateView(LoginRequiredMixin, CreateView):
+    """工数作成ビュー"""
+    model = Workload
+    template_name = 'workloads/workload_form.html'
+    fields = ['user', 'project', 'ticket', 'year_month']
+    success_url = reverse_lazy('workloads:workload_calendar')
+
+    def form_valid(self, form):
+        messages.success(self.request, '工数を作成しました。')
+        return super().form_valid(form)
+
+class WorkloadDetailView(LoginRequiredMixin, DetailView):
+    """工数詳細ビュー"""
+    model = Workload
+    template_name = 'workloads/workload_detail.html'
+    context_object_name = 'workload'
+
+class WorkloadUpdateView(LoginRequiredMixin, UpdateView):
+    """工数編集ビュー"""
+    model = Workload
+    template_name = 'workloads/workload_form.html'
+    fields = ['user', 'project', 'ticket', 'year_month']
+    success_url = reverse_lazy('workloads:workload_calendar')
+
+    def form_valid(self, form):
+        messages.success(self.request, '工数を更新しました。')
+        return super().form_valid(form)
+
+class WorkloadDeleteView(LoginRequiredMixin, DeleteView):
+    """工数削除ビュー"""
+    model = Workload
+    template_name = 'workloads/workload_delete.html'
+    success_url = reverse_lazy('workloads:workload_calendar')
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(request, '工数を削除しました。')
+        return super().delete(request, *args, **kwargs)
 
 @login_required
 @require_http_methods(["POST"])
