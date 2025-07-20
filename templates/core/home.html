@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
-
+{% load core_filters %}
+{% load workload_filters %}
 {% block title %}ダッシュボード - 工数管理システム{% endblock %}
 
 {% block page_title %}ダッシュボード{% endblock %}
@@ -12,16 +13,24 @@
             <div class="card-body">
                 <div class="d-flex align-items-start justify-content-between">
                     <div>
-                        <span class="text-muted d-block">総ユーザー数</span>
-                        <span class="h3 mb-0">{{ stats.total_users }}</span>
+                        <span class="text-muted d-block">今月の総チケット</span>
+                        <span class="h3 mb-0">{{ stats.current_month_tickets }}</span>
+                        <small class="text-muted">件</small>
                     </div>
-                    <i class="bi bi-people text-primary" style="font-size: 2rem;"></i>
+                    <i class="bi bi-ticket-perforated text-primary" style="font-size: 2rem;"></i>
+                </div>
+                <!-- 補足情報を追加 -->
+                <div class="mt-2">
+                    <small class="text-muted">
+                        工数入力済み
+                        <span class="text-muted">({{ current_month }}月)</span>
+                    </small>
                 </div>
             </div>
         </div>
     </div>
     
-    <div class="col-sm-6 col-xl-3">
+    <!-- <div class="col-sm-6 col-xl-3">
         <div class="card">
             <div class="card-body">
                 <div class="d-flex align-items-start justify-content-between">
@@ -33,9 +42,9 @@
                 </div>
             </div>
         </div>
-    </div>
+    </div> -->
     
-    <div class="col-sm-6 col-xl-3">
+    <!-- <div class="col-sm-6 col-xl-3">
         <div class="card">
             <div class="card-body">
                 <div class="d-flex align-items-start justify-content-between">
@@ -47,7 +56,7 @@
                 </div>
             </div>
         </div>
-    </div>
+    </div> -->
     
     <div class="col-sm-6 col-xl-3">
         <div class="card">
@@ -55,10 +64,17 @@
                 <div class="d-flex align-items-start justify-content-between">
                     <div>
                         <span class="text-muted d-block">今月の工数</span>
-                        <span class="h3 mb-0">0</span>
+                        <span class="h3 mb-0">{{ stats.current_month_hours|floatformat:1 }}</span>
                         <small class="text-muted">時間</small>
                     </div>
                     <i class="bi bi-clock text-warning" style="font-size: 2rem;"></i>
+                </div>
+                <!-- 人日表示を追加 -->
+                <div class="mt-2">
+                    <small class="text-muted">
+                        約 {{ stats.current_month_hours|div:8|floatformat:1 }}人日
+                        <span class="text-muted">({{ current_month }}月)</span>
+                    </small>
                 </div>
             </div>
         </div>
@@ -128,18 +144,71 @@
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
-                    <a href="{% url 'workloads:workload_create' %}" class="btn btn-primary">
-                        <i class="bi bi-plus-circle"></i> 工数入力
-                    </a>
-                    <a href="{% url 'projects:project_create' %}" class="btn btn-outline-primary">
-                        <i class="bi bi-folder-plus"></i> プロジェクト作成
-                    </a>
                     <a href="{% url 'reports:report-list' %}" class="btn btn-outline-info">
                         <i class="bi bi-bar-chart"></i> レポート表示
+                    </a>
+                    <a href="{% url 'projects:project_list' %}" class="btn btn-outline-primary">
+                        <i class="bi bi-folder-plus"></i> プロジェクト管理
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 工数サマリーカードを追加 -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-graph-up"></i> 今月の工数サマリー
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-4">
+                        <div class="border-end pe-2">
+                            <div class="h5 text-primary mb-1">{{ stats.current_month_tickets }}</div>
+                            <small class="text-muted">チケット</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="border-end pe-2 ps-2">
+                            <div class="h5 text-info mb-1">{{ stats.current_month_hours|floatformat:1 }}</div>
+                            <small class="text-muted">時間</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="ps-2">
+                            <div class="h5 text-success mb-1">{{ stats.current_month_hours|div:8|floatformat:1 }}</div>
+                            <small class="text-muted">人日</small>
+                        </div>
+                    </div>
+                </div>
+                <hr class="my-3">
+                <div class="text-center">
+                    <a href="{% url 'workloads:workload_calendar' %}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-calendar"></i> 詳細を確認
                     </a>
                 </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 統計カードのアニメーション
+    const cards = document.querySelectorAll('.card');
+    cards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+});
+</script>
 {% endblock %}

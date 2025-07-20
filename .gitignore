@@ -1,13 +1,11 @@
 .env
 # Ignore the SQLite database file
 *.pyc
-# Ignore Python bytecode files
-__pycache__/
 # Ignore Python cache directories
 *.pyo
 # Ignore Python optimized bytecode files
 *.pyd
-# Ignore Python dynamic module files
-*.db
-# Ignore database files
+# Ignore Django migrations
+migrations/
+# Ignore SQLite database file
 *.sqlite3
