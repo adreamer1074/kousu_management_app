@@ -4,125 +4,56 @@ from django.urls import reverse
 
 User = get_user_model()
 
-class ProjectStatus(models.TextChoices):
-    """プロジェクトステータス"""
-    PLANNING = 'planning', '計画中'
-    ACTIVE = 'active', '進行中'
-    ON_HOLD = 'on_hold', '保留中'
-    COMPLETED = 'completed', '完了'
-    CANCELLED = 'cancelled', 'キャンセル'
-
-class ProjectPriority(models.TextChoices):
-    """プロジェクト優先度"""
-    LOW = 'low', '低'
-    MEDIUM = 'medium', '中'
-    HIGH = 'high', '高'
-    URGENT = 'urgent', '緊急'
-
 class Project(models.Model):
     """プロジェクトモデル"""
-    name = models.CharField(
-        max_length=200,
-        verbose_name="プロジェクト名"
-    )
-    code = models.CharField(
-        max_length=50,
-        unique=True,
-        verbose_name="プロジェクトコード",
-        help_text="例: PROJ-2025-001"
-    )
-    description = models.TextField(
-        blank=True,
-        null=True,
-        verbose_name="説明"
-    )
+    STATUS_CHOICES = [
+        ('planning', '計画中'),
+        ('active', '進行中'),
+        ('paused', '一時停止'),
+        ('completed', '完了'),
+        ('cancelled', 'キャンセル'),
+    ]
+    
+    name = models.CharField(max_length=200, verbose_name="プロジェクト名")
+    description = models.TextField(blank=True, default="", verbose_name="説明")
     client = models.CharField(
-        max_length=200,
-        blank=True,
-        null=True,
+        max_length=200, 
+        blank=True, 
+        default="",
         verbose_name="クライアント"
     )
     status = models.CharField(
-        max_length=20,
-        choices=ProjectStatus.choices,
-        default=ProjectStatus.PLANNING,
+        max_length=20, 
+        choices=STATUS_CHOICES, 
+        default='planning',
         verbose_name="ステータス"
     )
-    priority = models.CharField(
-        max_length=20,
-        choices=ProjectPriority.choices,
-        default=ProjectPriority.MEDIUM,
-        verbose_name="優先度"
-    )
-    start_date = models.DateField(
-        blank=True,
-        null=True,
-        verbose_name="開始予定日"
-    )
-    end_date = models.DateField(
-        blank=True,
-        null=True,
-        verbose_name="終了予定日"
-    )
-    actual_start_date = models.DateField(
-        blank=True,
-        null=True,
-        verbose_name="実際の開始日"
-    )
-    actual_end_date = models.DateField(
-        blank=True,
-        null=True,
-        verbose_name="実際の終了日"
-    )
+    start_date = models.DateField(blank=True, null=True, verbose_name="開始日")
+    end_date = models.DateField(blank=True, null=True, verbose_name="終了日")
     budget = models.DecimalField(
-        max_digits=12,
-        decimal_places=0,
-        blank=True,
+        max_digits=10, 
+        decimal_places=2, 
+        blank=True, 
         null=True,
-        verbose_name="予算（円）"
+        verbose_name="予算"
     )
-    estimated_hours = models.DecimalField(
-        max_digits=8,
-        decimal_places=2,
-        blank=True,
+    assigned_section = models.ForeignKey(
+        'users.Section',
+        on_delete=models.SET_NULL,
         null=True,
-        verbose_name="見積工数（時間）"
+        blank=True,
+        verbose_name="担当課",
+        related_name='projects'
     )
-    manager = models.ForeignKey(
+    assigned_users = models.ManyToManyField(
         User,
-        on_delete=models.SET_NULL,
-        null=True,
         blank=True,
-        related_name='managed_projects',
-        verbose_name="プロジェクトマネージャー"
+        related_name='assigned_projects',
+        verbose_name="マネージャー"
     )
-    department = models.ForeignKey(
-        'users.Department',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='projects',
-        verbose_name="担当部署"
-    )
-    is_active = models.BooleanField(
-        default=True,
-        verbose_name="アクティブ"
-    )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name="作成日時"
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True,
-        verbose_name="更新日時"
-    )
-    created_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name='created_projects',
-        verbose_name="作成者"
-    )
+    is_active = models.BooleanField(default=True, verbose_name="有効")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="作成日時")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新日時")
 
     class Meta:
         verbose_name = "プロジェクト"
@@ -130,198 +61,121 @@ class Project(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.code} - {self.name}"
-
+        return self.name
+    
     def get_absolute_url(self):
         return reverse('projects:project_detail', kwargs={'pk': self.pk})
-
+    
     @property
-    def is_overdue(self):
-        """期限切れかどうか"""
-        if not self.end_date:
-            return False
-        
-        from django.utils import timezone
-        today = timezone.now().date()
-        
-        if self.status in [ProjectStatus.COMPLETED, ProjectStatus.CANCELLED]:
-            return False
-            
-        return self.end_date < today
-
+    def period_display(self):
+        """期間の表示用プロパティ"""
+        if self.start_date and self.end_date:
+            return f"{self.start_date} ～ {self.end_date}"
+        elif self.start_date:
+            return f"{self.start_date} ～"
+        elif self.end_date:
+            return f"～ {self.end_date}"
+        return "未設定"
+    
     @property
-    def progress_percentage(self):
-        """進捗率を計算"""
-        if not self.start_date or not self.end_date:
-            return 0
-        
-        from django.utils import timezone
-        today = timezone.now().date()
-        
-        if today < self.start_date:
-            return 0
-        elif today > self.end_date:
-            return 100
-        
-        total_days = (self.end_date - self.start_date).days
-        elapsed_days = (today - self.start_date).days
-        
-        if total_days == 0:
-            return 100
-        
-        return min(100, max(0, int((elapsed_days / total_days) * 100)))
+    def assigned_users_display(self):
+        """担当者の表示用プロパティ"""
+        users = self.assigned_users.all()
+        if users:
+            return ", ".join([user.get_full_name() or user.username for user in users[:3]])
+        return "未設定"
+    
+    def get_status_display_with_color(self):
+        """ステータスの色付き表示"""
+        status_colors = {
+            'planning': 'secondary',
+            'active': 'primary',
+            'paused': 'warning',
+            'completed': 'success',
+            'cancelled': 'danger',
+        }
+        return {
+            'text': self.get_status_display(),
+            'color': status_colors.get(self.status, 'secondary')
+        }
 
-    @property
-    def total_workload_hours(self):
-        """総工数時間を計算"""
-        from apps.workloads.models import Workload
-        return Workload.objects.filter(project=self).aggregate(
-            total=models.Sum('hours')
-        )['total'] or 0
-
-    @property
-    def member_count(self):
-        """プロジェクトメンバー数"""
-        return self.members.filter(is_active=True).count()
-
-class ProjectMember(models.Model):
-    """プロジェクトメンバーモデル"""
+class ProjectTicket(models.Model):
+    """プロジェクトチケットモデル"""
+    PRIORITY_CHOICES = [
+        ('low', '低'),
+        ('normal', '中'),
+        ('high', '高'),
+        ('urgent', '緊急'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('open', 'オープン'),
+        ('in_progress', '進行中'),
+        ('review', 'レビュー中'),
+        ('closed', 'クローズ'),
+    ]
+    
     project = models.ForeignKey(
         Project,
         on_delete=models.CASCADE,
-        related_name='members',
+        related_name='tickets',
         verbose_name="プロジェクト"
     )
-    user = models.ForeignKey(
+    title = models.CharField(max_length=200, verbose_name="タイトル")
+    description = models.TextField(blank=True, verbose_name="説明")
+    priority = models.CharField(
+        max_length=20,
+        choices=PRIORITY_CHOICES,
+        default='normal',
+        verbose_name="優先度"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='open',
+        verbose_name="ステータス"
+    )
+    assigned_user = models.ForeignKey(
         User,
-        on_delete=models.CASCADE,
-        related_name='project_memberships',
-        verbose_name="ユーザー"
-    )
-    role = models.CharField(
-        max_length=100,
-        blank=True,
+        on_delete=models.SET_NULL,
         null=True,
-        verbose_name="役割",
-        help_text="例: 開発者、テスター、デザイナー"
-    )
-    hourly_rate = models.DecimalField(
-        max_digits=8,
-        decimal_places=0,
         blank=True,
-        null=True,
-        verbose_name="時間単価（円）"
+        verbose_name="担当者"
     )
-    join_date = models.DateField(
-        verbose_name="参加日"
-    )
-    leave_date = models.DateField(
-        blank=True,
-        null=True,
-        verbose_name="離脱日"
-    )
-    is_active = models.BooleanField(
-        default=True,
-        verbose_name="アクティブ"
-    )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name="作成日時"
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True,
-        verbose_name="更新日時"
-    )
+    due_date = models.DateField(blank=True, null=True, verbose_name="期限")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="作成日時")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新日時")
 
     class Meta:
-        verbose_name = "プロジェクトメンバー"
-        verbose_name_plural = "プロジェクトメンバー"
-        unique_together = ['project', 'user']
-        ordering = ['join_date']
+        verbose_name = "チケット"
+        verbose_name_plural = "チケット"
+        ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.project.name} - {self.user.username}"
-
-    @property
-    def total_hours(self):
-        """このメンバーの総工数時間"""
-        from apps.workloads.models import Workload
-        return Workload.objects.filter(
-            project=self.project,
-            user=self.user
-        ).aggregate(total=models.Sum('hours'))['total'] or 0
-
-class ProjectPhase(models.Model):
-    """プロジェクトフェーズモデル"""
-    project = models.ForeignKey(
-        Project,
-        on_delete=models.CASCADE,
-        related_name='phases',
-        verbose_name="プロジェクト"
-    )
-    name = models.CharField(
-        max_length=100,
-        verbose_name="フェーズ名"
-    )
-    description = models.TextField(
-        blank=True,
-        null=True,
-        verbose_name="説明"
-    )
-    start_date = models.DateField(
-        verbose_name="開始予定日"
-    )
-    end_date = models.DateField(
-        verbose_name="終了予定日"
-    )
-    estimated_hours = models.DecimalField(
-        max_digits=8,
-        decimal_places=2,
-        blank=True,
-        null=True,
-        verbose_name="見積工数（時間）"
-    )
-    order = models.PositiveIntegerField(
-        default=1,
-        verbose_name="順序"
-    )
-    is_completed = models.BooleanField(
-        default=False,
-        verbose_name="完了"
-    )
-    completion_date = models.DateField(
-        blank=True,
-        null=True,
-        verbose_name="完了日"
-    )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name="作成日時"
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True,
-        verbose_name="更新日時"
-    )
-
-    class Meta:
-        verbose_name = "プロジェクトフェーズ"
-        verbose_name_plural = "プロジェクトフェーズ"
-        ordering = ['order', 'start_date']
-        unique_together = ['project', 'name']
-
-    def __str__(self):
-        return f"{self.project.name} - {self.name}"
-
-    @property
-    def duration_days(self):
-        """フェーズの期間（日数）"""
-        return (self.end_date - self.start_date).days + 1
-
-    @property
-    def total_hours(self):
-        """このフェーズの総工数時間"""
-        from apps.workloads.models import Workload
-        return Workload.objects.filter(
-            project=self.project,
-            phase=self
-        ).aggregate(total=models.Sum('hours'))['total'] or 0
+        return f"{self.project.name} - {self.title}"
+    
+    def get_priority_display_with_color(self):
+        """優先度の色付き表示"""
+        priority_colors = {
+            'low': 'success',
+            'normal': 'info',
+            'high': 'warning',
+            'urgent': 'danger',
+        }
+        return {
+            'text': self.get_priority_display(),
+            'color': priority_colors.get(self.priority, 'info')
+        }
+    
+    def get_status_display_with_color(self):
+        """ステータスの色付き表示"""
+        status_colors = {
+            'open': 'secondary',
+            'in_progress': 'primary',
+            'review': 'warning',
+            'closed': 'success',
+        }
+        return {
+            'text': self.get_status_display(),
+            'color': status_colors.get(self.status, 'secondary')
+        }

@@ -1,16 +1,21 @@
 from django.db import models
 from django.contrib.auth import get_user_model
-from apps.projects.models import Project
-from apps.users.models import Department
-import calendar
+from decimal import Decimal
 
 User = get_user_model()
 
 class Workload(models.Model):
     """工数モデル（カレンダー形式）"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="担当者", related_name="workloads")
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, verbose_name="案件", related_name="workloads")
-    department = models.ForeignKey(Department, on_delete=models.CASCADE, verbose_name="部署", related_name="workloads", null=True, blank=True)
+    project = models.ForeignKey("projects.Project", on_delete=models.CASCADE, verbose_name="プロジェクト", related_name="workloads")
+    ticket = models.ForeignKey(
+        "projects.ProjectTicket", 
+        on_delete=models.CASCADE, 
+        verbose_name="チケット", 
+        related_name="workloads",
+        null=True,
+        blank=True
+    )
     year_month = models.CharField(max_length=7, verbose_name="年月", help_text="YYYY-MM形式")
     
     # 各日の工数（時間）
@@ -46,46 +51,59 @@ class Workload(models.Model):
     day_30 = models.DecimalField(max_digits=4, decimal_places=1, default=0, verbose_name="30日")
     day_31 = models.DecimalField(max_digits=4, decimal_places=1, default=0, verbose_name="31日")
     
-    total_hours = models.DecimalField(max_digits=6, decimal_places=1, default=0, verbose_name="月間合計時間")
-    total_days = models.DecimalField(max_digits=5, decimal_places=1, default=0, verbose_name="月間合計人日")
-    
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="作成日時")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新日時")
-
+    
     class Meta:
+        db_table = "workloads"
         verbose_name = "工数"
         verbose_name_plural = "工数"
-        ordering = ['-year_month', 'department', 'user', 'project']
-        unique_together = ['user', 'project', 'year_month']
-
-    def save(self, *args, **kwargs):
-        if not self.department and self.user.department:
-            self.department = self.user.department
-        self.calculate_totals()
-        super().save(*args, **kwargs)
-
-    def calculate_totals(self):
-        total = sum(getattr(self, f'day_{i:02d}', 0) for i in range(1, 32))
-        self.total_hours = total
-        self.total_days = round(total / 8, 1)
-
-    def get_day_value(self, day):
-        return getattr(self, f'day_{day:02d}', 0)
-
-    def set_day_value(self, day, value):
-        setattr(self, f'day_{day:02d}', value)
-
-    @property
-    def year(self):
-        return int(self.year_month.split('-')[0])
-
-    @property
-    def month(self):
-        return int(self.year_month.split('-')[1])
-
-    @property
-    def days_in_month(self):
-        return calendar.monthrange(self.year, self.month)[1]
-
+        unique_together = ["user", "project", "ticket", "year_month"]
+        indexes = [
+            models.Index(fields=["year_month"]),
+            models.Index(fields=["user", "year_month"]),
+        ]
+    
     def __str__(self):
+        if self.ticket:
+            return f"{self.user.username} - {self.ticket.title} - {self.year_month}"
         return f"{self.user.username} - {self.project.name} - {self.year_month}"
+    
+    def get_day_value(self, day):
+        """指定された日の工数を取得"""
+        try:
+            day = int(day)
+            field_name = f'day_{day:02d}'
+            value = getattr(self, field_name, Decimal('0'))
+            return float(value) if value is not None else 0.0
+        except (ValueError, AttributeError):
+            return 0.0
+    
+    def set_day_value(self, day, value):
+        """指定された日の工数を設定"""
+        try:
+            day = int(day)
+            field_name = f'day_{day:02d}'
+            if hasattr(self, field_name):
+                # Decimalに変換して設定
+                decimal_value = Decimal(str(value)) if value else Decimal('0')
+                setattr(self, field_name, decimal_value)
+        except (ValueError, AttributeError, TypeError):
+            pass
+    
+    @property
+    def total_hours(self):
+        """月の合計時間を計算"""
+        total = Decimal('0')
+        for day in range(1, 32):
+            field_name = f'day_{day:02d}'
+            if hasattr(self, field_name):
+                value = getattr(self, field_name, Decimal('0'))
+                if value is not None:
+                    total += value
+        return float(total)
+    
+    @property
+    def total_days(self):
+        """月の合計人日を計算（8時間 = 1人日）"""
+        return self.total_hours / 8

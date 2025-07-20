@@ -1,27 +1,23 @@
-from django.shortcuts import render, get_object_or_404, redirect
+from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.views.generic import TemplateView, DetailView, CreateView, UpdateView, DeleteView
-from django.urls import reverse_lazy
-from django.contrib import messages
+from django.views.generic import TemplateView
 from django.http import JsonResponse
-from django.db.models import Q, Sum
-from django.utils import timezone
-from datetime import datetime
-import calendar
-import json
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
+from django.utils import timezone
+from django.db.models import Q
+import json
+import calendar
 
 from .models import Workload
-from .forms import WorkloadForm
-from apps.projects.models import Project
+from apps.projects.models import Project, ProjectTicket
 from apps.users.models import Department
 
 User = get_user_model()
 
 class WorkloadCalendarView(LoginRequiredMixin, TemplateView):
-    """工数入力画面（カレンダー形式）"""
+    """工数カレンダー表示"""
     template_name = 'workloads/workload_calendar.html'
 
     def get_context_data(self, **kwargs):
@@ -29,8 +25,8 @@ class WorkloadCalendarView(LoginRequiredMixin, TemplateView):
         
         # 年月の取得（デフォルトは現在月）
         year_month = self.request.GET.get('year_month', timezone.now().strftime('%Y-%m'))
-        department_filter = self.request.GET.get('department', '')  # 部署フィルター
-        section_filter = self.request.GET.get('section', '')        # 課フィルター
+        department_filter = self.request.GET.get('department', '')
+        section_filter = self.request.GET.get('section', '')
         
         try:
             year, month = map(int, year_month.split('-'))
@@ -87,8 +83,11 @@ class WorkloadCalendarView(LoginRequiredMixin, TemplateView):
                 # 自分のみ表示
                 all_users = User.objects.filter(id=user.id)
 
-        workloads = workloads.select_related('user', 'project', 'user__section', 'user__department').order_by(
-            'user__department__name', 'user__section__name', 'user__username', 'project__name'
+        # selectで関連データを取得（ticketとprojectの両方）
+        workloads = workloads.select_related(
+            'user', 'project', 'ticket', 'user__section', 'user__department'
+        ).order_by(
+            'user__department__name', 'user__section__name', 'user__username', 'project__name', 'ticket__title'
         )
 
         # 統計計算
@@ -117,6 +116,11 @@ class WorkloadCalendarView(LoginRequiredMixin, TemplateView):
 
         # アクティブなプロジェクト一覧
         projects = Project.objects.filter(is_active=True).order_by('name')
+        
+        # 全チケット一覧（プロジェクトごとに整理）
+        tickets = ProjectTicket.objects.select_related('project').filter(
+            project__is_active=True
+        ).order_by('project__name', 'title')
 
         # 月の最初の日（曜日計算用）
         from datetime import date
@@ -129,12 +133,13 @@ class WorkloadCalendarView(LoginRequiredMixin, TemplateView):
             'days_in_month': days_in_month,
             'day_range': range(1, days_in_month + 1),
             'workloads': workloads,
-            'departments': departments,        # 部署一覧
-            'sections': sections,             # 課一覧
+            'departments': departments,
+            'sections': sections,
             'projects': projects,
+            'tickets': tickets,  # チケット一覧を追加
             'all_users': all_users,
-            'selected_department': department_filter,  # 選択された部署
-            'selected_section': section_filter,       # 選択された課
+            'selected_department': department_filter,
+            'selected_section': section_filter,
             'is_admin': user.is_staff or user.is_superuser,
             'unique_users_count': unique_users,
             'year_month_first_day': first_day.weekday(),
@@ -142,144 +147,70 @@ class WorkloadCalendarView(LoginRequiredMixin, TemplateView):
         
         return context
 
-class WorkloadDetailView(LoginRequiredMixin, DetailView):
-    """工数詳細表示"""
-    model = Workload
-    template_name = 'workloads/workload_detail.html'
-    context_object_name = 'workload'
-
-    def get_queryset(self):
-        user = self.request.user
-        # 管理者・スタッフは全ての工数を表示、一般ユーザーは自分の工数のみ
-        if user.is_staff or user.is_superuser:
-            return Workload.objects.select_related('user', 'project', 'department')
-        else:
-            return Workload.objects.filter(user=user).select_related('user', 'project', 'department')
-
-class WorkloadCreateView(LoginRequiredMixin, CreateView):
-    """工数入力（従来形式）"""
-    model = Workload
-    form_class = WorkloadForm
-    template_name = 'workloads/workload_form.html'
-    
-    def form_valid(self, form):
-        form.instance.user = self.request.user
-        # 部署情報を自動設定
-        user_department = getattr(self.request.user, 'department', None)
-        if user_department:
-            form.instance.department = user_department
-        elif hasattr(self.request.user, 'section') and self.request.user.section and self.request.user.section.department:
-            form.instance.department = self.request.user.section.department
-        
-        messages.success(self.request, '工数を登録しました。')
-        return super().form_valid(form)
-    
-    def get_success_url(self):
-        return reverse_lazy('workloads:workload_list')
-
-class WorkloadUpdateView(LoginRequiredMixin, UpdateView):
-    """工数編集"""
-    model = Workload
-    form_class = WorkloadForm
-    template_name = 'workloads/workload_form.html'
-    
-    def get_queryset(self):
-        user = self.request.user
-        # 管理者・スタッフは全ての工数を編集可能、一般ユーザーは自分の工数のみ
-        if user.is_staff or user.is_superuser:
-            return Workload.objects.all()
-        else:
-            return Workload.objects.filter(user=user)
-    
-    def form_valid(self, form):
-        messages.success(self.request, '工数を更新しました。')
-        return super().form_valid(form)
-    
-    def get_success_url(self):
-        return reverse_lazy('workloads:workload_detail', kwargs={'pk': self.object.pk})
-
-class WorkloadDeleteView(LoginRequiredMixin, DeleteView):
-    """工数削除"""
-    model = Workload
-    template_name = 'workloads/workload_delete.html'
-    
-    def get_queryset(self):
-        user = self.request.user
-        # 管理者・スタッフは全ての工数を削除可能、一般ユーザーは自分の工数のみ
-        if user.is_staff or user.is_superuser:
-            return Workload.objects.all()
-        else:
-            return Workload.objects.filter(user=user)
-    
-    def delete(self, request, *args, **kwargs):
-        messages.success(request, '工数を削除しました。')
-        return super().delete(request, *args, **kwargs)
-    
-    def get_success_url(self):
-        return reverse_lazy('workloads:workload_list')
-
-@require_http_methods(["POST"])
-def save_workload_ajax(request):
-    """AJAX工数保存"""
-    try:
-        data = json.loads(request.body)
-        workload_id = data.get('workload_id')
-        day = data.get('day')
-        hours = data.get('hours', 0)
-        
-        workload = get_object_or_404(Workload, id=workload_id)
-        
-        # 権限チェック
-        user_department = getattr(request.user, 'department', None)
-        if not (request.user.is_staff or request.user.is_superuser or 
-                workload.user == request.user or 
-                (user_department and workload.department == user_department)):
-            return JsonResponse({'success': False, 'error': '権限がありません'})
-        
-        # 日別工数を更新
-        workload.set_day_value(day, hours)
-        workload.save()
-        
-        return JsonResponse({
-            'success': True,
-            'total_hours': str(workload.total_hours),
-            'total_days': str(workload.total_days)
-        })
-        
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
-
+@login_required
 @require_http_methods(["POST"])
 def create_workload_ajax(request):
-    """AJAX工数行作成"""
+    """AJAX工数行追加"""
     try:
         data = json.loads(request.body)
         user_id = data.get('user_id')
-        project_id = data.get('project_id')
+        ticket_id = data.get('ticket_id')  # オプション
         year_month = data.get('year_month')
         
-        user_obj = get_object_or_404(User, id=user_id)
-        project = get_object_or_404(Project, id=project_id)
+        # 必須項目のチェック
+        if not user_id:
+            return JsonResponse({'success': False, 'error': '担当者を選択してください'})
+        
+        if not year_month:
+            return JsonResponse({'success': False, 'error': '年月を指定してください'})
+        
+        user = get_object_or_404(User, id=user_id)
+        
+        # チケットが指定されている場合
+        if ticket_id:
+            ticket = get_object_or_404(ProjectTicket, id=ticket_id)
+            project = ticket.project
+        else:
+            # チケットが指定されていない場合は、デフォルトプロジェクトまたはエラー
+            # ここでは簡単なダミープロジェクトを作成するか、既存のプロジェクトを使用
+            project = None
+            ticket = None
+            # プロジェクトがない場合のデフォルト処理
+            default_project = Project.objects.filter(is_active=True).first()
+            if default_project:
+                project = default_project
+            else:
+                return JsonResponse({'success': False, 'error': 'プロジェクトまたはチケットを選択してください'})
         
         # 権限チェック
-        user_department = getattr(request.user, 'department', None)
-        user_obj_department = getattr(user_obj, 'department', None)
+        user_section = getattr(user, 'section', None)
+        request_user_section = getattr(request.user, 'section', None)
+        user_department = getattr(user, 'department', None)
+        request_user_department = getattr(request.user, 'department', None)
         
         if not (request.user.is_staff or request.user.is_superuser or 
-                user_obj == request.user or
-                (user_department and user_obj_department == user_department)):
+                user == request.user or
+                (request_user_section and user_section == request_user_section) or
+                (request_user_department and user_department == request_user_department)):
             return JsonResponse({'success': False, 'error': '権限がありません'})
         
-        # 既存チェック
-        if Workload.objects.filter(user=user_obj, project=project, year_month=year_month).exists():
-            return JsonResponse({'success': False, 'error': '既に同じ工数行が存在します'})
+        # 重複チェック
+        existing_workload = Workload.objects.filter(
+            user=user,
+            project=project,
+            ticket=ticket,
+            year_month=year_month
+        ).first()
+        
+        if existing_workload:
+            return JsonResponse({'success': False, 'error': 'この組み合わせの工数行は既に存在します'})
         
         # 工数行作成
         workload = Workload.objects.create(
-            user=user_obj,
+            user=user,
             project=project,
-            year_month=year_month,
-            department=user_obj_department
+            ticket=ticket,
+            year_month=year_month
         )
         
         return JsonResponse({'success': True, 'workload_id': workload.id})
@@ -287,5 +218,99 @@ def create_workload_ajax(request):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
 
-# 既存のビューをエイリアス（後方互換性のため）
-WorkloadListView = WorkloadCalendarView
+@login_required
+@require_http_methods(["POST"])
+def update_workload_ajax(request):
+    """AJAX工数更新"""
+    try:
+        data = json.loads(request.body)
+        workload_id = data.get('workload_id')
+        day = data.get('day')
+        value = data.get('value', 0)
+        
+        workload = get_object_or_404(Workload, id=workload_id)
+        
+        # 権限チェック
+        user_section = getattr(request.user, 'section', None)
+        workload_user_section = getattr(workload.user, 'section', None)
+        user_department = getattr(request.user, 'department', None)
+        workload_user_department = getattr(workload.user, 'department', None)
+        
+        if not (request.user.is_staff or request.user.is_superuser or 
+                workload.user == request.user or
+                (user_section and workload_user_section == user_section) or
+                (user_department and workload_user_department == user_department)):
+            return JsonResponse({'success': False, 'error': '権限がありません'})
+        
+        # 工数更新
+        try:
+            value = float(value) if value else 0
+            if value < 0 or value > 24:
+                return JsonResponse({'success': False, 'error': '工数は0-24の範囲で入力してください'})
+        except (ValueError, TypeError):
+            return JsonResponse({'success': False, 'error': '正しい数値を入力してください'})
+        
+        # 日付の妥当性チェック
+        try:
+            day = int(day)
+            if day < 1 or day > 31:
+                return JsonResponse({'success': False, 'error': '正しい日付を入力してください'})
+        except (ValueError, TypeError):
+            return JsonResponse({'success': False, 'error': '正しい日付を入力してください'})
+        
+        workload.set_day_value(day, value)
+        workload.save()
+        
+        return JsonResponse({
+            'success': True, 
+            'total_hours': float(workload.total_hours),
+            'total_days': float(workload.total_days)
+        })
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@require_http_methods(["POST"])
+def delete_workload_ajax(request):
+    """AJAX工数行削除"""
+    try:
+        data = json.loads(request.body)
+        workload_id = data.get('workload_id')
+        
+        if not workload_id:
+            return JsonResponse({'success': False, 'error': '工数IDが指定されていません'})
+        
+        workload = get_object_or_404(Workload, id=workload_id)
+        
+        # 権限チェック
+        user_section = getattr(request.user, 'section', None)
+        workload_user_section = getattr(workload.user, 'section', None)
+        user_department = getattr(request.user, 'department', None)
+        workload_user_department = getattr(workload.user, 'department', None)
+        
+        if not (request.user.is_staff or request.user.is_superuser or 
+                workload.user == request.user or
+                (user_section and workload_user_section == user_section) or
+                (user_department and workload_user_department == user_department)):
+            return JsonResponse({'success': False, 'error': '削除権限がありません'})
+        
+        # 削除実行
+        workload_info = {
+            'user': workload.user.get_full_name() or workload.user.username,
+            'project': workload.project.name,
+            'ticket': workload.ticket.title if workload.ticket else 'なし'
+        }
+        
+        workload.delete()
+        
+        return JsonResponse({
+            'success': True, 
+            'message': f"{workload_info['user']}の{workload_info['ticket']}の工数行を削除しました"
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"Error in delete_workload_ajax: {str(e)}")
+        print(traceback.format_exc())
+        return JsonResponse({'success': False, 'error': str(e)})

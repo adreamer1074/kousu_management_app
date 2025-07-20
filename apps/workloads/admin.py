@@ -1,35 +1,43 @@
 from django.contrib import admin
 from django.db.models import Sum
-from django.utils.html import format_html
 from .models import Workload
 
 @admin.register(Workload)
 class WorkloadAdmin(admin.ModelAdmin):
     """工数管理画面（カレンダー形式対応）"""
     list_display = [
-        'year_month', 'user_display', 'project_display', 'department_display',
-        'total_hours_display', 'total_days_display', 'created_at_display'
+        'user', 
+        'project', 
+        'ticket', 
+        'year_month', 
+        'get_department',
+        'get_section',
+        'total_hours', 
+        'total_days',
+        'created_at'
     ]
     list_filter = [
-        'year_month', 'department', 'project', 'user', 'created_at',
-        ('created_at', admin.DateFieldListFilter),
+        'year_month',
+        'user__department',  # userを通してdepartmentにアクセス
+        'user__section',     # userを通してsectionにアクセス
+        'project',
+        'ticket__status',
+        'created_at'
     ]
     search_fields = [
-        'user__username', 'user__first_name', 'user__last_name', 
-        'project__name', 'department__name', 'year_month'
+        'user__username',
+        'user__first_name', 
+        'user__last_name',
+        'project__name',
+        'ticket__title'
     ]
-    ordering = ['-year_month', 'department__name', 'user__username', 'project__name']
     readonly_fields = ['total_hours', 'total_days', 'created_at', 'updated_at']
     
     fieldsets = (
         ('基本情報', {
-            'fields': ('user', 'project', 'department', 'year_month')
+            'fields': ('user', 'project', 'ticket', 'year_month')
         }),
-        ('工数合計', {
-            'fields': ('total_hours', 'total_days'),
-            'classes': ('collapse',)
-        }),
-        ('日別工数', {
+        ('工数情報', {
             'fields': (
                 ('day_01', 'day_02', 'day_03', 'day_04', 'day_05', 'day_06', 'day_07'),
                 ('day_08', 'day_09', 'day_10', 'day_11', 'day_12', 'day_13', 'day_14'),
@@ -39,106 +47,91 @@ class WorkloadAdmin(admin.ModelAdmin):
             ),
             'classes': ('wide',)
         }),
-        ('システム情報', {
-            'fields': ('created_at', 'updated_at'),
+        ('合計・メタ情報', {
+            'fields': ('total_hours', 'total_days', 'created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
     )
     
-    # 年月順でグループ化
-    date_hierarchy = 'created_at'  # year_monthフィールドは文字列なのでcreated_atを使用
+    def get_department(self, obj):
+        """部署名を取得"""
+        if hasattr(obj.user, 'department') and obj.user.department:
+            return obj.user.department.name
+        return '-'
+    get_department.short_description = '部署'
+    get_department.admin_order_field = 'user__department__name'
     
-    # ページネーション
-    list_per_page = 50
+    def get_section(self, obj):
+        """課名を取得"""
+        if hasattr(obj.user, 'section') and obj.user.section:
+            return obj.user.section.name
+        return '-'
+    get_section.short_description = '課'
+    get_section.admin_order_field = 'user__section__name'
+    
+    def total_hours(self, obj):
+        """合計時間を表示"""
+        return f"{obj.total_hours:.1f}時間"
+    total_hours.short_description = '合計時間'
+    
+    def total_days(self, obj):
+        """合計人日を表示"""
+        return f"{obj.total_days:.1f}人日"
+    total_days.short_description = '合計人日'
     
     def get_queryset(self, request):
-        """関連オブジェクトを事前取得してパフォーマンス向上"""
-        queryset = super().get_queryset(request)
-        return queryset.select_related('user', 'project', 'department')
-    
-    def user_display(self, obj):
-        """ユーザー表示をカスタマイズ"""
-        full_name = obj.user.get_full_name()
-        if full_name:
-            return format_html(
-                '<strong>{}</strong><br><small>{}</small>',
-                full_name,
-                obj.user.username
-            )
-        return obj.user.username
-    user_display.short_description = 'ユーザー'
-    
-    def project_display(self, obj):
-        """プロジェクト表示をカスタマイズ"""
-        return format_html(
-            '<span style="color: #0066cc;">{}</span>',
-            obj.project.name
+        """クエリセットを最適化"""
+        return super().get_queryset(request).select_related(
+            'user',
+            'user__department', 
+            'user__section',
+            'project',
+            'ticket'
         )
-    project_display.short_description = 'プロジェクト'
     
-    def department_display(self, obj):
-        """部署表示をカスタマイズ"""
-        if obj.department:
-            return format_html(
-                '<span style="color: #28a745;">{}</span>',
-                obj.department.name
-            )
-        return '-'
-    department_display.short_description = '部署'
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """外部キーフィールドのクエリセットを最適化"""
+        if db_field.name == "user":
+            kwargs["queryset"] = db_field.related_model.objects.select_related(
+                'department', 'section'
+            ).order_by('username')
+        elif db_field.name == "project":
+            kwargs["queryset"] = db_field.related_model.objects.filter(
+                is_active=True
+            ).order_by('name')
+        elif db_field.name == "ticket":
+            kwargs["queryset"] = db_field.related_model.objects.select_related(
+                'project'
+            ).order_by('project__name', 'title')
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
     
-    def total_hours_display(self, obj):
-        """工数表示をカスタマイズ"""
-        return format_html(
-            '<strong>{}</strong> 時間',
-            obj.total_hours
+    # カスタムアクション
+    actions = ['export_workload_summary']
+    
+    def export_workload_summary(self, request, queryset):
+        """選択された工数のサマリーを表示"""
+        total_hours = sum(w.total_hours for w in queryset)
+        total_days = total_hours / 8
+        
+        self.message_user(
+            request, 
+            f"選択された{queryset.count()}件の工数合計: "
+            f"{total_hours:.1f}時間 ({total_days:.1f}人日)"
         )
-    total_hours_display.short_description = '合計時間'
+    export_workload_summary.short_description = "選択された工数のサマリーを表示"
     
-    def total_days_display(self, obj):
-        """人日表示をカスタマイズ"""
-        return format_html(
-            '<strong>{}</strong> 人日',
-            obj.total_days
-        )
-    total_days_display.short_description = '合計人日'
+    # 日付フィールドの階層表示
+    date_hierarchy = 'created_at'
     
-    def created_at_display(self, obj):
-        """作成日時表示をカスタマイズ"""
-        return obj.created_at.strftime('%Y/%m/%d %H:%M')
-    created_at_display.short_description = '登録日時'
+    # ページあたりの表示件数
+    list_per_page = 50
+    list_max_show_all = 200
     
-    def save_model(self, request, obj, form, change):
-        """保存時に部署を自動設定"""
-        if not obj.department:
-            if obj.user.department:
-                obj.department = obj.user.department
-            elif obj.user.section and obj.user.section.department:
-                obj.department = obj.user.section.department
-        super().save_model(request, obj, form, change)
-    
-    def changelist_view(self, request, extra_context=None):
-        """管理画面に統計情報を追加"""
-        extra_context = extra_context or {}
-        
-        # 現在表示されている工数の統計
-        changelist = self.get_changelist_instance(request)
-        filtered_queryset = changelist.get_queryset(request)
-        
-        stats = filtered_queryset.aggregate(
-            total_hours=Sum('total_hours'),
-            total_days=Sum('total_days')
-        )
-        
-        extra_context.update({
-            'total_hours': stats['total_hours'] or 0,
-            'total_days': stats['total_days'] or 0,
-            'total_workloads': filtered_queryset.count(),
-            'unique_users': filtered_queryset.values('user').distinct().count(),
-            'unique_projects': filtered_queryset.values('project').distinct().count(),
-            'unique_departments': filtered_queryset.values('department').distinct().count(),
-        })
-        
-        return super().changelist_view(request, extra_context)
+    class Media:
+        css = {
+            'all': ('admin/css/workload_admin.css',)
+        }
+        js = ('admin/js/workload_admin.js',)
 
 # 管理画面のタイトルをカスタマイズ
 admin.site.site_header = "工数管理システム 管理画面"
