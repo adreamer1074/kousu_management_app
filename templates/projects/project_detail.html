@@ -1,0 +1,248 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ project.name }} - プロジェクト詳細{% endblock %}
+
+{% block page_title %}
+    <i class="bi bi-folder"></i> {{ project.name }}
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-toolbar mb-3">
+    <div class="btn-group me-2">
+        <a href="{% url 'projects:project_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 一覧に戻る
+        </a>
+    </div>
+    <div class="btn-group me-2">
+        <a href="{% url 'projects:ticket_create' project.pk %}" class="btn btn-success">
+            <i class="bi bi-plus-circle"></i> チケット追加
+        </a>
+    </div>
+    <div class="btn-group">
+        <a href="{% url 'projects:project_update' project.pk %}" class="btn btn-primary">
+            <i class="bi bi-pencil"></i> 編集
+        </a>
+        <a href="{% url 'projects:project_delete' project.pk %}" class="btn btn-outline-danger">
+            <i class="bi bi-trash"></i> 削除
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <!-- プロジェクト詳細 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-info-circle"></i> プロジェクト詳細
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <strong>プロジェクト名:</strong><br>
+                        {{ project.name }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <strong>クライアント:</strong><br>
+                        {{ project.client|default:"未設定" }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <strong>ステータス:</strong><br>
+                        {% with status_info=project.get_status_display_with_color %}
+                            <span class="badge bg-{{ status_info.color }}">
+                                {{ status_info.text }}
+                            </span>
+                        {% endwith %}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <strong>担当課:</strong><br>
+                        {% if project.assigned_section %}
+                            <span class="badge bg-info">
+                                {{ project.assigned_section.department.name }} - {{ project.assigned_section.name }}
+                            </span>
+                        {% else %}
+                            <span class="text-muted">未設定</span>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <strong>期間:</strong><br>
+                        {{ project.period_display }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <strong>予算:</strong><br>
+                        {% if project.budget %}
+                            ¥{{ project.budget|floatformat:0 }}
+                        {% else %}
+                            <span class="text-muted">未設定</span>
+                        {% endif %}
+                    </div>
+                    {% if project.description %}
+                        <div class="col-12 mb-3">
+                            <strong>説明:</strong><br>
+                            <div class="bg-light p-3 rounded">
+                                {{ project.description|linebreaks }}
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- チケット一覧 -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-ticket"></i> チケット一覧
+                </h5>
+                <a href="{% url 'projects:ticket_create' project.pk %}" class="btn btn-sm btn-success">
+                    <i class="bi bi-plus"></i> 新規チケット
+                </a>
+            </div>
+            <div class="card-body">
+                {% if tickets %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>タイトル</th>
+                                    <th>優先度</th>
+                                    <th>ステータス</th>
+                                    <th>担当者</th>
+                                    <th>期限</th>
+                                    <th>作成日</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for ticket in tickets %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ ticket.title }}</strong>
+                                            {% if ticket.description %}
+                                                <br><small class="text-muted">{{ ticket.description|truncatechars:50 }}</small>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% with priority_info=ticket.get_priority_display_with_color %}
+                                                <span class="badge bg-{{ priority_info.color }}">
+                                                    {{ priority_info.text }}
+                                                </span>
+                                            {% endwith %}
+                                        </td>
+                                        <td>
+                                            {% with status_info=ticket.get_status_display_with_color %}
+                                                <span class="badge bg-{{ status_info.color }}">
+                                                    {{ status_info.text }}
+                                                </span>
+                                            {% endwith %}
+                                        </td>
+                                        <td>
+                                            {% if ticket.assigned_user %}
+                                                {{ ticket.assigned_user.get_full_name|default:ticket.assigned_user.username }}
+                                            {% else %}
+                                                <span class="text-muted">未設定</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if ticket.due_date %}
+                                                {{ ticket.due_date|date:"Y/m/d" }}
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <small>{{ ticket.created_at|date:"m/d H:i" }}</small>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-ticket fs-2 mb-2 d-block"></i>
+                        チケットがありません。
+                        <br>
+                        <a href="{% url 'projects:ticket_create' project.pk %}" class="btn btn-success mt-2">
+                            最初のチケットを作成
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <!-- 担当課 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-building"></i> 担当課
+                </h6>
+            </div>
+            <div class="card-body">
+                {% if project.assigned_section %}
+                    <div class="d-flex align-items-center">
+                        <div class="bg-info rounded-circle d-flex align-items-center justify-content-center text-white me-2" style="width: 32px; height: 32px; font-size: 0.8rem;">
+                            {{ project.assigned_section.name.0|upper }}
+                        </div>
+                        <div>
+                            <div class="fw-bold">{{ project.assigned_section.name }}</div>
+                            <small class="text-muted">{{ project.assigned_section.department.name }}</small>
+                        </div>
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">担当課が設定されていません</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- 担当者 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-people"></i> 担当者
+                </h6>
+            </div>
+            <div class="card-body">
+                {% if project.assigned_users.exists %}
+                    {% for user in project.assigned_users.all %}
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="bg-primary rounded-circle d-flex align-items-center justify-content-center text-white me-2" style="width: 32px; height: 32px; font-size: 0.8rem;">
+                                {{ user.get_full_name.0|default:user.username.0|upper }}
+                            </div>
+                            <div>
+                                <div class="fw-bold">{{ user.get_full_name|default:user.username }}</div>
+                                <small class="text-muted">{{ user.email }}</small>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted mb-0">担当者が設定されていません</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- 作成・更新情報 -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-clock"></i> 作成・更新情報
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <strong>作成日時:</strong><br>
+                    <small>{{ project.created_at|date:"Y年m月d日 H:i" }}</small>
+                </div>
+                <div>
+                    <strong>最終更新:</strong><br>
+                    <small>{{ project.updated_at|date:"Y年m月d日 H:i" }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
