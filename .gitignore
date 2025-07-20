@@ -13,3 +13,5 @@ migrations/
 
 # Env files
 .env
+# Virtual environment
+.venv/
