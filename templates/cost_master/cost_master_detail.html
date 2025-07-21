@@ -1,0 +1,528 @@
+{% extends 'base.html' %}
+{% load cost_filters %}
+{% load static %}
+
+{% block title %}{{ cost_master }} - 詳細 | 工数管理システム{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detail-card {
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 2rem;
+    }
+    .detail-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px 10px 0 0;
+        padding: 2rem;
+    }
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        padding: 1.5rem;
+    }
+    .info-item {
+        padding: 1rem;
+        border-radius: 8px;
+        background: #f8f9fa;
+        border-left: 4px solid #0d6efd;
+    }
+    .info-label {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-bottom: 0.25rem;
+        font-weight: 500;
+    }
+    .info-value {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #212529;
+    }
+    .profit-display {
+        font-size: 2rem;
+        font-weight: bold;
+        text-align: center;
+        padding: 1.5rem;
+        border-radius: 10px;
+        margin: 1rem 0;
+    }
+    .profit-high { background: linear-gradient(135deg, #28a745, #20c997); color: white; }
+    .profit-medium { background: linear-gradient(135deg, #ffc107, #fd7e14); color: white; }
+    .profit-low { background: linear-gradient(135deg, #dc3545, #e83e8c); color: white; }
+    .billing-type-card {
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+    }
+    .billing-type-monthly { background-color: #e3f2fd; border-left: 4px solid #2196f3; }
+    .billing-type-daily { background-color: #f3e5f5; border-left: 4px solid #9c27b0; }
+    .billing-type-hourly { background-color: #e8f5e8; border-left: 4px solid #4caf50; }
+    .billing-type-fixed { background-color: #fff3e0; border-left: 4px solid #ff9800; }
+    .action-button {
+        margin: 0.25rem;
+        min-width: 120px;
+    }
+    .timeline-item {
+        border-left: 3px solid #dee2e6;
+        padding-left: 1rem;
+        margin-bottom: 1rem;
+        position: relative;
+    }
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: -6px;
+        top: 0;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #6c757d;
+    }
+    .timeline-item.active::before {
+        background: #28a745;
+    }
+    .conversion-table {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .comparison-chart {
+        height: 300px;
+        margin: 1rem 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- ページヘッダー -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'cost_master:cost_master_list' %}">コストマスター一覧</a></li>
+                <li class="breadcrumb-item active">詳細</li>
+            </ol>
+        </nav>
+        <div class="d-flex gap-2">
+            <a href="{% url 'cost_master:cost_master_edit' cost_master.pk %}" class="btn btn-primary action-button">
+                <i class="bi bi-pencil"></i> 編集
+            </a>
+            <a href="{% url 'cost_master:cost_master_create' %}?copy={{ cost_master.pk }}" class="btn btn-outline-secondary action-button">
+                <i class="bi bi-files"></i> 複製
+            </a>
+            <button class="btn btn-outline-success action-button" onclick="exportDetail()">
+                <i class="bi bi-download"></i> エクスポート
+            </button>
+            <a href="{% url 'cost_master:cost_master_list' %}" class="btn btn-outline-secondary action-button">
+                <i class="bi bi-arrow-left"></i> 一覧に戻る
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- 左カラム: メイン情報 -->
+        <div class="col-lg-8">
+            <!-- 基本情報カード -->
+            <div class="detail-card">
+                <div class="detail-header">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h1 class="h3 mb-2">
+                                <i class="bi bi-calculator"></i> {{ cost_master.department.name }}
+                            </h1>
+                            <p class="mb-1">
+                                <span class="badge bg-light text-dark me-2">{{ cost_master.get_employee_level_display }}</span>
+                                <span class="badge bg-light text-dark me-2">{{ cost_master.get_billing_type_display }}</span>
+                                {% if cost_master.is_active %}
+                                    <span class="badge bg-success">有効</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">無効</span>
+                                {% endif %}
+                            </p>
+                            <small class="opacity-75">
+                                作成日: {{ cost_master.created_at|date:"Y年n月j日" }} | 
+                                更新日: {{ cost_master.updated_at|date:"Y年n月j日" }}
+                            </small>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            {% if cost_master.profit_margin >= 20 %}
+                                <div class="profit-display profit-high">
+                            {% elif cost_master.profit_margin >= 10 %}
+                                <div class="profit-display profit-medium">
+                            {% else %}
+                                <div class="profit-display profit-low">
+                            {% endif %}
+                                <small>利益率</small><br>
+                                {{ cost_master.profit_margin|floatformat:1 }}%
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 基本情報グリッド -->
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">部署</div>
+                        <div class="info-value">{{ cost_master.department.name }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">社員レベル</div>
+                        <div class="info-value">{{ cost_master.get_employee_level_display }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">請求タイプ</div>
+                        <div class="info-value">{{ cost_master.get_billing_type_display }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">ステータス</div>
+                        <div class="info-value">
+                            {% if cost_master.is_active %}
+                                <span class="text-success">有効</span>
+                            {% else %}
+                                <span class="text-secondary">無効</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 単価詳細カード -->
+            <div class="detail-card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-currency-yen"></i> 単価詳細</h5>
+                </div>
+                <div class="card-body">
+                    {% if cost_master.billing_type == 'monthly' %}
+                    <div class="billing-type-card billing-type-monthly">
+                        <h6 class="text-primary"><i class="bi bi-calendar-month"></i> 月額単価</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="info-label">月額原価</div>
+                                <div class="info-value">{{ cost_master.monthly_cost }} 万円</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-label">月額請求単価</div>
+                                <div class="info-value text-primary">{{ cost_master.monthly_billing }} 万円</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% elif cost_master.billing_type == 'daily' %}
+                    <div class="billing-type-card billing-type-daily">
+                        <h6 class="text-purple"><i class="bi bi-calendar-day"></i> 日額単価</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="info-label">日額原価</div>
+                                <div class="info-value">{{ cost_master.daily_cost }} 万円</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-label">日額請求単価</div>
+                                <div class="info-value text-purple">{{ cost_master.daily_billing }} 万円</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% elif cost_master.billing_type == 'hourly' %}
+                    <div class="billing-type-card billing-type-hourly">
+                        <h6 class="text-success"><i class="bi bi-clock"></i> 時間単価</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="info-label">時間原価</div>
+                                <div class="info-value">{{ cost_master.hourly_cost }} 円</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-label">時間請求単価</div>
+                                <div class="info-value text-success">{{ cost_master.hourly_billing }} 円</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% elif cost_master.billing_type == 'fixed' %}
+                    <div class="billing-type-card billing-type-fixed">
+                        <h6 class="text-warning"><i class="bi bi-cash-stack"></i> 固定料金</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="info-label">固定原価</div>
+                                <div class="info-value">{{ cost_master.fixed_cost }} 万円</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-label">固定請求料金</div>
+                                <div class="info-value text-warning">{{ cost_master.fixed_billing }} 万円</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 特別条件カード -->
+            <div class="detail-card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-gear"></i> 特別条件</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="info-item">
+                                <div class="info-label">残業単価倍率</div>
+                                <div class="info-value">{{ cost_master.overtime_rate }} 倍</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-item">
+                                <div class="info-label">休日単価倍率</div>
+                                <div class="info-value">{{ cost_master.holiday_rate }} 倍</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 有効期間タイムライン -->
+            <div class="detail-card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-calendar-range"></i> 有効期間</h5>
+                </div>
+                <div class="card-body">
+                    <div class="timeline-item {% if cost_master.is_active %}active{% endif %}">
+                        <strong>有効開始日:</strong> {{ cost_master.effective_from|date:"Y年n月j日" }}
+                        {% if cost_master.is_active and not cost_master.effective_to %}
+                            <span class="badge bg-success ms-2">現在有効</span>
+                        {% endif %}
+                    </div>
+                    {% if cost_master.effective_to %}
+                    <div class="timeline-item">
+                        <strong>有効終了日:</strong> {{ cost_master.effective_to|date:"Y年n月j日" }}
+                        {% if cost_master.effective_to < today %}
+                            <span class="badge bg-secondary ms-2">期限切れ</span>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div class="timeline-item">
+                        <strong>有効終了日:</strong> 無期限
+                        <span class="badge bg-info ms-2">継続</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 右カラム: サイドバー -->
+        <div class="col-lg-4">
+            <!-- 単価換算表 -->
+            <div class="conversion-table mb-4">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-calculator"></i> 単価換算表</h6>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <td>月額換算</td>
+                                <td class="text-end fw-bold">
+                                    {{ conversions.monthly|floatformat:1 }} 万円
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>日額換算</td>
+                                <td class="text-end fw-bold">
+                                    {% if conversions.daily %}
+                                        {{ conversions.daily|floatformat:2 }} 万円
+                                    {% else %}
+                                        - 万円
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>時間換算</td>
+                                <td class="text-end fw-bold">
+                                    {% if conversions.hourly %}
+                                        {{ conversions.hourly|floatformat:0 }} 円
+                                    {% else %}
+                                        - 円
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <small class="text-muted">※ 月20日、1日8時間で換算</small>
+                </div>
+            </div>
+
+            <!-- 関連情報 -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-link-45deg"></i> 関連情報</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'cost_master:cost_master_list' %}?department={{ cost_master.department.id }}" 
+                           class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-building"></i> 同部署の設定 ({{ related_projects_count }}件)
+                        </a>
+                        <a href="{% url 'cost_master:cost_master_list' %}?employee_level={{ cost_master.employee_level }}" 
+                           class="btn btn-outline-info btn-sm">
+                            <i class="bi bi-person"></i> 同レベルの設定
+                        </a>
+                        <a href="{% url 'cost_master:cost_master_list' %}?billing_type={{ cost_master.billing_type }}" 
+                           class="btn btn-outline-success btn-sm">
+                            <i class="bi bi-cash"></i> 同タイプの設定
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 履歴・操作ログ -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-clock-history"></i> 更新履歴</h6>
+                </div>
+                <div class="card-body">
+                    <div class="timeline-item active">
+                        <small class="text-muted">{{ cost_master.updated_at|date:"Y/m/d H:i" }}</small><br>
+                        <strong>最終更新</strong>
+                    </div>
+                    <div class="timeline-item">
+                        <small class="text-muted">{{ cost_master.created_at|date:"Y/m/d H:i" }}</small><br>
+                        <strong>作成</strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- クイックアクション -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-lightning"></i> クイックアクション</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-primary btn-sm" onclick="toggleStatus()">
+                            {% if cost_master.is_active %}
+                                <i class="bi bi-pause"></i> 無効にする
+                            {% else %}
+                                <i class="bi bi-play"></i> 有効にする
+                            {% endif %}
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" onclick="showComparison()">
+                            <i class="bi bi-bar-chart"></i> 他設定と比較
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm" onclick="calculateCost()">
+                            <i class="bi bi-calculator"></i> 工数計算機
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 工数計算機モーダル -->
+<div class="modal fade" id="costCalculatorModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-calculator"></i> 工数計算機</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="workdays" class="form-label">工数（人日）</label>
+                    <input type="number" class="form-control" id="workdays" step="0.5" min="0" value="1">
+                </div>
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="isOvertime">
+                        <label class="form-check-label" for="isOvertime">
+                            残業 ({{ cost_master.overtime_rate }}倍)
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="isHoliday">
+                        <label class="form-check-label" for="isHoliday">
+                            休日 ({{ cost_master.holiday_rate }}倍)
+                        </label>
+                    </div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-6">
+                        <small class="text-muted">原価</small>
+                        <div class="h5" id="calculated-cost">-</div>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">請求金額</small>
+                        <div class="h5 text-primary" id="calculated-billing">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// データエクスポート
+function exportDetail() {
+    // エクスポート機能の実装
+    window.print();
+}
+
+// ステータス切り替え
+function toggleStatus() {
+    if (confirm('ステータスを変更しますか？')) {
+        // AJAX実装予定
+        alert('ステータス変更機能は準備中です。');
+    }
+}
+
+// 比較表示
+function showComparison() {
+    alert('比較機能は準備中です。');
+}
+
+// 工数計算機
+function calculateCost() {
+    const modal = new bootstrap.Modal(document.getElementById('costCalculatorModal'));
+    modal.show();
+    updateCalculation();
+}
+
+// 計算機の計算更新
+function updateCalculation() {
+    const workdays = parseFloat(document.getElementById('workdays').value) || 0;
+    const isOvertime = document.getElementById('isOvertime').checked;
+    const isHoliday = document.getElementById('isHoliday').checked;
+    
+    let baseCost = {{ cost_master.calculated_daily_cost }};
+    let baseBilling = {{ cost_master.calculated_daily_billing }};
+    
+    let totalCost = baseCost * workdays;
+    let totalBilling = baseBilling * workdays;
+    
+    if (isOvertime) {
+        totalCost *= {{ cost_master.overtime_rate }};
+        totalBilling *= {{ cost_master.overtime_rate }};
+    }
+    
+    if (isHoliday) {
+        totalCost *= {{ cost_master.holiday_rate }};
+        totalBilling *= {{ cost_master.holiday_rate }};
+    }
+    
+    document.getElementById('calculated-cost').textContent = totalCost.toFixed(2) + ' 万円';
+    document.getElementById('calculated-billing').textContent = totalBilling.toFixed(2) + ' 万円';
+}
+
+// 計算機のイベントリスナー
+document.addEventListener('DOMContentLoaded', function() {
+    const calculatorFields = ['workdays', 'isOvertime', 'isHoliday'];
+    calculatorFields.forEach(fieldId => {
+        const field = document.getElementById(fieldId);
+        if (field) {
+            field.addEventListener('change', updateCalculation);
+            field.addEventListener('input', updateCalculation);
+        }
+    });
+});
+</script>
+{% endblock %}
