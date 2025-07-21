@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from apps.users.models import Department
 
 User = get_user_model()
 
@@ -179,3 +180,146 @@ class ProjectTicket(models.Model):
             'text': self.get_status_display(),
             'color': status_colors.get(self.status, 'secondary')
         }
+
+class ProjectDetail(models.Model):
+    """案件詳細管理"""
+    
+    # ステータス選択肢
+    STATUS_CHOICES = [
+        ('planning', '計画中'),
+        ('active', '進行中'),
+        ('completed', '完了'),
+        ('on_hold', '保留'),
+        ('cancelled', 'キャンセル'),
+        ('inspection_pending', '検収待ち'),
+    ]
+    
+    # 案件分類選択肢
+    CASE_CLASSIFICATION_CHOICES = [
+        ('development', '開発'),
+        ('maintenance', '保守'),
+        ('consulting', 'コンサルティング'),
+        ('support', 'サポート'),
+        ('other', 'その他'),
+    ]
+    
+    # 基本情報
+    project = models.OneToOneField('Project', on_delete=models.CASCADE, related_name='detail')
+    project_name = models.CharField('プロジェクト名', max_length=200)
+    case_name = models.CharField('案件名', max_length=200)
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, verbose_name='部署')
+    status = models.CharField('ステータス', max_length=20, choices=STATUS_CHOICES, default='planning')
+    case_classification = models.CharField('案件分類', max_length=20, choices=CASE_CLASSIFICATION_CHOICES, default='development')
+    
+    # 日程情報
+    estimate_date = models.DateField('見積日', null=True, blank=True)
+    order_date = models.DateField('受注日', null=True, blank=True)
+    planned_end_date = models.DateField('終了日（予定）', null=True, blank=True)
+    actual_end_date = models.DateField('終了日実績', null=True, blank=True)
+    inspection_date = models.DateField('検収日', null=True, blank=True)
+    
+    # 金額情報（税別）
+    budget_amount = models.DecimalField('使用可能金額（税別）', max_digits=12, decimal_places=0, default=0)
+    billing_amount = models.DecimalField('請求金額（税別）', max_digits=12, decimal_places=0, default=0)
+    outsourcing_cost = models.DecimalField('外注費（税別）', max_digits=12, decimal_places=0, default=0)
+    
+    # 工数情報（人日）
+    estimated_workdays = models.DecimalField('見積工数（人日）', max_digits=8, decimal_places=2, default=0)
+    used_workdays = models.DecimalField('使用工数（人日）', max_digits=8, decimal_places=2, default=0)
+    newbie_workdays = models.DecimalField('新入社員使用工数（人日）', max_digits=8, decimal_places=2, default=0)
+    
+    # 計算フィールド（プロパティで動的計算）
+    # remaining_workdays = 見積工数 - 使用工数
+    # remaining_amount = 使用可能金額 - (使用工数 × 単価)
+    # profit_rate = (請求金額 - 実際費用) / 請求金額 × 100
+    # wip_amount = 仕掛中金額（人日×単価）
+    
+    # 取引先情報
+    billing_destination = models.CharField('請求先', max_length=200, blank=True)
+    billing_contact = models.CharField('請求先担当者', max_length=100, blank=True)
+    mub_manager = models.CharField('MUB担当者', max_length=100, blank=True)
+    
+    # その他
+    remarks = models.TextField('備考', blank=True)
+    created_at = models.DateTimeField('作成日時', auto_now_add=True)
+    updated_at = models.DateTimeField('更新日時', auto_now=True)
+    
+    class Meta:
+        verbose_name = '案件詳細'
+        verbose_name_plural = '案件詳細'
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.project_name} - {self.case_name}"
+    
+    @property
+    def remaining_workdays(self):
+        """残工数（人日）"""
+        return self.estimated_workdays - self.used_workdays
+    
+    @property
+    def remaining_amount(self):
+        """残金額（税抜）"""
+        # 単価マスターから取得して計算
+        try:
+            cost_master = self.get_cost_master()
+            used_cost = self.used_workdays * cost_master.monthly_cost / 20  # 月20日換算
+            return self.budget_amount - used_cost
+        except:
+            return self.budget_amount
+    
+    @property
+    def profit_rate(self):
+        """利益率"""
+        if self.billing_amount > 0:
+            total_cost = self.get_total_cost()
+            profit = self.billing_amount - total_cost
+            return (profit / self.billing_amount) * 100
+        return 0
+    
+    @property
+    def wip_amount(self):
+        """仕掛中金額（人日×単価）"""
+        try:
+            cost_master = self.get_cost_master()
+            daily_rate = cost_master.monthly_cost / 20  # 月20日換算
+            return self.used_workdays * daily_rate
+        except:
+            return 0
+    
+    @property
+    def tax_included_billing_amount(self):
+        """税込請求金額"""
+        return self.billing_amount * 1.1  # 10%税込
+    
+    def get_cost_master(self):
+        """コストマスターを取得"""
+        from apps.cost_master.models import CostMaster
+        return CostMaster.objects.filter(department=self.department).first()
+    
+    def get_total_cost(self):
+        """総コスト計算"""
+        try:
+            cost_master = self.get_cost_master()
+            personnel_cost = self.used_workdays * cost_master.monthly_cost / 20
+            return personnel_cost + self.outsourcing_cost
+        except:
+            return self.outsourcing_cost
+    
+    def update_used_workdays_from_workloads(self, year_month=None):
+        """工数入力データから使用工数を更新"""
+        from apps.workloads.models import Workload
+        
+        if year_month:
+            workloads = Workload.objects.filter(
+                project=self.project,
+                year_month=year_month
+            )
+        else:
+            workloads = Workload.objects.filter(project=self.project)
+        
+        total_days = sum(w.total_days for w in workloads)
+        self.used_workdays = total_days
+        self.save()
+        
+        return total_days
