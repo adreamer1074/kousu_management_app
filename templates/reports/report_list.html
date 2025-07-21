@@ -1,124 +1,103 @@
 {% extends 'base.html' %}
 
-{% block title %}レポート - 工数管理システム{% endblock %}
+{% block title %}レポート一覧 - 工数管理システム{% endblock %}
 
-{% block page_title %}レポート・統計{% endblock %}
+{% block page_title %}
+    <i class="bi bi-bar-chart"></i> レポート一覧
+{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <!-- 統計カード -->
-    <div class="col-sm-6 col-xl-3">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex align-items-start justify-content-between">
-                    <div>
-                        <span class="text-muted d-block">総工数</span>
-                        <span class="h3 mb-0">{{ total_hours|default:0 }}</span>
-                        <small class="text-muted">時間</small>
-                    </div>
-                    <i class="bi bi-clock text-primary" style="font-size: 2rem;"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-sm-6 col-xl-3">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex align-items-start justify-content-between">
-                    <div>
-                        <span class="text-muted d-block">アクティブプロジェクト</span>
-                        <span class="h3 mb-0">{{ total_projects }}</span>
-                        <small class="text-muted">件</small>
-                    </div>
-                    <i class="bi bi-folder text-success" style="font-size: 2rem;"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-sm-6 col-xl-3">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex align-items-start justify-content-between">
-                    <div>
-                        <span class="text-muted d-block">あなたの総工数</span>
-                        <span class="h3 mb-0">{{ user_workloads.total|default:0 }}</span>
-                        <small class="text-muted">時間</small>
-                    </div>
-                    <i class="bi bi-person-clock text-info" style="font-size: 2rem;"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-sm-6 col-xl-3">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex align-items-start justify-content-between">
-                    <div>
-                        <span class="text-muted d-block">あなたの工数記録数</span>
-                        <span class="h3 mb-0">{{ user_workloads.count|default:0 }}</span>
-                        <small class="text-muted">件</small>
-                    </div>
-                    <i class="bi bi-list-check text-warning" style="font-size: 2rem;"></i>
-                </div>
-            </div>
-        </div>
+<div class="row">
+    <div class="col-12">
+        <p class="text-muted mb-4">
+            工数管理システムの各種レポートをご確認いただけます。
+        </p>
     </div>
 </div>
 
 <div class="row">
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-bar-chart"></i> レポート機能
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="card border">
-                            <div class="card-body text-center">
-                                <i class="bi bi-calendar-month text-primary" style="font-size: 3rem;"></i>
-                                <h6 class="mt-3">月次レポート</h6>
-                                <p class="text-muted small">月別の工数集計とプロジェクト進捗</p>
-                                <button class="btn btn-primary btn-sm" disabled>
-                                    準備中
-                                </button>
-                            </div>
+    {% for report in reports %}
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="bg-{{ report.color }} text-white rounded-circle p-3 me-3">
+                            <i class="{{ report.icon }}" style="font-size: 1.5rem;"></i>
+                        </div>
+                        <div>
+                            <h5 class="card-title mb-1">{{ report.name }}</h5>
                         </div>
                     </div>
                     
-                    <div class="col-md-4">
-                        <div class="card border">
-                            <div class="card-body text-center">
-                                <i class="bi bi-folder-check text-success" style="font-size: 3rem;"></i>
-                                <h6 class="mt-3">プロジェクト別レポート</h6>
-                                <p class="text-muted small">プロジェクト毎の詳細分析</p>
-                                <button class="btn btn-success btn-sm" disabled>
-                                    準備中
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                    <p class="card-text text-muted flex-grow-1">
+                        {{ report.description }}
+                    </p>
                     
-                    <div class="col-md-4">
-                        <div class="card border">
-                            <div class="card-body text-center">
-                                <i class="bi bi-people text-info" style="font-size: 3rem;"></i>
-                                <h6 class="mt-3">ユーザー別レポート</h6>
-                                <p class="text-muted small">チームメンバーの工数分析</p>
-                                <button class="btn btn-info btn-sm" disabled>
-                                    準備中
-                                </button>
-                            </div>
-                        </div>
+                    <div class="mt-auto">
+                        <a href="{% url report.url %}" class="btn btn-{{ report.color }} w-100">
+                            <i class="bi bi-arrow-right-circle me-2"></i>レポート表示
+                        </a>
                     </div>
                 </div>
             </div>
         </div>
+    {% endfor %}
+</div>
+
+<!-- クイックアクションセクション -->
+<div class="row mt-5">
+    <div class="col-12">
+        <h4><i class="bi bi-lightning"></i> クイックアクション</h4>
+        <hr>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="bi bi-download text-success" style="font-size: 2rem;"></i>
+                <h6 class="mt-2">CSV一括出力</h6>
+                <p class="text-muted small">全レポートをCSV形式で出力</p>
+                <a href="{% url 'reports:workload_export' %}" class="btn btn-outline-success btn-sm">
+                    出力する
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="bi bi-calendar-event text-primary" style="font-size: 2rem;"></i>
+                <h6 class="mt-2">工数入力</h6>
+                <p class="text-muted small">工数カレンダーで入力</p>
+                <a href="{% url 'workloads:workload_calendar' %}" class="btn btn-outline-primary btn-sm">
+                    入力画面へ
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="bi bi-gear text-secondary" style="font-size: 2rem;"></i>
+                <h6 class="mt-2">設定</h6>
+                <p class="text-muted small">レポート設定とカスタマイズ</p>
+                <button class="btn btn-outline-secondary btn-sm" disabled>
+                    準備中
+                </button>
+            </div>
+        </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+</style>
 {% endblock %}

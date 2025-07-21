@@ -96,6 +96,26 @@
                                 </a></li>
                             </ul>
                         </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-calculator"></i> コスト管理
+                            </a>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="{% url 'cost_master:cost_master_list' %}">
+                                    <i class="bi bi-list-ul"></i> コストマスター一覧
+                                </a></li>
+                                <li><a class="dropdown-item" href="{% url 'cost_master:cost_master_create' %}">
+                                    <i class="bi bi-plus-circle"></i> 新規作成
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{% url 'cost_master:client_billing_rate_list' %}">
+                                    <i class="bi bi-people"></i> 取引先別単価
+                                </a></li>
+                                <li><a class="dropdown-item" href="{% url 'cost_master:project_cost_setting_list' %}">
+                                    <i class="bi bi-gear"></i> 案件別設定
+                                </a></li>
+                            </ul>
+                        </li>
                     {% endif %}
                     
                     <!-- 全ユーザー共通メニュー -->
@@ -105,7 +125,7 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'reports:report-list' %}">
+                        <a class="nav-link" href="{% url 'reports:report_list' %}">
                             <i class="bi bi-bar-chart"></i> レポート
                         </a>
                     </li>
@@ -167,7 +187,7 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'reports:report-list' %}">
+                            <a class="nav-link" href="{% url 'reports:report_list' %}">
                                 <i class="bi bi-bar-chart"></i> レポート
                             </a>
                         </li>

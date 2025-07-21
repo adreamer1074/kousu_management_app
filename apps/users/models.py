@@ -1,6 +1,38 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
+class CustomUser(AbstractUser):
+    """カスタムユーザーモデル"""
+    department = models.ForeignKey(
+        'Department',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='users',
+        verbose_name="所属部署"
+    )
+    section = models.ForeignKey(
+        'Section',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='users',
+        verbose_name="所属課"
+    )
+
+    class Meta:
+        verbose_name = "ユーザー"
+        verbose_name_plural = "ユーザー"
+
+    @property
+    def full_organization(self):
+        """所属組織の完全名"""
+        if self.section:
+            return f"{self.department.name} - {self.section.name}"
+        elif self.department:
+            return self.department.name
+        return "未設定"
+
 class Department(models.Model):
     """部署モデル"""
     name = models.CharField(
@@ -103,38 +135,6 @@ class Section(models.Model):
     def active_users_count(self):
         """アクティブユーザー数"""
         return self.users.filter(is_active=True).count()
-
-class CustomUser(AbstractUser):
-    """カスタムユーザーモデル"""
-    department = models.ForeignKey(
-        Department,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='users',
-        verbose_name="所属部署"
-    )
-    section = models.ForeignKey(
-        Section,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='users',
-        verbose_name="所属課"
-    )
-
-    class Meta:
-        verbose_name = "ユーザー"
-        verbose_name_plural = "ユーザー"
-
-    @property
-    def full_organization(self):
-        """所属組織の完全名"""
-        if self.section:
-            return f"{self.department.name} - {self.section.name}"
-        elif self.department:
-            return self.department.name
-        return "未設定"
 
 class UserProfile(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE)

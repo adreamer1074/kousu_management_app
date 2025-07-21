@@ -1,64 +1,81 @@
 from django.contrib import admin
-from .models import Project, ProjectTicket
+from .models import Project, ProjectDetail
 
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
     """プロジェクト管理画面"""
-    list_display = [
-        'name', 'client', 'status', 
-        'start_date', 'end_date', 'assigned_section', 'is_active', 'created_at'
-    ]
-    list_filter = ['status', 'is_active', 'created_at', 'start_date', 'assigned_section']
-    search_fields = ['name', 'client', 'description']
-    readonly_fields = ['created_at', 'updated_at']
+    list_display = ['name', 'status', 'start_date', 'end_date', 'assigned_section', 'is_active']
+    list_filter = ['status', 'assigned_section', 'is_active', 'created_at']
+    search_fields = ['name', 'description', 'client']
+    filter_horizontal = ['assigned_users']
+    date_hierarchy = 'created_at'
     
     fieldsets = (
         ('基本情報', {
-            'fields': ('name', 'description')
+            'fields': ('name', 'description', 'client', 'status')
         }),
-        ('プロジェクト詳細', {
-            'fields': ('client', 'status', 'start_date', 'end_date', 'budget')
+        ('期間・予算', {
+            'fields': ('start_date', 'end_date', 'budget')
         }),
-        ('担当', {
+        ('担当者', {
             'fields': ('assigned_section', 'assigned_users')
         }),
-        ('設定', {
+        ('その他', {
             'fields': ('is_active',)
         }),
-        ('システム情報', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
     )
-    
-    filter_horizontal = ['assigned_users']
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('assigned_section').prefetch_related('assigned_users')
 
-@admin.register(ProjectTicket)
-class ProjectTicketAdmin(admin.ModelAdmin):
-    """プロジェクトチケット管理画面"""
+@admin.register(ProjectDetail)
+class ProjectDetailAdmin(admin.ModelAdmin):
+    """プロジェクト詳細管理画面"""
     list_display = [
-        'title', 'project', 'priority', 'status', 
-        'assigned_user', 'due_date', 'created_at'
+        'project_name', 'case_name', 'department', 'status', 
+        'case_classification', 'budget_amount', 'billing_amount', 
+        'estimated_workdays', 'used_workdays'
     ]
-    list_filter = ['priority', 'status', 'created_at', 'due_date']
-    search_fields = ['title', 'project__name', 'description']
-    readonly_fields = ['created_at', 'updated_at']
+    list_filter = [
+        'status', 'case_classification', 'department', 
+        'estimate_date', 'order_date'
+    ]
+    search_fields = [
+        'project_name', 'case_name', 'billing_destination', 
+        'mub_manager', 'remarks'
+    ]
+    ordering = ['-created_at']
     
     fieldsets = (
         ('基本情報', {
-            'fields': ('project', 'title', 'description')
+            'fields': ('project', 'project_name', 'case_name', 'department', 'status', 'case_classification')
         }),
-        ('設定', {
-            'fields': ('priority', 'status', 'assigned_user', 'due_date')
+        ('日程情報', {
+            'fields': ('estimate_date', 'order_date', 'planned_end_date', 'actual_end_date', 'inspection_date')
         }),
-        ('システム情報', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
+        ('金額情報（税別）', {
+            'fields': ('budget_amount', 'billing_amount', 'outsourcing_cost')
+        }),
+        ('工数情報（人日）', {
+            'fields': ('estimated_workdays', 'used_workdays', 'newbie_workdays')
+        }),
+        ('取引先情報', {
+            'fields': ('billing_destination', 'billing_contact', 'mub_manager')
+        }),
+        ('その他', {
+            'fields': ('remarks',)
         }),
     )
     
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related('project', 'assigned_user')
+        return super().get_queryset(request).select_related('project', 'department')
+    
+    # カスタム表示メソッド
+    def get_readonly_fields(self, request, obj=None):
+        if obj:  # 編集時
+            return ['project']  # プロジェクトは変更不可
+        return []
+
+    def save_model(self, request, obj, form, change):
+        # プロジェクト名が変更された場合、関連するProjectも更新
+        if obj.project:
+            obj.project.name = obj.project_name
+            obj.project.save()
+        super().save_model(request, obj, form, change)
