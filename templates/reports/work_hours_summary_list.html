@@ -1,0 +1,404 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}工数集計一覧 | 工数管理システム{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .filter-section {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .table-responsive {
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .status-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .work-type-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .overtime-indicator {
+        color: #dc3545;
+        font-weight: bold;
+    }
+    .progress-bar-custom {
+        height: 20px;
+        border-radius: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- ページヘッダー -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="bi bi-clock-history"></i> 工数集計一覧
+            </h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">ホーム</a></li>
+                    <li class="breadcrumb-item active">工数集計一覧</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <a href="{% url 'reports:work_hours_summary_create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> 新規登録
+            </a>
+        </div>
+    </div>
+
+    <!-- 統計カード -->
+    <div class="row">
+        <div class="col-md-3 mb-3">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="mb-0">総記録数</h6>
+                        <h3 class="mb-0">{{ stats.total_records }}件</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-file-text" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="mb-0">総作業時間</h6>
+                        <h3 class="mb-0">{{ stats.total_hours|floatformat:1 }}h</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-clock" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="mb-0">残業時間</h6>
+                        <h3 class="mb-0">{{ stats.total_overtime|floatformat:1 }}h</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-exclamation-triangle" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="mb-0">平均進捗率</h6>
+                        <h3 class="mb-0">{{ stats.avg_progress|floatformat:0 }}%</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-graph-up" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- フィルターセクション -->
+    <div class="filter-section">
+        <h5 class="mb-3"><i class="bi bi-funnel"></i> フィルター</h5>
+        <form method="get" class="row g-3">
+            <div class="col-md-2">
+                {{ filter_form.start_date.label_tag }}
+                {{ filter_form.start_date }}
+            </div>
+            <div class="col-md-2">
+                {{ filter_form.end_date.label_tag }}
+                {{ filter_form.end_date }}
+            </div>
+            <div class="col-md-2">
+                {{ filter_form.user.label_tag }}
+                {{ filter_form.user }}
+            </div>
+            <div class="col-md-2">
+                {{ filter_form.department.label_tag }}
+                {{ filter_form.department }}
+            </div>
+            <div class="col-md-2">
+                {{ filter_form.work_type.label_tag }}
+                {{ filter_form.work_type }}
+            </div>
+            <div class="col-md-2">
+                {{ filter_form.status.label_tag }}
+                {{ filter_form.status }}
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search"></i> 検索
+                </button>
+                <a href="{% url 'reports:work_hours_summary_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-clockwise"></i> クリア
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- 一括操作フォーム -->
+    <form method="post" action="{% url 'reports:work_hours_bulk_update' %}" id="bulkUpdateForm">
+        {% csrf_token %}
+        {{ bulk_update_form.selected_records }}
+        
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <button type="button" class="btn btn-outline-primary btn-sm" onclick="selectAll()">
+                    <i class="bi bi-check-all"></i> 全選択
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearSelection()">
+                    <i class="bi bi-x-circle"></i> 選択解除
+                </button>
+            </div>
+            <div>
+                <span id="selectedCount">0</span>件選択中
+            </div>
+        </div>
+
+        <!-- 一括操作パネル -->
+        <div class="card mb-3" id="bulkActionPanel" style="display: none;">
+            <div class="card-body">
+                <h6 class="card-title">一括操作</h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        {{ bulk_update_form.status.label_tag }}
+                        {{ bulk_update_form.status }}
+                    </div>
+                    <div class="col-md-3">
+                        {{ bulk_update_form.approved_by.label_tag }}
+                        {{ bulk_update_form.approved_by }}
+                    </div>
+                    <div class="col-md-4">
+                        {{ bulk_update_form.rejection_reason.label_tag }}
+                        {{ bulk_update_form.rejection_reason }}
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-warning">
+                            <i class="bi bi-arrow-repeat"></i> 一括更新
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- テーブル -->
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 50px;">
+                            <input type="checkbox" id="selectAllCheckbox" class="form-check-input">
+                        </th>
+                        <th>作業日</th>
+                        <th>担当者</th>
+                        <th>作業種別</th>
+                        <th>作業タイトル</th>
+                        <th>作業時間</th>
+                        <th>残業時間</th>
+                        <th>進捗率</th>
+                        <th>ステータス</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for work_hour in work_hours_list %}
+                    <tr>
+                        <td>
+                            <input type="checkbox" class="form-check-input record-checkbox" 
+                                   value="{{ work_hour.id }}" onchange="updateSelection()">
+                        </td>
+                        <td>{{ work_hour.work_date|date:"Y/m/d" }}</td>
+                        <td>
+                            {{ work_hour.user.get_full_name }}
+                            {% if work_hour.department %}
+                                <br><small class="text-muted">{{ work_hour.department.name }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge work-type-badge bg-secondary">
+                                {{ work_hour.get_work_type_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <strong>{{ work_hour.task_title }}</strong>
+                            {% if work_hour.project %}
+                                <br><small class="text-muted">
+                                    <i class="bi bi-folder"></i> {{ work_hour.project.name }}
+                                </small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {{ work_hour.work_hours }}h
+                            {% if not work_hour.is_billable %}
+                                <br><small class="text-muted">(請求対象外)</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if work_hour.overtime_hours > 0 %}
+                                <span class="overtime-indicator">{{ work_hour.overtime_hours }}h</span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="progress progress-bar-custom">
+                                <div class="progress-bar bg-info" role="progressbar" 
+                                     style="width: {{ work_hour.progress_rate }}%"
+                                     aria-valuenow="{{ work_hour.progress_rate }}" 
+                                     aria-valuemin="0" aria-valuemax="100">
+                                    {{ work_hour.progress_rate }}%
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if work_hour.status == 'draft' %}
+                                <span class="badge status-badge bg-secondary">{{ work_hour.get_status_display }}</span>
+                            {% elif work_hour.status == 'submitted' %}
+                                <span class="badge status-badge bg-warning">{{ work_hour.get_status_display }}</span>
+                            {% elif work_hour.status == 'approved' %}
+                                <span class="badge status-badge bg-success">{{ work_hour.get_status_display }}</span>
+                            {% elif work_hour.status == 'rejected' %}
+                                <span class="badge status-badge bg-danger">{{ work_hour.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'reports:work_hours_summary_detail' work_hour.pk %}" 
+                               class="btn btn-outline-info btn-sm">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <a href="{% url 'reports:work_hours_summary_edit' work_hour.pk %}" 
+                               class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{% url 'reports:work_hours_summary_delete' work_hour.pk %}" 
+                               class="btn btn-outline-danger btn-sm"
+                               onclick="return confirm('この工数集計を削除しますか？')">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="text-center text-muted">
+                            工数集計が登録されていません
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </form>
+
+    <!-- ページネーション -->
+    {% if is_paginated %}
+    <nav aria-label="ページネーション">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}">前</a>
+                </li>
+            {% endif %}
+            
+            {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ num }}</span>
+                    </li>
+                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                    </li>
+                {% endif %}
+            {% endfor %}
+            
+            {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}">次</a>
+                </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let selectedRecords = new Set();
+
+function updateSelection() {
+    selectedRecords.clear();
+    document.querySelectorAll('.record-checkbox:checked').forEach(checkbox => {
+        selectedRecords.add(checkbox.value);
+    });
+    
+    document.getElementById('selectedCount').textContent = selectedRecords.size;
+    document.querySelector('input[name="selected_records"]').value = Array.from(selectedRecords).join(',');
+    
+    const bulkPanel = document.getElementById('bulkActionPanel');
+    if (selectedRecords.size > 0) {
+        bulkPanel.style.display = 'block';
+    } else {
+        bulkPanel.style.display = 'none';
+    }
+}
+
+function selectAll() {
+    document.querySelectorAll('.record-checkbox').forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    updateSelection();
+}
+
+function clearSelection() {
+    document.querySelectorAll('.record-checkbox').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    updateSelection();
+}
+
+document.getElementById('selectAllCheckbox').addEventListener('change', function() {
+    const isChecked = this.checked;
+    document.querySelectorAll('.record-checkbox').forEach(checkbox => {
+        checkbox.checked = isChecked;
+    });
+    updateSelection();
+});
+
+// フォーム送信前の確認
+document.getElementById('bulkUpdateForm').addEventListener('submit', function(e) {
+    if (selectedRecords.size === 0) {
+        e.preventDefault();
+        alert('更新する記録を選択してください。');
+        return false;
+    }
+    
+    if (!confirm(`選択した${selectedRecords.size}件の記録を更新しますか？`)) {
+        e.preventDefault();
+        return false;
+    }
+});
+</script>
+{% endblock %}

@@ -1,23 +1,194 @@
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, redirect, get_object_or_404
+from django.views.generic import ListView, CreateView, DetailView, UpdateView, DeleteView, TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.views.generic import ListView, TemplateView
-from django.db.models import Sum, Count, Q, F, Case, When, DecimalField
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.urls import reverse_lazy
 from django.http import JsonResponse, HttpResponse
+from django.db.models import Q, Sum, Avg, Count
 from django.utils import timezone
-from django.contrib.admin.views.decorators import staff_member_required
-from django.utils.decorators import method_decorator
-from datetime import datetime, timedelta
-import json
-import csv
-from io import StringIO
-from decimal import Decimal
+from datetime import date, datetime, timedelta
+from django.contrib.auth import get_user_model
 
-from apps.workloads.models import Workload
-from apps.projects.models import Project, ProjectDetail
-from apps.users.models import CustomUser, Department
-from apps.cost_master.models import CostMaster
+from .models import ReportExport, WorkloadAggregation
+from .forms import WorkloadAggregationForm, WorkloadAggregationFilterForm
+from apps.users.models import Department
 
-@method_decorator(staff_member_required, name='dispatch')
+User = get_user_model()
+
+class WorkloadAggregationListView(LoginRequiredMixin, ListView):
+    """工数集計一覧画面（工数集計レポート機能）"""
+    model = WorkloadAggregation
+    template_name = 'reports/workload_aggregation.html'
+    context_object_name = 'aggregated_projects'
+    paginate_by = 20
+    
+    def get_queryset(self):
+        queryset = WorkloadAggregation.objects.select_related(
+            'project', 'project_detail', 'department', 'manager', 'created_by'
+        ).order_by('-year_month', '-created_at')
+        
+        # フィルター処理
+        form = WorkloadAggregationFilterForm(self.request.GET)
+        if form.is_valid():
+            if form.cleaned_data.get('year_month'):
+                queryset = queryset.filter(year_month=form.cleaned_data['year_month'])
+            if form.cleaned_data.get('project'):
+                queryset = queryset.filter(project=form.cleaned_data['project'])
+            if form.cleaned_data.get('department'):
+                queryset = queryset.filter(department=form.cleaned_data['department'])
+            if form.cleaned_data.get('status'):
+                queryset = queryset.filter(status=form.cleaned_data['status'])
+            if form.cleaned_data.get('manager'):
+                queryset = queryset.filter(manager=form.cleaned_data['manager'])
+            if form.cleaned_data.get('search'):
+                search_term = form.cleaned_data['search']
+                queryset = queryset.filter(
+                    Q(project__name__icontains=search_term) |
+                    Q(notes__icontains=search_term)
+                )
+        
+        return queryset
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # フィルターフォーム
+        context['filter_form'] = WorkloadAggregationFilterForm(self.request.GET)
+        
+        # 統計データ
+        queryset = self.get_queryset()
+        context['total_stats'] = {
+            'total_budget': queryset.aggregate(total=Sum('budget'))['total'] or 0,
+            'total_billing': queryset.aggregate(total=Sum('billing_amount'))['total'] or 0,
+            'total_outsourcing': queryset.aggregate(total=Sum('outsourcing_cost'))['total'] or 0,
+            'total_estimated_workdays': queryset.aggregate(total=Sum('estimated_workdays'))['total'] or 0,
+            'total_used_workdays': queryset.aggregate(total=Sum('used_workdays'))['total'] or 0,
+        }
+        
+        # 現在のフィルター値
+        context['current_filters'] = {
+            'year_month': self.request.GET.get('year_month', ''),
+            'project_id': self.request.GET.get('project', ''),
+            'department_id': self.request.GET.get('department', ''),
+            'status': self.request.GET.get('status', ''),
+            'search': self.request.GET.get('search', ''),
+        }
+        
+        return context
+
+class WorkloadAggregationCreateView(LoginRequiredMixin, CreateView):
+    """工数集計作成画面"""
+    model = WorkloadAggregation
+    form_class = WorkloadAggregationForm
+    template_name = 'reports/workload_aggregation_form.html'
+    success_url = reverse_lazy('reports:workload_aggregation')
+    
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+    
+    def form_valid(self, form):
+        form.instance.created_by = self.request.user
+        messages.success(self.request, '工数集計データが正常に登録されました。')
+        return super().form_valid(form)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['title'] = '工数集計 - 新規登録'
+        return context
+
+class WorkloadAggregationDetailView(LoginRequiredMixin, DetailView):
+    """工数集計詳細画面"""
+    model = WorkloadAggregation
+    template_name = 'reports/workload_aggregation_detail.html'
+    context_object_name = 'workload_aggregation'
+
+class WorkloadAggregationUpdateView(LoginRequiredMixin, UpdateView):
+    """工数集計編集画面"""
+    model = WorkloadAggregation
+    form_class = WorkloadAggregationForm
+    template_name = 'reports/workload_aggregation_form.html'
+    success_url = reverse_lazy('reports:workload_aggregation')
+    
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+    
+    def form_valid(self, form):
+        messages.success(self.request, '工数集計データが正常に更新されました。')
+        return super().form_valid(form)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['title'] = '工数集計 - 編集'
+        return context
+
+class WorkloadAggregationDeleteView(LoginRequiredMixin, DeleteView):
+    """工数集計削除画面"""
+    model = WorkloadAggregation
+    template_name = 'reports/workload_aggregation_confirm_delete.html'
+    success_url = reverse_lazy('reports:workload_aggregation')
+    
+    def delete(self, request, *args, **kwargs):
+        messages.success(request, '工数集計データを削除しました。')
+        return super().delete(request, *args, **kwargs)
+
+@login_required
+def workload_export(request):
+    """工数データのエクスポート"""
+    import csv
+    from django.http import HttpResponse
+    from datetime import datetime
+    
+    # CSV レスポンスの作成
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="workload_aggregation_{datetime.now().strftime("%Y%m%d")}.csv"'
+    
+    # BOM付きでUTF-8エンコーディング
+    response.write('\ufeff')
+    
+    writer = csv.writer(response)
+    writer.writerow([
+        'プロジェクト名', '年月', 'ステータス', '予算（万円）', '請求金額（万円）',
+        '外注費（万円）', '見積工数（人日）', '消化工数（人日）', '進捗率（%）',
+        '担当部署', 'プロジェクトマネージャー', '作成日時'
+    ])
+    
+    # フィルター適用
+    queryset = WorkloadAggregation.objects.select_related(
+        'project', 'department', 'manager'
+    ).order_by('-year_month')
+    
+    # URLパラメータでフィルター
+    if request.GET.get('year_month'):
+        queryset = queryset.filter(year_month=request.GET['year_month'])
+    if request.GET.get('project'):
+        queryset = queryset.filter(project_id=request.GET['project'])
+    if request.GET.get('status'):
+        queryset = queryset.filter(status=request.GET['status'])
+    
+    for workload in queryset:
+        writer.writerow([
+            workload.project.name,
+            workload.year_month,
+            workload.get_status_display(),
+            str(workload.budget),
+            str(workload.billing_amount),
+            str(workload.outsourcing_cost),
+            str(workload.estimated_workdays),
+            str(workload.used_workdays),
+            workload.progress_rate,
+            workload.department.name if workload.department else '',
+            workload.manager.get_full_name() if workload.manager else '',
+            workload.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+        ])
+    
+    return response
+
+# 既存のビューは保持
 class ReportListView(LoginRequiredMixin, TemplateView):
     """レポート一覧画面"""
     template_name = 'reports/report_list.html'
@@ -25,268 +196,33 @@ class ReportListView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # 利用可能なレポート一覧
+        # レポートメニューの定義
         reports = [
             {
                 'name': '工数集計レポート',
-                'description': '月次工数の詳細集計と分析',
+                'description': '工数集計一覧の管理と分析',
                 'url': 'reports:workload_aggregation',
                 'icon': 'bi-bar-chart-line',
-                'color': 'primary',
+                'color': 'success'
             },
             {
-                'name': 'プロジェクト別レポート',
-                'description': 'プロジェクト単位での工数・費用分析',
-                'url': 'reports:workload_aggregation',
-                'icon': 'bi-folder-open',
-                'color': 'info',
+                'name': 'エクスポート履歴',
+                'description': 'レポートのエクスポート履歴',
+                'url': 'reports:report_export_list',
+                'icon': 'bi-download',
+                'color': 'info'
             },
         ]
         
         context['reports'] = reports
         return context
 
-@method_decorator(staff_member_required, name='dispatch')
-class WorkloadAggregationView(LoginRequiredMixin, TemplateView):
-    """工数集計画面（管理者専用）"""
-    template_name = 'reports/workload_aggregation.html'
+class ReportExportListView(LoginRequiredMixin, ListView):
+    """レポートエクスポート一覧画面"""
+    model = ReportExport
+    template_name = 'reports/report_export_list.html'
+    context_object_name = 'reports'
+    paginate_by = 20
     
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        
-        # フィルターパラメータ取得
-        year_month = self.request.GET.get('year_month', self.get_current_month())
-        project_id = self.request.GET.get('project_id')
-        department_id = self.request.GET.get('department_id')
-        status = self.request.GET.get('status')
-        case_classification = self.request.GET.get('case_classification')
-        search_query = self.request.GET.get('search')
-        
-        # 基本クエリセット（修正: workload_setをworkloadsに変更）
-        queryset = ProjectDetail.objects.select_related(
-            'project', 'department'
-        ).prefetch_related(
-            'project__workloads'  # workload_set → workloads に修正
-        )
-        
-        # フィルター適用
-        if project_id:
-            queryset = queryset.filter(project_id=project_id)
-        if department_id:
-            queryset = queryset.filter(department_id=department_id)
-        if status:
-            queryset = queryset.filter(status=status)
-        if case_classification:
-            queryset = queryset.filter(case_classification=case_classification)
-        if search_query:
-            queryset = queryset.filter(
-                Q(project_name__icontains=search_query) |
-                Q(case_name__icontains=search_query) |
-                Q(billing_destination__icontains=search_query) |
-                Q(mub_manager__icontains=search_query)
-            )
-        
-        # 各案件の工数データを更新
-        aggregated_projects = []
-        total_stats = {
-            'total_budget': 0,
-            'total_billing': 0,
-            'total_outsourcing': 0,
-            'total_estimated_workdays': 0,
-            'total_used_workdays': 0,
-            'total_newbie_workdays': 0,
-            'total_wip_amount': 0,
-        }
-        
-        for project_detail in queryset:
-            # 指定年月の工数を集計（修正: workload_set → workloads）
-            monthly_workloads = project_detail.project.workloads.filter(
-                year_month=year_month
-            )
-            
-            monthly_used_workdays = sum(w.total_days for w in monthly_workloads)
-            monthly_newbie_workdays = sum(
-                w.total_days for w in monthly_workloads 
-                if w.user.date_joined and 
-                (timezone.now() - w.user.date_joined).days < 365  # 新入社員判定
-            )
-            
-            # 集計データを作成
-            project_data = {
-                'detail': project_detail,
-                'monthly_used_workdays': monthly_used_workdays,
-                'monthly_newbie_workdays': monthly_newbie_workdays,
-                'monthly_remaining_workdays': project_detail.estimated_workdays - Decimal(str(monthly_used_workdays)),
-                'monthly_wip_amount': self.calculate_wip_amount(project_detail, monthly_used_workdays),
-                'monthly_remaining_amount': self.calculate_remaining_amount(project_detail, monthly_used_workdays),
-                'profit_rate': project_detail.profit_rate,
-            }
-            
-            aggregated_projects.append(project_data)
-            
-            # 合計統計に追加
-            total_stats['total_budget'] += project_detail.budget_amount
-            total_stats['total_billing'] += project_detail.billing_amount
-            total_stats['total_outsourcing'] += project_detail.outsourcing_cost
-            total_stats['total_estimated_workdays'] += project_detail.estimated_workdays
-            total_stats['total_used_workdays'] += monthly_used_workdays
-            total_stats['total_newbie_workdays'] += monthly_newbie_workdays
-            total_stats['total_wip_amount'] += project_data['monthly_wip_amount']
-        
-        # フィルターオプション
-        filter_options = {
-            'projects': Project.objects.filter(is_active=True),
-            'departments': Department.objects.filter(is_active=True),
-            'statuses': ProjectDetail.STATUS_CHOICES,
-            'classifications': ProjectDetail.CASE_CLASSIFICATION_CHOICES,
-            'available_months': self.get_available_months(),
-        }
-        
-        context.update({
-            'year_month': year_month,
-            'aggregated_projects': aggregated_projects,
-            'total_stats': total_stats,
-            'filter_options': filter_options,
-            'current_filters': {
-                'project_id': project_id,
-                'department_id': department_id,
-                'status': status,
-                'case_classification': case_classification,
-                'search': search_query,
-            },
-        })
-        
-        return context
-    
-    def get_current_month(self):
-        """現在の年月を取得"""
-        current = timezone.now()
-        return f"{current.year}-{current.month:02d}"
-    
-    def get_available_months(self):
-        """利用可能な年月一覧"""
-        months = Workload.objects.values_list('year_month', flat=True).distinct().order_by('-year_month')
-        return list(months)
-    
-    def calculate_wip_amount(self, project_detail, used_workdays):
-        """仕掛中金額計算"""
-        try:
-            cost_master = CostMaster.objects.filter(
-                department=project_detail.department,
-                is_active=True
-            ).first()
-            if cost_master:
-                return used_workdays * cost_master.daily_cost
-        except:
-            pass
-        return 0
-    
-    def calculate_remaining_amount(self, project_detail, used_workdays):
-        """残金額計算"""
-        try:
-            cost_master = CostMaster.objects.filter(
-                department=project_detail.department,
-                is_active=True
-            ).first()
-            if cost_master:
-                used_cost = used_workdays * cost_master.daily_cost
-                return project_detail.budget_amount - used_cost
-        except:
-            pass
-        return project_detail.budget_amount
-
-@method_decorator(staff_member_required, name='dispatch')
-class WorkloadAggregationExportView(LoginRequiredMixin, TemplateView):
-    """工数集計CSV出力"""
-    
-    def get(self, request, *args, **kwargs):
-        year_month = request.GET.get('year_month')
-        export_format = request.GET.get('format', 'csv')
-        
-        if not year_month:
-            return JsonResponse({'error': '年月が指定されていません'}, status=400)
-        
-        # データ取得（フィルター適用）
-        queryset = ProjectDetail.objects.select_related('project', 'department')
-        
-        # フィルター適用（WorkloadAggregationViewと同じロジック）
-        project_id = request.GET.get('project_id')
-        department_id = request.GET.get('department_id')
-        status = request.GET.get('status')
-        
-        if project_id:
-            queryset = queryset.filter(project_id=project_id)
-        if department_id:
-            queryset = queryset.filter(department_id=department_id)
-        if status:
-            queryset = queryset.filter(status=status)
-        
-        if export_format == 'csv':
-            return self.export_csv(queryset, year_month)
-        else:
-            return JsonResponse({'error': '未対応の出力形式です'}, status=400)
-    
-    def export_csv(self, queryset, year_month):
-        """CSV出力"""
-        response = HttpResponse(content_type='text/csv; charset=utf-8')
-        response['Content-Disposition'] = f'attachment; filename="workload_aggregation_{year_month}.csv"'
-        
-        # BOM付きCSV
-        response.write('\ufeff')
-        
-        writer = csv.writer(response)
-        
-        # ヘッダー行
-        headers = [
-            'プロジェクト名', '案件名', '部名', 'ステータス', '案件分類', '見積日', '受注日',
-            '終了日（予定）', '終了日実績', '検収日', '使用可能金額（税別）', '請求金額（税別）',
-            '外注費（税別）', '見積工数（人日）', '使用工数（人日）', '新入社員使用工数（人日）',
-            '残工数（人日）', '残金額（税抜）', '利益率（%）', '仕掛中金額', '税込請求金額',
-            '請求先', '請求先担当者', 'MUB担当者', '備考'
-        ]
-        writer.writerow(headers)
-        
-        # データ行
-        for project_detail in queryset:
-            # 月次工数計算
-            monthly_workloads = Workload.objects.filter(
-                project=project_detail.project,
-                year_month=year_month
-            )
-            monthly_used_workdays = sum(w.total_days for w in monthly_workloads)
-            monthly_newbie_workdays = sum(
-                w.total_days for w in monthly_workloads 
-                if w.user.date_joined and 
-                (timezone.now() - w.user.date_joined).days < 365
-            )
-            
-            row = [
-                project_detail.project_name,
-                project_detail.case_name,
-                project_detail.department.name,
-                project_detail.get_status_display(),
-                project_detail.get_case_classification_display(),
-                project_detail.estimate_date.strftime('%Y-%m-%d') if project_detail.estimate_date else '',
-                project_detail.order_date.strftime('%Y-%m-%d') if project_detail.order_date else '',
-                project_detail.planned_end_date.strftime('%Y-%m-%d') if project_detail.planned_end_date else '',
-                project_detail.actual_end_date.strftime('%Y-%m-%d') if project_detail.actual_end_date else '',
-                project_detail.inspection_date.strftime('%Y-%m-%d') if project_detail.inspection_date else '',
-                float(project_detail.budget_amount),
-                float(project_detail.billing_amount),
-                float(project_detail.outsourcing_cost),
-                float(project_detail.estimated_workdays),
-                float(monthly_used_workdays),
-                float(monthly_newbie_workdays),
-                float(project_detail.estimated_workdays - monthly_used_workdays),
-                float(project_detail.remaining_amount),
-                f"{project_detail.profit_rate:.2f}",
-                float(project_detail.wip_amount),
-                float(project_detail.tax_included_billing_amount),
-                project_detail.billing_destination,
-                project_detail.billing_contact,
-                project_detail.mub_manager,
-                project_detail.remarks,
-            ]
-            writer.writerow(row)
-        
-        return response
+    def get_queryset(self):
+        return ReportExport.objects.select_related('created_by').order_by('-created_at')
