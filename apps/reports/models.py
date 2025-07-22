@@ -6,7 +6,7 @@ from decimal import Decimal
 User = get_user_model()
 
 class WorkloadAggregation(models.Model):
-    """工数集計一覧テーブル（設計書通りの完全版）"""
+    """工数集計一覧テーブル"""
     
     class StatusChoices(models.TextChoices):
         PLANNING = 'planning', '計画中'
@@ -24,8 +24,13 @@ class WorkloadAggregation(models.Model):
         CONSULTING = 'consulting', 'コンサルティング'
         OTHER = 'other', 'その他'
     
-    # 基本情報
-    project_name = models.CharField('プロジェクト名', max_length=200)
+    # 基本情報 - project_nameをForeignKeyに変更
+    project_name = models.ForeignKey(
+        'projects.Project',
+        on_delete=models.CASCADE,
+        verbose_name='プロジェクト名',
+        related_name='workload_aggregations_as_project'
+    )
     case_name = models.ForeignKey(
         'projects.Project',
         on_delete=models.CASCADE,
@@ -82,7 +87,7 @@ class WorkloadAggregation(models.Model):
         validators=[MinValueValidator(Decimal('0'))]
     )
     
-    # 工数関連（人日）
+    # 工数関連（人日） - 自動計算用フィールドに変更
     estimated_workdays = models.DecimalField(
         '見積工数（人日）',
         max_digits=8,
@@ -95,14 +100,16 @@ class WorkloadAggregation(models.Model):
         max_digits=8,
         decimal_places=1,
         default=Decimal('0.0'),
-        validators=[MinValueValidator(Decimal('0.0'))]
+        validators=[MinValueValidator(Decimal('0.0'))],
+        help_text='工数登録機能から自動計算'
     )
     newbie_workdays = models.DecimalField(
         '新入社員使用工数（人日）',
         max_digits=8,
         decimal_places=1,
         default=Decimal('0.0'),
-        validators=[MinValueValidator(Decimal('0.0'))]
+        validators=[MinValueValidator(Decimal('0.0'))],
+        help_text='ユーザーレベルがjuniorの工数を自動計算'
     )
     
     # 計算フィールド用の基礎データ
@@ -153,7 +160,38 @@ class WorkloadAggregation(models.Model):
         ordering = ['-order_date', '-created_at']
     
     def __str__(self):
-        return f"{self.project_name} - {self.case_name.name}"
+        return f"{self.project_name.name} - {self.case_name.name}"
+    
+    def calculate_workdays_from_workload(self):
+        """工数登録機能から工数を自動計算"""
+        from apps.workloads.models import WorkHour
+        
+        # プロジェクトに関連する工数を取得
+        work_hours = WorkHour.objects.filter(
+            project=self.case_name,
+            date__gte=self.order_date if self.order_date else None,
+            date__lte=self.actual_end_date if self.actual_end_date else None
+        )
+        
+        # 一般使用工数と新入社員工数を分離
+        regular_workdays = Decimal('0.0')
+        newbie_workdays = Decimal('0.0')
+        
+        for work_hour in work_hours:
+            if work_hour.user.employee_level == 'junior':
+                newbie_workdays += work_hour.hours
+            else:
+                regular_workdays += work_hour.hours
+        
+        # 時間を人日に変換（8時間=1人日として計算）
+        self.used_workdays = regular_workdays / 8
+        self.newbie_workdays = newbie_workdays / 8
+        
+        return {
+            'used_workdays': self.used_workdays,
+            'newbie_workdays': self.newbie_workdays,
+            'total_workdays': self.used_workdays + self.newbie_workdays
+        }
     
     @property
     def total_used_workdays(self):
