@@ -9,6 +9,9 @@ from django.db.models import Q, Sum, Avg, Count
 from django.utils import timezone
 from datetime import date, datetime, timedelta
 from django.contrib.auth import get_user_model
+import json
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
 
 from .models import ReportExport, WorkloadAggregation
 from .forms import WorkloadAggregationForm, WorkloadAggregationFilterForm
@@ -243,3 +246,58 @@ class ReportExportListView(LoginRequiredMixin, ListView):
     
     def get_queryset(self):
         return ReportExport.objects.select_related('created_by').order_by('-created_at')
+
+@login_required
+@require_http_methods(["POST"])
+def calculate_workdays_api(request):
+    """工数自動計算API"""
+    try:
+        data = json.loads(request.body)
+        case_id = data.get('case_id')
+        order_date = data.get('order_date')
+        actual_end_date = data.get('actual_end_date')
+        
+        if not case_id:
+            return JsonResponse({'success': False, 'error': '案件IDが必要です。'})
+        
+        from apps.workloads.models import WorkHour
+        from apps.projects.models import Project
+        from decimal import Decimal
+        
+        try:
+            project = Project.objects.get(id=case_id)
+        except Project.DoesNotExist:
+            return JsonResponse({'success': False, 'error': '指定された案件が見つかりません。'})
+        
+        # 工数を取得
+        work_hours_query = WorkHour.objects.filter(project=project)
+        
+        # 日付フィルター適用
+        if order_date:
+            work_hours_query = work_hours_query.filter(date__gte=order_date)
+        if actual_end_date:
+            work_hours_query = work_hours_query.filter(date__lte=actual_end_date)
+        
+        # 一般使用工数と新入社員工数を分離
+        regular_workdays = Decimal('0.0')
+        newbie_workdays = Decimal('0.0')
+        
+        for work_hour in work_hours_query:
+            if work_hour.user.employee_level == 'junior':
+                newbie_workdays += work_hour.hours
+            else:
+                regular_workdays += work_hour.hours
+        
+        # 時間を人日に変換（8時間=1人日として計算）
+        used_workdays = regular_workdays / 8
+        newbie_workdays = newbie_workdays / 8
+        
+        return JsonResponse({
+            'success': True,
+            'used_workdays': float(used_workdays),
+            'newbie_workdays': float(newbie_workdays),
+            'total_workdays': float(used_workdays + newbie_workdays)
+        })
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
