@@ -14,7 +14,8 @@ urlpatterns = [
     path('workload-aggregation/<int:pk>/edit/', views.WorkloadAggregationUpdateView.as_view(), name='workload_aggregation_edit'),
     path('workload-aggregation/<int:pk>/delete/', views.WorkloadAggregationDeleteView.as_view(), name='workload_aggregation_delete'),
     path('workload-export/', views.workload_export, name='workload_export'),
+    path('export/', views.ReportExportListView.as_view(), name='report_export_list'),
     
-    # レポートエクスポート関連
-    path('exports/', views.ReportExportListView.as_view(), name='report_export_list'),
+    # 工数自動計算API
+    path('api/calculate-workdays/', views.calculate_workdays_api, name='calculate_workdays_api'),
 ]

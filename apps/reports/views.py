@@ -250,27 +250,27 @@ class ReportExportListView(LoginRequiredMixin, ListView):
 @login_required
 @require_http_methods(["POST"])
 def calculate_workdays_api(request):
-    """工数自動計算API"""
+    """工数自動計算API（ProjectTicket対応版）"""
     try:
         data = json.loads(request.body)
-        case_id = data.get('case_id')
+        case_id = data.get('case_id')  # これはProjectTicketのID
         order_date = data.get('order_date')
         actual_end_date = data.get('actual_end_date')
         
         if not case_id:
-            return JsonResponse({'success': False, 'error': '案件IDが必要です。'})
+            return JsonResponse({'success': False, 'error': 'チケットIDが必要です。'})
         
         from apps.workloads.models import WorkHour
-        from apps.projects.models import Project
+        from apps.projects.models import ProjectTicket
         from decimal import Decimal
         
         try:
-            project = Project.objects.get(id=case_id)
-        except Project.DoesNotExist:
-            return JsonResponse({'success': False, 'error': '指定された案件が見つかりません。'})
+            ticket = ProjectTicket.objects.get(id=case_id)
+        except ProjectTicket.DoesNotExist:
+            return JsonResponse({'success': False, 'error': '指定されたチケットが見つかりません。'})
         
-        # 工数を取得
-        work_hours_query = WorkHour.objects.filter(project=project)
+        # 工数を取得（ProjectTicket基準）
+        work_hours_query = WorkHour.objects.filter(ticket=ticket)
         
         # 日付フィルター適用
         if order_date:
@@ -283,7 +283,7 @@ def calculate_workdays_api(request):
         newbie_workdays = Decimal('0.0')
         
         for work_hour in work_hours_query:
-            if work_hour.user.employee_level == 'junior':
+            if hasattr(work_hour.user, 'employee_level') and work_hour.user.employee_level == 'junior':
                 newbie_workdays += work_hour.hours
             else:
                 regular_workdays += work_hour.hours
@@ -296,7 +296,8 @@ def calculate_workdays_api(request):
             'success': True,
             'used_workdays': float(used_workdays),
             'newbie_workdays': float(newbie_workdays),
-            'total_workdays': float(used_workdays + newbie_workdays)
+            'total_workdays': float(used_workdays + newbie_workdays),
+            'ticket_name': ticket.title
         })
         
     except Exception as e:

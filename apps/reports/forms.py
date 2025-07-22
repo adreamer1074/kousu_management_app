@@ -3,12 +3,12 @@ from django.contrib.auth import get_user_model
 from datetime import date, datetime
 from .models import WorkloadAggregation
 from apps.users.models import Department
-from apps.projects.models import Project
+from apps.projects.models import Project, ProjectTicket  # 既存のProjectTicketを使用
 
 User = get_user_model()
 
 class WorkloadAggregationForm(forms.ModelForm):
-    """工数集計フォーム（修正版）"""
+    """工数集計フォーム（ProjectTicket対応版）"""
     
     # 工数自動計算ボタン用フィールド
     auto_calculate_workdays = forms.BooleanField(
@@ -21,7 +21,7 @@ class WorkloadAggregationForm(forms.ModelForm):
     class Meta:
         model = WorkloadAggregation
         fields = [
-            # 基本情報 - project_nameを含む
+            # 基本情報
             'project_name', 'case_name', 'department', 'status', 'case_classification',
             # 日付関連
             'estimate_date', 'order_date', 'planned_end_date', 'actual_end_date', 'inspection_date',
@@ -37,7 +37,7 @@ class WorkloadAggregationForm(forms.ModelForm):
             'remarks'
         ]
         widgets = {
-            # 基本情報 - project_nameをSelectに変更
+            # 基本情報
             'project_name': forms.Select(attrs={'class': 'form-select'}),
             'case_name': forms.Select(attrs={'class': 'form-select'}),
             'department': forms.Select(attrs={'class': 'form-select'}),
@@ -63,7 +63,7 @@ class WorkloadAggregationForm(forms.ModelForm):
                 'step': '0.1',
                 'min': '0',
                 'placeholder': '0.0',
-                'readonly': True,  # 自動計算のため読み取り専用
+                'readonly': True,
                 'style': 'background-color: #e9ecef;'
             }),
             'newbie_workdays': forms.NumberInput(attrs={
@@ -71,7 +71,7 @@ class WorkloadAggregationForm(forms.ModelForm):
                 'step': '0.1',
                 'min': '0',
                 'placeholder': '0.0',
-                'readonly': True,  # 自動計算のため読み取り専用
+                'readonly': True,
                 'style': 'background-color: #e9ecef;'
             }),
             
@@ -98,13 +98,25 @@ class WorkloadAggregationForm(forms.ModelForm):
         ).order_by('name')
         self.fields['project_name'].empty_label = "プロジェクトを選択してください"
         
-        # 案件名（案件リスト登録画面にある案件のみ選択可能）
-        self.fields['case_name'].queryset = Project.objects.filter(
-            is_active=True
-        ).order_by('name')
-        self.fields['case_name'].empty_label = "案件を選択してください"
+        # 案件名（ProjectTicketリストから選択）
+        self.fields['case_name'].queryset = ProjectTicket.objects.select_related('project').order_by('project__name', 'title')
+        self.fields['case_name'].empty_label = "チケット（案件）を選択してください"
         
-        # 部名（案件リスト登録画面にある部名のみ選択可能）
+        # プロジェクト選択時にチケットをフィルター
+        if 'project_name' in self.data:
+            try:
+                project_id = int(self.data.get('project_name'))
+                self.fields['case_name'].queryset = ProjectTicket.objects.filter(
+                    project_id=project_id
+                ).order_by('title')
+            except (ValueError, TypeError):
+                pass
+        elif self.instance.pk and self.instance.project_name:
+            self.fields['case_name'].queryset = ProjectTicket.objects.filter(
+                project=self.instance.project_name
+            ).order_by('title')
+        
+        # 部名
         self.fields['department'].queryset = Department.objects.filter(is_active=True)
         self.fields['department'].empty_label = "部署を選択してください"
         
@@ -120,7 +132,6 @@ class WorkloadAggregationForm(forms.ModelForm):
         # 工数の自動計算を実行
         if self.cleaned_data.get('auto_calculate_workdays', False):
             workdays_data = instance.calculate_workdays_from_workload()
-            # 計算結果をフィールドに反映
             instance.used_workdays = workdays_data['used_workdays']
             instance.newbie_workdays = workdays_data['newbie_workdays']
         
@@ -131,7 +142,7 @@ class WorkloadAggregationForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         
-        # 日付の妥当性チェック（既存ロジック維持）
+        # 日付の妥当性チェック
         estimate_date = cleaned_data.get('estimate_date')
         order_date = cleaned_data.get('order_date')
         planned_end_date = cleaned_data.get('planned_end_date')
@@ -147,31 +158,11 @@ class WorkloadAggregationForm(forms.ModelForm):
         if actual_end_date and inspection_date and actual_end_date > inspection_date:
             self.add_error('inspection_date', '検収日は終了日実績以降の日付を設定してください。')
         
-        # 工数の妥当性チェック（既存ロジック維持）
-        estimated_workdays = cleaned_data.get('estimated_workdays')
-        used_workdays = cleaned_data.get('used_workdays')
-        newbie_workdays = cleaned_data.get('newbie_workdays')
-        
-        if estimated_workdays and used_workdays and newbie_workdays:
-            total_used = used_workdays + newbie_workdays
-            if total_used > estimated_workdays * 1.5:
-                self.add_error('used_workdays', 
-                    '使用工数合計が見積工数の150%を超えています。確認してください。')
-        
-        # 金額の妥当性チェック（既存ロジック維持）
-        available_amount = cleaned_data.get('available_amount')
-        billing_amount = cleaned_data.get('billing_amount_excluding_tax')
-        
-        if available_amount and billing_amount:
-            if billing_amount > available_amount * 1.2:
-                self.add_error('billing_amount_excluding_tax', 
-                    '請求金額が使用可能金額の120%を超えています。確認してください。')
-        
         return cleaned_data
 
-# 既存のFilterFormはそのまま維持
+# フィルターフォームも更新
 class WorkloadAggregationFilterForm(forms.Form):
-    """工数集計フィルターフォーム"""
+    """工数集計フィルターフォーム（ProjectTicket対応版）"""
     
     project_name = forms.ModelChoiceField(
         label='プロジェクト名',
@@ -182,9 +173,9 @@ class WorkloadAggregationFilterForm(forms.Form):
     )
     case_name = forms.ModelChoiceField(
         label='案件名',
-        queryset=Project.objects.filter(is_active=True),
+        queryset=ProjectTicket.objects.select_related('project'),
         required=False,
-        empty_label="全ての案件",
+        empty_label="全てのチケット",
         widget=forms.Select(attrs={'class': 'form-select'})
     )
     department = forms.ModelChoiceField(
@@ -218,6 +209,6 @@ class WorkloadAggregationFilterForm(forms.Form):
         required=False,
         widget=forms.TextInput(attrs={
             'class': 'form-control',
-            'placeholder': 'プロジェクト名・案件名・備考で検索'
+            'placeholder': 'プロジェクト名・チケット名・備考で検索'
         })
     )
