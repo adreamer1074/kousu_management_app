@@ -1,132 +1,94 @@
 from django.contrib import admin
-from django.utils.html import format_html
-from .models import CostMaster, ClientBillingRate, ProjectCostSetting
+from .models import CostMaster
 
 @admin.register(CostMaster)
 class CostMasterAdmin(admin.ModelAdmin):
+    """コストマスター管理画面"""
+    
     list_display = [
-        'department', 'employee_level', 'billing_type', 
-        'monthly_billing', 'daily_billing', 'hourly_billing',
-        'profit_margin_display', 'effective_from', 'is_active'
+        'client_name', 'billing_type', 'department', 'employee_level',
+        'get_billing_amount', 'discount_rate', 'contract_type', 
+        'effective_from', 'effective_to', 'is_active', 'created_at'
     ]
+    
     list_filter = [
-        'department', 'employee_level', 'billing_type', 
-        'is_active', 'effective_from'
+        'billing_type', 'contract_type', 'department', 'employee_level', 
+        'is_active', 'created_at'
     ]
-    search_fields = ['department__name']
-    ordering = ['-effective_from']
-    date_hierarchy = 'effective_from'
     
-    fieldsets = (
-        ('基本情報', {
-            'fields': ('department', 'employee_level', 'billing_type')
-        }),
-        ('月額単価設定', {
-            'fields': ('monthly_cost', 'monthly_billing'),
-            'classes': ('collapse',)
-        }),
-        ('日額単価設定', {
-            'fields': ('daily_cost', 'daily_billing'),
-            'classes': ('collapse',)
-        }),
-        ('時間単価設定', {
-            'fields': ('hourly_cost', 'hourly_billing'),
-            'classes': ('collapse',)
-        }),
-        ('固定料金設定', {
-            'fields': ('fixed_cost', 'fixed_billing'),
-            'classes': ('collapse',)
-        }),
-        ('特別条件', {
-            'fields': ('overtime_rate', 'holiday_rate'),
-            'classes': ('collapse',)
-        }),
-        ('有効期間', {
-            'fields': ('effective_from', 'effective_to', 'is_active')
-        }),
-    )
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('department')
-    
-    def profit_margin_display(self, obj):
-        margin = obj.profit_margin
-        color = 'green' if margin > 20 else 'orange' if margin > 10 else 'red'
-        return format_html(
-            '<span style="color: {};">{:.1f}%</span>',
-            color, margin
-        )
-    profit_margin_display.short_description = '利益率'
-
-@admin.register(ClientBillingRate)
-class ClientBillingRateAdmin(admin.ModelAdmin):
-    list_display = [
-        'client_name', 'department', 'employee_level', 'billing_type',
-        'monthly_billing', 'discount_rate', 'contract_type', 
-        'effective_from', 'is_active'
-    ]
-    list_filter = [
-        'department', 'employee_level', 'billing_type', 
-        'contract_type', 'is_active'
-    ]
-    search_fields = ['client_name', 'department__name']
-    ordering = ['client_name', '-effective_from']
-    
-    fieldsets = (
-        ('基本情報', {
-            'fields': ('client_name', 'department', 'employee_level', 'billing_type')
-        }),
-        ('請求単価', {
-            'fields': ('monthly_billing', 'daily_billing', 'hourly_billing', 'fixed_billing')
-        }),
-        ('割引・条件', {
-            'fields': ('discount_rate', 'minimum_billing_amount', 'contract_type', 'payment_terms')
-        }),
-        ('有効期間', {
-            'fields': ('effective_from', 'effective_to', 'is_active')
-        }),
-    )
-
-@admin.register(ProjectCostSetting)
-class ProjectCostSettingAdmin(admin.ModelAdmin):
-    list_display = [
-        'project_detail', 'use_client_specific_rate', 
-        'billing_cycle', 'setup_cost', 'maintenance_cost'
-    ]
-    list_filter = [
-        'use_client_specific_rate', 'billing_cycle', 
-        'project_detail__status', 'project_detail__department'
-    ]
     search_fields = [
-        'project_detail__project_name', 
-        'project_detail__case_name',
-        'project_detail__billing_destination'
+        'client_name', 'payment_terms', 'special_conditions'
     ]
     
+    readonly_fields = ['created_at', 'updated_at', 'created_by']
+    
     fieldsets = (
-        ('案件情報', {
-            'fields': ('project_detail',)
+        ('基本情報', {
+            'fields': ('client_name', 'billing_type')
         }),
-        ('請求設定', {
-            'fields': ('use_client_specific_rate', 'client_billing_rate')
-        }),
-        ('カスタム単価', {
-            'fields': ('custom_monthly_billing', 'custom_daily_billing', 'custom_hourly_billing'),
+        ('対象設定', {
+            'fields': ('department', 'manager', 'employee_level'),
             'classes': ('collapse',)
         }),
-        ('追加費用', {
-            'fields': ('setup_cost', 'maintenance_cost')
+        ('請求単価設定', {
+            'fields': (
+                'monthly_billing', 'daily_billing', 
+                'hourly_billing', 'fixed_billing'
+            )
         }),
-        ('請求条件', {
-            'fields': ('billing_cycle', 'invoice_timing')
+        ('割引・特別条件', {
+            'fields': (
+                'discount_rate', 'minimum_billing_amount', 'special_conditions'
+            ),
+            'classes': ('collapse',)
         }),
-        ('備考', {
-            'fields': ('cost_notes',)
+        ('契約条件', {
+            'fields': ('contract_type', 'payment_terms'),
+            'classes': ('collapse',)
+        }),
+        ('有効期間', {
+            'fields': ('effective_from', 'effective_to', 'is_active')
+        }),
+        ('管理情報', {
+            'fields': ('created_at', 'updated_at', 'created_by'),
+            'classes': ('collapse',)
         }),
     )
     
+    def get_billing_amount(self, obj):
+        """請求金額の表示"""
+        amount = obj.get_billing_amount()
+        if amount:
+            if obj.billing_type == 'hourly':
+                return f"{amount:,.0f}円"
+            else:
+                return f"{amount:,.1f}万円"
+        return "-"
+    get_billing_amount.short_description = '請求金額'
+    
+    def save_model(self, request, obj, form, change):
+        """保存時に作成者を設定"""
+        if not change:  # 新規作成時
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+    
     def get_queryset(self, request):
+        """クエリセットの最適化"""
         return super().get_queryset(request).select_related(
-            'project_detail__project', 
-            'project_detail__department'
+            'department', 'manager', 'created_by'
         )
+    
+    # カスタムアクション
+    actions = ['make_active', 'make_inactive']
+    
+    def make_active(self, request, queryset):
+        """選択したレコードを有効にする"""
+        updated = queryset.update(is_active=True)
+        self.message_user(request, f'{updated}件のレコードを有効にしました。')
+    make_active.short_description = '選択したコストマスターを有効にする'
+    
+    def make_inactive(self, request, queryset):
+        """選択したレコードを無効にする"""
+        updated = queryset.update(is_active=False)
+        self.message_user(request, f'{updated}件のレコードを無効にしました。')
+    make_inactive.short_description = '選択したコストマスターを無効にする'
