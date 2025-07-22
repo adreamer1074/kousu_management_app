@@ -1,61 +1,51 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}{{ title }} | 工数管理システム{% endblock %}
+{% block title %}コストマスター - 新規作成 | 工数管理システム{% endblock %}
 
 {% block extra_css %}
 <style>
     .form-section {
-        background: #f8f9fa;
-        border-radius: 8px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-        border: 1px solid #e9ecef;
+        background: #fff;
+        border-radius: 10px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     .form-section h5 {
         color: #495057;
-        border-bottom: 2px solid #0d6efd;
+        margin-bottom: 1.5rem;
         padding-bottom: 0.5rem;
-        margin-bottom: 1rem;
+        border-bottom: 2px solid #e9ecef;
     }
-    .billing-type-section {
-        display: none;
-        border-radius: 8px;
-        padding: 1rem;
-        margin-top: 1rem;
-        border: 1px solid #dee2e6;
-    }
-    .billing-type-section.active {
-        display: block;
-    }
-    .billing-type-section.monthly { background-color: #e3f2fd; }
-    .billing-type-section.daily { background-color: #f3e5f5; }
-    .billing-type-section.hourly { background-color: #e8f5e8; }
-    .billing-type-section.fixed { background-color: #fff3e0; }
-    
-    .profit-preview {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-radius: 8px;
-        padding: 1rem;
-        margin-top: 1rem;
-    }
-    .required-field {
-        border-left: 3px solid #dc3545;
-        padding-left: 0.5rem;
+    .required-field::after {
+        content: " *";
+        color: #dc3545;
     }
     .help-text {
         font-size: 0.875rem;
         color: #6c757d;
         margin-top: 0.25rem;
     }
-    .preview-card {
-        background: #ffffff;
+    .billing-type-section {
+        display: none;
+        border: 1px solid #dee2e6;
         border-radius: 8px;
         padding: 1rem;
-        margin-top: 1rem;
-        border: 1px solid #dee2e6;
+        margin: 1rem 0;
+        background: #f8f9fa;
+    }
+    .billing-type-section.active {
+        display: block;
+    }
+    .preview-card {
+        background: #fff;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        position: sticky;
+        top: 1rem;
     }
 </style>
 {% endblock %}
@@ -66,12 +56,12 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h1 class="h3 mb-0">
-                <i class="bi bi-calculator"></i> {{ title }}
+                <i class="bi bi-gear"></i> コストマスター - 新規作成
             </h1>
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="{% url 'cost_master:cost_master_list' %}">コストマスター一覧</a></li>
-                    <li class="breadcrumb-item active">{{ title }}</li>
+                    <li class="breadcrumb-item active">新規作成</li>
                 </ol>
             </nav>
         </div>
@@ -85,29 +75,20 @@
     <form method="post" id="costMasterForm">
         {% csrf_token %}
         <div class="row">
-            <!-- 左カラム: フォーム -->
             <div class="col-lg-8">
                 <!-- 基本情報セクション -->
                 <div class="form-section">
                     <h5><i class="bi bi-info-circle"></i> 基本情報</h5>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label for="{{ form.department.id_for_label }}" class="form-label required-field">
-                                部署
+                            <label for="{{ form.client_name.id_for_label }}" class="form-label required-field">
+                                請求先
                             </label>
-                            {{ form.department }}
-                            {% if form.department.errors %}
-                                <div class="text-danger small mt-1">{{ form.department.errors.0 }}</div>
+                            {{ form.client_name }}
+                            {% if form.client_name.errors %}
+                                <div class="text-danger small mt-1">{{ form.client_name.errors.0 }}</div>
                             {% endif %}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ form.employee_level.id_for_label }}" class="form-label required-field">
-                                社員レベル
-                            </label>
-                            {{ form.employee_level }}
-                            {% if form.employee_level.errors %}
-                                <div class="text-danger small mt-1">{{ form.employee_level.errors.0 }}</div>
-                            {% endif %}
+                            <div class="help-text">取引先の正式名称を入力してください</div>
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="{{ form.billing_type.id_for_label }}" class="form-label required-field">
@@ -119,145 +100,166 @@
                             {% endif %}
                             <div class="help-text">選択したタイプに応じて入力項目が変わります</div>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <div class="form-check mt-4">
-                                {{ form.is_active }}
-                                <label for="{{ form.is_active.id_for_label }}" class="form-check-label">
-                                    有効
-                                </label>
-                            </div>
+                    </div>
+                </div>
+
+                <!-- 対象設定セクション -->
+                <div class="form-section">
+                    <h5><i class="bi bi-people"></i> 対象設定</h5>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.department.id_for_label }}" class="form-label">
+                                対象部署
+                            </label>
+                            {{ form.department }}
+                            {% if form.department.errors %}
+                                <div class="text-danger small mt-1">{{ form.department.errors.0 }}</div>
+                            {% endif %}
+                            <div class="help-text">設定しない場合は全部署が対象</div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.manager.id_for_label }}" class="form-label">
+                                責任者
+                            </label>
+                            {{ form.manager }}
+                            {% if form.manager.errors %}
+                                <div class="text-danger small mt-1">{{ form.manager.errors.0 }}</div>
+                            {% endif %}
+                            <div class="help-text">案件の責任者を設定</div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.employee_level.id_for_label }}" class="form-label">
+                                社員レベル
+                            </label>
+                            {{ form.employee_level }}
+                            {% if form.employee_level.errors %}
+                                <div class="text-danger small mt-1">{{ form.employee_level.errors.0 }}</div>
+                            {% endif %}
+                            <div class="help-text">対象となる社員レベル</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 単価設定セクション -->
+                <!-- 請求単価設定セクション -->
                 <div class="form-section">
-                    <h5><i class="bi bi-currency-yen"></i> 単価設定</h5>
+                    <h5><i class="bi bi-currency-yen"></i> 請求単価設定</h5>
                     
-                    <!-- 月額単価 -->
+                    <!-- 月額請求 -->
                     <div class="billing-type-section monthly" id="monthly-section">
-                        <h6 class="text-primary"><i class="bi bi-calendar-month"></i> 月額単価設定</h6>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="{{ form.monthly_cost.id_for_label }}" class="form-label">
-                                    月額原価（万円） <span class="text-danger">*</span>
-                                </label>
-                                {{ form.monthly_cost }}
-                                {% if form.monthly_cost.errors %}
-                                    <div class="text-danger small mt-1">{{ form.monthly_cost.errors.0 }}</div>
-                                {% endif %}
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="{{ form.monthly_billing.id_for_label }}" class="form-label">
-                                    月額請求単価（万円） <span class="text-danger">*</span>
-                                </label>
-                                {{ form.monthly_billing }}
-                                {% if form.monthly_billing.errors %}
-                                    <div class="text-danger small mt-1">{{ form.monthly_billing.errors.0 }}</div>
-                                {% endif %}
-                            </div>
+                        <h6 class="text-primary"><i class="bi bi-calendar-month"></i> 月額請求単価</h6>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.monthly_billing.id_for_label }}" class="form-label required-field">
+                                月額請求単価（万円）
+                            </label>
+                            {{ form.monthly_billing }}
+                            {% if form.monthly_billing.errors %}
+                                <div class="text-danger small mt-1">{{ form.monthly_billing.errors.0 }}</div>
+                            {% endif %}
                         </div>
                     </div>
 
-                    <!-- 日額単価 -->
+                    <!-- 日額請求 -->
                     <div class="billing-type-section daily" id="daily-section">
-                        <h6 class="text-purple"><i class="bi bi-calendar-day"></i> 日額単価設定</h6>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="{{ form.daily_cost.id_for_label }}" class="form-label">
-                                    日額原価（万円） <span class="text-danger">*</span>
-                                </label>
-                                {{ form.daily_cost }}
-                                {% if form.daily_cost.errors %}
-                                    <div class="text-danger small mt-1">{{ form.daily_cost.errors.0 }}</div>
-                                {% endif %}
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="{{ form.daily_billing.id_for_label }}" class="form-label">
-                                    日額請求単価（万円） <span class="text-danger">*</span>
-                                </label>
-                                {{ form.daily_billing }}
-                                {% if form.daily_billing.errors %}
-                                    <div class="text-danger small mt-1">{{ form.daily_billing.errors.0 }}</div>
-                                {% endif %}
-                            </div>
+                        <h6 class="text-success"><i class="bi bi-calendar-day"></i> 日額請求単価</h6>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.daily_billing.id_for_label }}" class="form-label required-field">
+                                日額請求単価（万円）
+                            </label>
+                            {{ form.daily_billing }}
+                            {% if form.daily_billing.errors %}
+                                <div class="text-danger small mt-1">{{ form.daily_billing.errors.0 }}</div>
+                            {% endif %}
                         </div>
                     </div>
 
-                    <!-- 時間単価 -->
+                    <!-- 時間請求 -->
                     <div class="billing-type-section hourly" id="hourly-section">
-                        <h6 class="text-success"><i class="bi bi-clock"></i> 時間単価設定</h6>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="{{ form.hourly_cost.id_for_label }}" class="form-label">
-                                    時間原価（円） <span class="text-danger">*</span>
-                                </label>
-                                {{ form.hourly_cost }}
-                                {% if form.hourly_cost.errors %}
-                                    <div class="text-danger small mt-1">{{ form.hourly_cost.errors.0 }}</div>
-                                {% endif %}
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="{{ form.hourly_billing.id_for_label }}" class="form-label">
-                                    時間請求単価（円） <span class="text-danger">*</span>
-                                </label>
-                                {{ form.hourly_billing }}
-                                {% if form.hourly_billing.errors %}
-                                    <div class="text-danger small mt-1">{{ form.hourly_billing.errors.0 }}</div>
-                                {% endif %}
-                            </div>
+                        <h6 class="text-warning"><i class="bi bi-clock"></i> 時間請求単価</h6>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.hourly_billing.id_for_label }}" class="form-label required-field">
+                                時間請求単価（円）
+                            </label>
+                            {{ form.hourly_billing }}
+                            {% if form.hourly_billing.errors %}
+                                <div class="text-danger small mt-1">{{ form.hourly_billing.errors.0 }}</div>
+                            {% endif %}
                         </div>
                     </div>
 
                     <!-- 固定料金 -->
                     <div class="billing-type-section fixed" id="fixed-section">
-                        <h6 class="text-warning"><i class="bi bi-cash-stack"></i> 固定料金設定</h6>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="{{ form.fixed_cost.id_for_label }}" class="form-label">
-                                    固定原価（万円） <span class="text-danger">*</span>
-                                </label>
-                                {{ form.fixed_cost }}
-                                {% if form.fixed_cost.errors %}
-                                    <div class="text-danger small mt-1">{{ form.fixed_cost.errors.0 }}</div>
-                                {% endif %}
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="{{ form.fixed_billing.id_for_label }}" class="form-label">
-                                    固定請求料金（万円） <span class="text-danger">*</span>
-                                </label>
-                                {{ form.fixed_billing }}
-                                {% if form.fixed_billing.errors %}
-                                    <div class="text-danger small mt-1">{{ form.fixed_billing.errors.0 }}</div>
-                                {% endif %}
-                            </div>
+                        <h6 class="text-info"><i class="bi bi-cash-stack"></i> 固定請求料金</h6>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.fixed_billing.id_for_label }}" class="form-label required-field">
+                                固定請求料金（万円）
+                            </label>
+                            {{ form.fixed_billing }}
+                            {% if form.fixed_billing.errors %}
+                                <div class="text-danger small mt-1">{{ form.fixed_billing.errors.0 }}</div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
 
-                <!-- 特別条件セクション -->
+                <!-- 割引・特別条件セクション -->
                 <div class="form-section">
-                    <h5><i class="bi bi-gear"></i> 特別条件</h5>
+                    <h5><i class="bi bi-percent"></i> 割引・特別条件</h5>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label for="{{ form.overtime_rate.id_for_label }}" class="form-label">
-                                残業単価倍率
+                            <label for="{{ form.discount_rate.id_for_label }}" class="form-label">
+                                割引率（%）
                             </label>
-                            {{ form.overtime_rate }}
-                            {% if form.overtime_rate.errors %}
-                                <div class="text-danger small mt-1">{{ form.overtime_rate.errors.0 }}</div>
+                            {{ form.discount_rate }}
+                            {% if form.discount_rate.errors %}
+                                <div class="text-danger small mt-1">{{ form.discount_rate.errors.0 }}</div>
                             {% endif %}
-                            <div class="help-text">通常単価に対する倍率（例：1.25）</div>
+                            <div class="help-text">0-100の範囲で入力</div>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label for="{{ form.holiday_rate.id_for_label }}" class="form-label">
-                                休日単価倍率
+                            <label for="{{ form.minimum_billing_amount.id_for_label }}" class="form-label">
+                                最低請求金額（万円）
                             </label>
-                            {{ form.holiday_rate }}
-                            {% if form.holiday_rate.errors %}
-                                <div class="text-danger small mt-1">{{ form.holiday_rate.errors.0 }}</div>
+                            {{ form.minimum_billing_amount }}
+                            {% if form.minimum_billing_amount.errors %}
+                                <div class="text-danger small mt-1">{{ form.minimum_billing_amount.errors.0 }}</div>
                             {% endif %}
-                            <div class="help-text">通常単価に対する倍率（例：1.35）</div>
+                            <div class="help-text">設定しない場合は制限なし</div>
+                        </div>
+                        <div class="col-md-12 mb-3">
+                            <label for="{{ form.special_conditions.id_for_label }}" class="form-label">
+                                特別条件
+                            </label>
+                            {{ form.special_conditions }}
+                            {% if form.special_conditions.errors %}
+                                <div class="text-danger small mt-1">{{ form.special_conditions.errors.0 }}</div>
+                            {% endif %}
+                            <div class="help-text">割引条件や特別な取り決めなど</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 契約条件セクション -->
+                <div class="form-section">
+                    <h5><i class="bi bi-file-contract"></i> 契約条件</h5>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.contract_type.id_for_label }}" class="form-label">
+                                契約タイプ
+                            </label>
+                            {{ form.contract_type }}
+                            {% if form.contract_type.errors %}
+                                <div class="text-danger small mt-1">{{ form.contract_type.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.payment_terms.id_for_label }}" class="form-label">
+                                支払い条件
+                            </label>
+                            {{ form.payment_terms }}
+                            {% if form.payment_terms.errors %}
+                                <div class="text-danger small mt-1">{{ form.payment_terms.errors.0 }}</div>
+                            {% endif %}
+                            <div class="help-text">例：月末締め翌月末払い</div>
                         </div>
                     </div>
                 </div>
@@ -266,16 +268,16 @@
                 <div class="form-section">
                     <h5><i class="bi bi-calendar-range"></i> 有効期間</h5>
                     <div class="row">
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label for="{{ form.effective_from.id_for_label }}" class="form-label">
-                                有効開始日 <span class="text-danger">*</span>
+                                有効開始日
                             </label>
                             {{ form.effective_from }}
                             {% if form.effective_from.errors %}
                                 <div class="text-danger small mt-1">{{ form.effective_from.errors.0 }}</div>
                             {% endif %}
                         </div>
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label for="{{ form.effective_to.id_for_label }}" class="form-label">
                                 有効終了日
                             </label>
@@ -284,6 +286,14 @@
                                 <div class="text-danger small mt-1">{{ form.effective_to.errors.0 }}</div>
                             {% endif %}
                             <div class="help-text">空の場合は無期限</div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="form-check mt-4">
+                                {{ form.is_active }}
+                                <label for="{{ form.is_active.id_for_label }}" class="form-check-label">
+                                    有効
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -301,73 +311,32 @@
                         <i class="bi bi-x-circle"></i> キャンセル
                     </a>
                     <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-check-circle"></i> {{ button_text }}
+                        <i class="bi bi-check-circle"></i> 保存
                     </button>
                 </div>
             </div>
 
             <!-- 右カラム: プレビュー -->
             <div class="col-lg-4">
-                <div class="sticky-top" style="top: 1rem;">
-                    <!-- 利益率プレビュー -->
-                    <div class="profit-preview">
-                        <h6><i class="bi bi-graph-up"></i> リアルタイムプレビュー</h6>
-                        <div class="row">
-                            <div class="col-6">
-                                <small>原価</small>
-                                <div class="h5" id="preview-cost">-</div>
-                            </div>
-                            <div class="col-6">
-                                <small>請求単価</small>
-                                <div class="h5" id="preview-billing">-</div>
-                            </div>
+                <div class="preview-card">
+                    <h6><i class="bi bi-eye"></i> 設定プレビュー</h6>
+                    <div class="row">
+                        <div class="col-12 mb-2">
+                            <small class="text-muted">請求先</small>
+                            <div class="h6" id="preview-client">未入力</div>
                         </div>
-                        <hr class="my-2">
-                        <div class="text-center">
-                            <small>利益率</small>
-                            <div class="h4" id="preview-profit">-</div>
+                        <div class="col-12 mb-2">
+                            <small class="text-muted">請求タイプ</small>
+                            <div id="preview-billing-type">未選択</div>
                         </div>
-                    </div>
-
-                    <!-- 換算表 -->
-                    <div class="preview-card">
-                        <h6><i class="bi bi-calculator"></i> 単価換算表</h6>
-                        <table class="table table-sm">
-                            <tbody>
-                                <tr>
-                                    <td>月額換算</td>
-                                    <td class="text-end" id="convert-monthly">-</td>
-                                </tr>
-                                <tr>
-                                    <td>日額換算</td>
-                                    <td class="text-end" id="convert-daily">-</td>
-                                </tr>
-                                <tr>
-                                    <td>時間換算</td>
-                                    <td class="text-end" id="convert-hourly">-</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <small class="text-muted">※ 月20日、1日8時間で換算</small>
-                    </div>
-
-                    <!-- ヘルプ -->
-                    <div class="preview-card">
-                        <h6><i class="bi bi-question-circle"></i> ヘルプ</h6>
-                        <ul class="list-unstyled small">
-                            <li class="mb-2">
-                                <strong>月額単価:</strong> 月次契約での単価設定
-                            </li>
-                            <li class="mb-2">
-                                <strong>日額単価:</strong> 稼働日数に応じた単価設定
-                            </li>
-                            <li class="mb-2">
-                                <strong>時間単価:</strong> 時間ベースでの単価設定
-                            </li>
-                            <li class="mb-2">
-                                <strong>固定料金:</strong> プロジェクト一括での料金設定
-                            </li>
-                        </ul>
+                        <div class="col-12 mb-2">
+                            <small class="text-muted">請求金額</small>
+                            <div id="preview-amount">-</div>
+                        </div>
+                        <div class="col-12 mb-2">
+                            <small class="text-muted">割引後金額</small>
+                            <div id="preview-discounted" class="text-success">-</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -402,106 +371,76 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // プレビュー更新
     function updatePreview() {
-        const billingType = billingTypeField.value;
-        let cost = 0, billing = 0;
+        const clientName = document.getElementById('id_client_name').value || '未入力';
+        const billingType = document.getElementById('id_billing_type');
+        const discountRate = parseFloat(document.getElementById('id_discount_rate').value) || 0;
         
-        switch (billingType) {
-            case 'monthly':
-                cost = parseFloat(document.getElementById('id_monthly_cost').value) || 0;
-                billing = parseFloat(document.getElementById('id_monthly_billing').value) || 0;
-                break;
-            case 'daily':
-                cost = parseFloat(document.getElementById('id_daily_cost').value) || 0;
-                billing = parseFloat(document.getElementById('id_daily_billing').value) || 0;
-                break;
-            case 'hourly':
-                cost = parseFloat(document.getElementById('id_hourly_cost').value) || 0;
-                billing = parseFloat(document.getElementById('id_hourly_billing').value) || 0;
-                // 万円に換算（8時間/日）
-                cost = cost * 8 / 10000;
-                billing = billing * 8 / 10000;
-                break;
-            case 'fixed':
-                cost = parseFloat(document.getElementById('id_fixed_cost').value) || 0;
-                billing = parseFloat(document.getElementById('id_fixed_billing').value) || 0;
-                break;
-        }
+        document.getElementById('preview-client').textContent = clientName;
         
-        // プレビュー表示更新
-        document.getElementById('preview-cost').textContent = 
-            billingType === 'hourly' ? cost.toFixed(2) + '万円' : cost + '万円';
-        document.getElementById('preview-billing').textContent = 
-            billingType === 'hourly' ? billing.toFixed(2) + '万円' : billing + '万円';
-        
-        // 利益率計算
-        const profitMargin = billing > 0 ? ((billing - cost) / billing * 100).toFixed(1) : 0;
-        document.getElementById('preview-profit').textContent = profitMargin + '%';
-        
-        // 利益率の色分け
-        const profitElement = document.getElementById('preview-profit');
-        profitElement.className = 'h4';
-        if (profitMargin >= 20) {
-            profitElement.style.color = '#28a745';
-        } else if (profitMargin >= 10) {
-            profitElement.style.color = '#ffc107';
+        if (billingType.value) {
+            const selectedOption = billingType.options[billingType.selectedIndex];
+            document.getElementById('preview-billing-type').textContent = selectedOption.text;
+            
+            // 請求金額の表示
+            let amount = 0;
+            let unit = '';
+            
+            switch (billingType.value) {
+                case 'monthly':
+                    amount = parseFloat(document.getElementById('id_monthly_billing').value) || 0;
+                    unit = '万円/月';
+                    break;
+                case 'daily':
+                    amount = parseFloat(document.getElementById('id_daily_billing').value) || 0;
+                    unit = '万円/日';
+                    break;
+                case 'hourly':
+                    amount = parseFloat(document.getElementById('id_hourly_billing').value) || 0;
+                    unit = '円/時間';
+                    break;
+                case 'fixed':
+                    amount = parseFloat(document.getElementById('id_fixed_billing').value) || 0;
+                    unit = '万円';
+                    break;
+            }
+            
+            if (amount > 0) {
+                document.getElementById('preview-amount').textContent = amount.toLocaleString() + unit;
+                
+                // 割引後金額の計算
+                if (discountRate > 0) {
+                    const discounted = amount * (1 - discountRate / 100);
+                    document.getElementById('preview-discounted').textContent = 
+                        discounted.toLocaleString() + unit + ` (${discountRate}%割引)`;
+                } else {
+                    document.getElementById('preview-discounted').textContent = '割引なし';
+                }
+            } else {
+                document.getElementById('preview-amount').textContent = '-';
+                document.getElementById('preview-discounted').textContent = '-';
+            }
         } else {
-            profitElement.style.color = '#dc3545';
+            document.getElementById('preview-billing-type').textContent = '未選択';
+            document.getElementById('preview-amount').textContent = '-';
+            document.getElementById('preview-discounted').textContent = '-';
         }
-        
-        // 換算表更新
-        updateConversionTable(billingType, cost, billing);
-    }
-    
-    // 換算表更新
-    function updateConversionTable(billingType, cost, billing) {
-        let monthlyBilling = 0, dailyBilling = 0, hourlyBilling = 0;
-        
-        switch (billingType) {
-            case 'monthly':
-                monthlyBilling = billing;
-                dailyBilling = billing / 20;
-                hourlyBilling = billing * 10000 / 20 / 8;
-                break;
-            case 'daily':
-                monthlyBilling = billing * 20;
-                dailyBilling = billing;
-                hourlyBilling = billing * 10000 / 8;
-                break;
-            case 'hourly':
-                monthlyBilling = billing * 8 * 20 / 10000;
-                dailyBilling = billing * 8 / 10000;
-                hourlyBilling = parseFloat(document.getElementById('id_hourly_billing').value) || 0;
-                break;
-            case 'fixed':
-                // 固定料金の場合は換算しない
-                monthlyBilling = billing;
-                dailyBilling = '-';
-                hourlyBilling = '-';
-                break;
-        }
-        
-        document.getElementById('convert-monthly').textContent = 
-            typeof monthlyBilling === 'number' ? monthlyBilling.toFixed(1) + '万円' : monthlyBilling;
-        document.getElementById('convert-daily').textContent = 
-            typeof dailyBilling === 'number' ? dailyBilling.toFixed(2) + '万円' : dailyBilling;
-        document.getElementById('convert-hourly').textContent = 
-            typeof hourlyBilling === 'number' ? hourlyBilling.toFixed(0) + '円' : hourlyBilling;
     }
     
     // イベントリスナー設定
-    billingTypeField.addEventListener('change', toggleBillingTypeSection);
+    if (billingTypeField) {
+        billingTypeField.addEventListener('change', toggleBillingTypeSection);
+    }
     
-    // 数値入力フィールドの変更監視
-    const numericFields = [
-        'id_monthly_cost', 'id_monthly_billing',
-        'id_daily_cost', 'id_daily_billing',
-        'id_hourly_cost', 'id_hourly_billing',
-        'id_fixed_cost', 'id_fixed_billing'
+    // 入力フィールドの変更監視
+    const fieldsToWatch = [
+        'id_client_name', 'id_billing_type', 'id_monthly_billing', 
+        'id_daily_billing', 'id_hourly_billing', 'id_fixed_billing', 'id_discount_rate'
     ];
     
-    numericFields.forEach(fieldId => {
+    fieldsToWatch.forEach(fieldId => {
         const field = document.getElementById(fieldId);
         if (field) {
+            field.addEventListener('change', updatePreview);
             field.addEventListener('input', updatePreview);
         }
     });
@@ -509,42 +448,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // 初期表示
     toggleBillingTypeSection();
     updatePreview();
-});
-
-// フォーム送信前の検証
-document.getElementById('costMasterForm').addEventListener('submit', function(e) {
-    const billingType = document.getElementById('id_billing_type').value;
-    
-    // 必須項目チェック
-    let requiredField = '';
-    switch (billingType) {
-        case 'monthly':
-            if (!document.getElementById('id_monthly_billing').value) {
-                requiredField = '月額請求単価';
-            }
-            break;
-        case 'daily':
-            if (!document.getElementById('id_daily_billing').value) {
-                requiredField = '日額請求単価';
-            }
-            break;
-        case 'hourly':
-            if (!document.getElementById('id_hourly_billing').value) {
-                requiredField = '時間請求単価';
-            }
-            break;
-        case 'fixed':
-            if (!document.getElementById('id_fixed_billing').value) {
-                requiredField = '固定請求料金';
-            }
-            break;
-    }
-    
-    if (requiredField) {
-        e.preventDefault();
-        alert(`${requiredField}は必須です。`);
-        return false;
-    }
 });
 </script>
 {% endblock %}
