@@ -3,68 +3,128 @@ from django.contrib.auth import get_user_model
 from datetime import date, datetime
 from .models import WorkloadAggregation
 from apps.users.models import Department
-from apps.projects.models import Project, ProjectDetail
+from apps.projects.models import Project
 
 User = get_user_model()
 
 class WorkloadAggregationForm(forms.ModelForm):
-    """工数集計フォーム"""
+    """工数集計フォーム（設計書通りの完全版）"""
     
     class Meta:
         model = WorkloadAggregation
         fields = [
-            'project', 'project_detail', 'year_month', 'budget', 'billing_amount',
-            'outsourcing_cost', 'estimated_workdays', 'used_workdays', 'status',
-            'progress_rate', 'department', 'manager', 'notes'
+            # 基本情報
+            'project_name', 'case_name', 'department', 'status', 'case_classification',
+            # 日付関連
+            'estimate_date', 'order_date', 'planned_end_date', 'actual_end_date', 'inspection_date',
+            # 金額関連
+            'available_amount', 'billing_amount_excluding_tax', 'outsourcing_cost_excluding_tax',
+            # 工数関連
+            'estimated_workdays', 'used_workdays', 'newbie_workdays',
+            # 単価関連
+            'unit_cost_per_month', 'billing_unit_cost_per_month',
+            # 請求先・担当者
+            'billing_destination', 'billing_contact', 'mub_manager',
+            # 備考
+            'remarks'
         ]
         widgets = {
-            'project': forms.Select(attrs={'class': 'form-select'}),
-            'project_detail': forms.Select(attrs={'class': 'form-select'}),
-            'year_month': forms.TextInput(attrs={
+            # 基本情報
+            'project_name': forms.TextInput(attrs={
                 'class': 'form-control',
-                'placeholder': '2024-12',
-                'pattern': '[0-9]{4}-[0-9]{2}'
+                'placeholder': 'プロジェクト名を入力してください'
             }),
-            'budget': forms.NumberInput(attrs={
+            'case_name': forms.Select(attrs={'class': 'form-select'}),
+            'department': forms.Select(attrs={'class': 'form-select'}),
+            'status': forms.Select(attrs={'class': 'form-select'}),
+            'case_classification': forms.Select(attrs={'class': 'form-select'}),
+            
+            # 日付関連
+            'estimate_date': forms.DateInput(attrs={
                 'class': 'form-control',
-                'step': '0.01',
+                'type': 'date'
+            }),
+            'order_date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            'planned_end_date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            'actual_end_date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            'inspection_date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            
+            # 金額関連（税別）
+            'available_amount': forms.NumberInput(attrs={
+                'class': 'form-control',
                 'min': '0',
-                'placeholder': '0.00'
+                'placeholder': '0'
             }),
-            'billing_amount': forms.NumberInput(attrs={
+            'billing_amount_excluding_tax': forms.NumberInput(attrs={
                 'class': 'form-control',
-                'step': '0.01',
                 'min': '0',
-                'placeholder': '0.00'
+                'placeholder': '0'
             }),
-            'outsourcing_cost': forms.NumberInput(attrs={
+            'outsourcing_cost_excluding_tax': forms.NumberInput(attrs={
                 'class': 'form-control',
-                'step': '0.01',
                 'min': '0',
-                'placeholder': '0.00'
+                'placeholder': '0'
             }),
+            
+            # 工数関連
             'estimated_workdays': forms.NumberInput(attrs={
                 'class': 'form-control',
-                'step': '0.5',
+                'step': '0.1',
                 'min': '0',
                 'placeholder': '0.0'
             }),
             'used_workdays': forms.NumberInput(attrs={
                 'class': 'form-control',
-                'step': '0.5',
+                'step': '0.1',
                 'min': '0',
                 'placeholder': '0.0'
             }),
-            'status': forms.Select(attrs={'class': 'form-select'}),
-            'progress_rate': forms.NumberInput(attrs={
+            'newbie_workdays': forms.NumberInput(attrs={
                 'class': 'form-control',
+                'step': '0.1',
                 'min': '0',
-                'max': '100',
-                'placeholder': '0'
+                'placeholder': '0.0'
             }),
-            'department': forms.Select(attrs={'class': 'form-select'}),
-            'manager': forms.Select(attrs={'class': 'form-select'}),
-            'notes': forms.Textarea(attrs={
+            
+            # 単価関連
+            'unit_cost_per_month': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'min': '0',
+                'placeholder': '0.00'
+            }),
+            'billing_unit_cost_per_month': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'min': '0',
+                'placeholder': '0.00'
+            }),
+            
+            # 請求先・担当者
+            'billing_destination': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': '請求先を入力してください'
+            }),
+            'billing_contact': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': '請求先担当者を入力してください'
+            }),
+            'mub_manager': forms.Select(attrs={'class': 'form-select'}),
+            
+            # 備考
+            'remarks': forms.Textarea(attrs={
                 'class': 'form-control',
                 'rows': 3,
                 'placeholder': '備考があれば記載してください'
@@ -75,101 +135,84 @@ class WorkloadAggregationForm(forms.ModelForm):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         
-        # プロジェクトの絞り込み（アクティブなもののみ）
-        self.fields['project'].queryset = Project.objects.filter(
+        # 案件名（案件リスト登録画面にある案件のみ選択可能）
+        self.fields['case_name'].queryset = Project.objects.filter(
             is_active=True
         ).order_by('name')
-        self.fields['project'].empty_label = "プロジェクトを選択してください"
+        self.fields['case_name'].empty_label = "案件を選択してください"
         
-        # プロジェクト詳細の絞り込み
-        if self.instance.pk and self.instance.project:
-            self.fields['project_detail'].queryset = ProjectDetail.objects.filter(
-                project=self.instance.project
-            )
-        else:
-            self.fields['project_detail'].queryset = ProjectDetail.objects.none()
-        self.fields['project_detail'].empty_label = "プロジェクト詳細を選択（任意）"
-        
-        # 部署の絞り込み
+        # 部名（案件リスト登録画面にある部名のみ選択可能）
         self.fields['department'].queryset = Department.objects.filter(is_active=True)
-        self.fields['department'].empty_label = "担当部署を選択（任意）"
+        self.fields['department'].empty_label = "部署を選択してください"
         
-        # マネージャーの絞り込み
-        self.fields['manager'].queryset = User.objects.filter(
+        # MUB担当者
+        self.fields['mub_manager'].queryset = User.objects.filter(
             is_active=True
         ).order_by('last_name', 'first_name')
-        self.fields['manager'].empty_label = "プロジェクトマネージャーを選択（任意）"
-        
-        # デフォルト値設定
-        if not self.instance.pk:  # 新規作成時
-            current_date = datetime.now()
-            self.fields['year_month'].initial = f"{current_date.year}-{current_date.month:02d}"
-            self.fields['status'].initial = 'planning'
-            self.fields['progress_rate'].initial = 0
-
-    def clean_year_month(self):
-        year_month = self.cleaned_data.get('year_month')
-        if year_month:
-            try:
-                # YYYY-MM形式の検証
-                year, month = year_month.split('-')
-                year = int(year)
-                month = int(month)
-                if not (1 <= month <= 12):
-                    raise ValueError("月は1-12の範囲で入力してください")
-                if year < 2000 or year > 2100:
-                    raise ValueError("年は2000-2100の範囲で入力してください")
-            except ValueError as e:
-                raise forms.ValidationError(f"年月の形式が正しくありません: {e}")
-        return year_month
+        self.fields['mub_manager'].empty_label = "MUB担当者を選択（任意）"
 
     def clean(self):
         cleaned_data = super().clean()
         
-        # 進捗率の妥当性チェック
-        progress_rate = cleaned_data.get('progress_rate')
-        if progress_rate is not None and (progress_rate < 0 or progress_rate > 100):
-            raise forms.ValidationError('進捗率は0%から100%の範囲で設定してください。')
+        # 日付の妥当性チェック
+        estimate_date = cleaned_data.get('estimate_date')
+        order_date = cleaned_data.get('order_date')
+        planned_end_date = cleaned_data.get('planned_end_date')
+        actual_end_date = cleaned_data.get('actual_end_date')
+        inspection_date = cleaned_data.get('inspection_date')
+        
+        # 見積日 ≤ 受注日 ≤ 終了日（予定）の順序チェック
+        if estimate_date and order_date and estimate_date > order_date:
+            self.add_error('order_date', '受注日は見積日以降の日付を設定してください。')
+        
+        if order_date and planned_end_date and order_date > planned_end_date:
+            self.add_error('planned_end_date', '終了日（予定）は受注日以降の日付を設定してください。')
+        
+        if actual_end_date and inspection_date and actual_end_date > inspection_date:
+            self.add_error('inspection_date', '検収日は終了日実績以降の日付を設定してください。')
         
         # 工数の妥当性チェック
         estimated_workdays = cleaned_data.get('estimated_workdays')
         used_workdays = cleaned_data.get('used_workdays')
-        if estimated_workdays and used_workdays:
-            if used_workdays > estimated_workdays * 1.5:  # 150%を超える場合は警告
-                self.add_error('used_workdays', 
-                    '消化工数が見積工数の150%を超えています。確認してください。')
+        newbie_workdays = cleaned_data.get('newbie_workdays')
         
-        # 予算の妥当性チェック
-        budget = cleaned_data.get('budget')
-        billing_amount = cleaned_data.get('billing_amount')
-        if budget and billing_amount:
-            if billing_amount > budget * 1.2:  # 120%を超える場合は警告
-                self.add_error('billing_amount', 
-                    '請求金額が予算の120%を超えています。確認してください。')
+        if estimated_workdays and used_workdays and newbie_workdays:
+            total_used = used_workdays + newbie_workdays
+            if total_used > estimated_workdays * 1.5:  # 150%を超える場合は警告
+                self.add_error('used_workdays', 
+                    '使用工数合計が見積工数の150%を超えています。確認してください。')
+        
+        # 金額の妥当性チェック
+        available_amount = cleaned_data.get('available_amount')
+        billing_amount = cleaned_data.get('billing_amount_excluding_tax')
+        
+        if available_amount and billing_amount:
+            if billing_amount > available_amount * 1.2:  # 120%を超える場合は警告
+                self.add_error('billing_amount_excluding_tax', 
+                    '請求金額が使用可能金額の120%を超えています。確認してください。')
         
         return cleaned_data
 
 class WorkloadAggregationFilterForm(forms.Form):
     """工数集計フィルターフォーム"""
     
-    year_month = forms.CharField(
-        label='年月',
+    project_name = forms.CharField(
+        label='プロジェクト名',
         required=False,
         widget=forms.TextInput(attrs={
             'class': 'form-control',
-            'placeholder': '2024-12',
-            'pattern': '[0-9]{4}-[0-9]{2}'
+            'placeholder': 'プロジェクト名で検索'
         })
     )
-    project = forms.ModelChoiceField(
-        label='プロジェクト',
+    case_name = forms.ModelChoiceField(
+        label='案件名',
         queryset=Project.objects.filter(is_active=True),
         required=False,
-        empty_label="全てのプロジェクト",
+        empty_label="全ての案件",
         widget=forms.Select(attrs={'class': 'form-select'})
     )
     department = forms.ModelChoiceField(
-        label='部署',
+        label='部名',
         queryset=Department.objects.filter(is_active=True),
         required=False,
         empty_label="全ての部署",
@@ -181,11 +224,17 @@ class WorkloadAggregationFilterForm(forms.Form):
         required=False,
         widget=forms.Select(attrs={'class': 'form-select'})
     )
-    manager = forms.ModelChoiceField(
-        label='プロジェクトマネージャー',
+    case_classification = forms.ChoiceField(
+        label='案件分類',
+        choices=[('', '全ての案件分類')] + WorkloadAggregation.CaseClassificationChoices.choices,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    mub_manager = forms.ModelChoiceField(
+        label='MUB担当者',
         queryset=User.objects.filter(is_active=True),
         required=False,
-        empty_label="全てのマネージャー",
+        empty_label="全ての担当者",
         widget=forms.Select(attrs={'class': 'form-select'})
     )
     search = forms.CharField(
@@ -193,6 +242,6 @@ class WorkloadAggregationFilterForm(forms.Form):
         required=False,
         widget=forms.TextInput(attrs={
             'class': 'form-control',
-            'placeholder': 'プロジェクト名で検索'
+            'placeholder': 'プロジェクト名・案件名・備考で検索'
         })
     )

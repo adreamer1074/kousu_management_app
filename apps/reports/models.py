@@ -5,119 +5,137 @@ from decimal import Decimal
 
 User = get_user_model()
 
-class ReportType(models.TextChoices):
-    """レポートタイプ"""
-    MONTHLY = 'monthly', '月次レポート'
-    PROJECT = 'project', 'プロジェクトレポート'
-    USER = 'user', 'ユーザーレポート'
-    DEPARTMENT = 'department', '部署レポート'
-
-class ReportFormat(models.TextChoices):
-    """レポートフォーマット"""
-    PDF = 'pdf', 'PDF'
-    EXCEL = 'excel', 'Excel'
-    CSV = 'csv', 'CSV'
-
 class WorkloadAggregation(models.Model):
-    """工数集計一覧テーブル（工数集計レポート機能）"""
+    """工数集計一覧テーブル（設計書通りの完全版）"""
     
     class StatusChoices(models.TextChoices):
         PLANNING = 'planning', '計画中'
         IN_PROGRESS = 'in_progress', '進行中'
         COMPLETED = 'completed', '完了'
+        INSPECTION_WAITING = 'inspection_waiting', '検収待ち'
+        INSPECTED = 'inspected', '検収済み'
         ON_HOLD = 'on_hold', '保留'
         CANCELLED = 'cancelled', 'キャンセル'
     
-    # プロジェクト情報
-    project = models.ForeignKey(
+    class CaseClassificationChoices(models.TextChoices):
+        DEVELOPMENT = 'development', '開発'
+        MAINTENANCE = 'maintenance', '保守'
+        SUPPORT = 'support', 'サポート'
+        CONSULTING = 'consulting', 'コンサルティング'
+        OTHER = 'other', 'その他'
+    
+    # 基本情報
+    project_name = models.CharField('プロジェクト名', max_length=200)
+    case_name = models.ForeignKey(
         'projects.Project',
         on_delete=models.CASCADE,
-        verbose_name='プロジェクト',
+        verbose_name='案件名',
         related_name='workload_aggregations'
     )
-    project_detail = models.ForeignKey(
-        'projects.ProjectDetail',
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        verbose_name='プロジェクト詳細'
+    department = models.ForeignKey(
+        'users.Department',
+        on_delete=models.CASCADE,
+        verbose_name='部名'
     )
     
-    # 期間設定
-    year_month = models.CharField(
-        '年月',
-        max_length=7,  # YYYY-MM形式
-        help_text='YYYY-MM形式（例：2024-12）'
-    )
-    
-    # 予算・請求情報
-    budget = models.DecimalField(
-        '予算（万円）',
-        max_digits=12,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))]
-    )
-    billing_amount = models.DecimalField(
-        '請求金額（万円）',
-        max_digits=12,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))]
-    )
-    outsourcing_cost = models.DecimalField(
-        '外注費（万円）',
-        max_digits=12,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))]
-    )
-    
-    # 工数情報
-    estimated_workdays = models.DecimalField(
-        '見積工数（人日）',
-        max_digits=8,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))]
-    )
-    used_workdays = models.DecimalField(
-        '消化工数（人日）',
-        max_digits=8,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))]
-    )
-    
-    # ステータス・進捗
+    # ステータス・分類
     status = models.CharField(
         'ステータス',
         max_length=20,
         choices=StatusChoices.choices,
         default=StatusChoices.PLANNING
     )
-    progress_rate = models.PositiveIntegerField(
-        '進捗率（%）',
-        default=0,
-        validators=[MinValueValidator(0), MaxValueValidator(100)]
+    case_classification = models.CharField(
+        '案件分類',
+        max_length=20,
+        choices=CaseClassificationChoices.choices,
+        default=CaseClassificationChoices.DEVELOPMENT
     )
     
-    # 部署・担当者情報
-    department = models.ForeignKey(
-        'users.Department',
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        verbose_name='担当部署'
+    # 日付関連
+    estimate_date = models.DateField('見積日', null=True, blank=True)
+    order_date = models.DateField('受注日', null=True, blank=True)
+    planned_end_date = models.DateField('終了日（予定）', null=True, blank=True)
+    actual_end_date = models.DateField('終了日実績（検収待ち）', null=True, blank=True)
+    inspection_date = models.DateField('検収日', null=True, blank=True)
+    
+    # 金額関連（税別）
+    available_amount = models.DecimalField(
+        '使用可能金額（税別）',
+        max_digits=12,
+        decimal_places=0,
+        default=Decimal('0'),
+        validators=[MinValueValidator(Decimal('0'))]
     )
-    manager = models.ForeignKey(
+    billing_amount_excluding_tax = models.DecimalField(
+        '請求金額（税別）',
+        max_digits=12,
+        decimal_places=0,
+        default=Decimal('0'),
+        validators=[MinValueValidator(Decimal('0'))]
+    )
+    outsourcing_cost_excluding_tax = models.DecimalField(
+        '外注費（税別）',
+        max_digits=12,
+        decimal_places=0,
+        default=Decimal('0'),
+        validators=[MinValueValidator(Decimal('0'))]
+    )
+    
+    # 工数関連（人日）
+    estimated_workdays = models.DecimalField(
+        '見積工数（人日）',
+        max_digits=8,
+        decimal_places=1,
+        default=Decimal('0.0'),
+        validators=[MinValueValidator(Decimal('0.0'))]
+    )
+    used_workdays = models.DecimalField(
+        '使用工数（人日）',
+        max_digits=8,
+        decimal_places=1,
+        default=Decimal('0.0'),
+        validators=[MinValueValidator(Decimal('0.0'))]
+    )
+    newbie_workdays = models.DecimalField(
+        '新入社員使用工数（人日）',
+        max_digits=8,
+        decimal_places=1,
+        default=Decimal('0.0'),
+        validators=[MinValueValidator(Decimal('0.0'))]
+    )
+    
+    # 計算フィールド用の基礎データ
+    unit_cost_per_month = models.DecimalField(
+        '単価（万円/月）',
+        max_digits=8,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))]
+    )
+    billing_unit_cost_per_month = models.DecimalField(
+        '請求単価（万円/月）',
+        max_digits=8,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))]
+    )
+    
+    # 請求先情報
+    billing_destination = models.CharField('請求先', max_length=200, blank=True)
+    billing_contact = models.CharField('請求先担当者', max_length=100, blank=True)
+    
+    # 担当者
+    mub_manager = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True, blank=True,
-        verbose_name='プロジェクトマネージャー',
+        verbose_name='MUB担当者',
         related_name='managed_workload_aggregations'
     )
     
-    # 備考・メモ
-    notes = models.TextField('備考', blank=True)
+    # 備考
+    remarks = models.TextField('備考', blank=True)
     
     # 管理情報
     created_at = models.DateTimeField('作成日時', auto_now_add=True)
@@ -132,35 +150,48 @@ class WorkloadAggregation(models.Model):
     class Meta:
         verbose_name = '工数集計'
         verbose_name_plural = '工数集計'
-        ordering = ['-year_month', '-created_at']
-        unique_together = ['project', 'year_month']
+        ordering = ['-order_date', '-created_at']
     
     def __str__(self):
-        return f"{self.project.name} - {self.year_month}"
+        return f"{self.project_name} - {self.case_name.name}"
     
     @property
-    def workday_usage_rate(self):
-        """工数消化率"""
-        if self.estimated_workdays > 0:
-            return round((self.used_workdays / self.estimated_workdays) * 100, 1)
-        return 0
-    
-    @property
-    def budget_usage_rate(self):
-        """予算消化率"""
-        if self.budget > 0:
-            return round((self.billing_amount / self.budget) * 100, 1)
-        return 0
+    def total_used_workdays(self):
+        """使用工数合計（日）"""
+        return self.used_workdays + self.newbie_workdays
     
     @property
     def remaining_workdays(self):
-        """残り工数"""
-        return max(self.estimated_workdays - self.used_workdays, 0)
+        """残工数（人日）"""
+        return max(self.estimated_workdays - self.total_used_workdays, Decimal('0.0'))
     
     @property
-    def remaining_budget(self):
-        """残り予算"""
-        return max(self.budget - self.billing_amount, 0)
+    def remaining_amount(self):
+        """残金額（税抜）"""
+        return max(self.available_amount - self.billing_amount_excluding_tax, Decimal('0'))
+    
+    @property
+    def profit_rate(self):
+        """利益率"""
+        if self.billing_amount_excluding_tax > 0:
+            profit = self.billing_amount_excluding_tax - self.outsourcing_cost_excluding_tax
+            return round((profit / self.billing_amount_excluding_tax) * 100, 1)
+        return Decimal('0.0')
+    
+    @property
+    def wip_amount(self):
+        """仕掛中金額（人日×単価）"""
+        return self.used_workdays * (self.unit_cost_per_month / 20)  # 月20日計算
+    
+    @property
+    def wip_amount_partner(self):
+        """仕掛中合計（協力会社）"""
+        return self.newbie_workdays * (self.unit_cost_per_month / 20)
+    
+    @property
+    def tax_excluded_billing_amount(self):
+        """税抜請求金額（表示用）"""
+        return self.billing_amount_excluding_tax
 
 class ReportExport(models.Model):
     """レポートエクスポート管理モデル"""
@@ -170,13 +201,21 @@ class ReportExport(models.Model):
     )
     report_type = models.CharField(
         max_length=20,
-        choices=ReportType.choices,
+        choices=[
+            ('monthly', '月次レポート'),
+            ('project', 'プロジェクトレポート'),
+            ('department', '部署レポート'),
+        ],
         verbose_name="レポートタイプ"
     )
     format = models.CharField(
         max_length=10,
-        choices=ReportFormat.choices,
-        default=ReportFormat.PDF,
+        choices=[
+            ('pdf', 'PDF'),
+            ('excel', 'Excel'),
+            ('csv', 'CSV'),
+        ],
+        default='pdf',
         verbose_name="フォーマット"
     )
     department = models.ForeignKey(

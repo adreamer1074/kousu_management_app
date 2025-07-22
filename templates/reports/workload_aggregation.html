@@ -1,276 +1,323 @@
 {% extends 'base.html' %}
-{% load workload_filters %}
+{% load static %}
 
-{% block title %}工数集計 - 工数管理システム{% endblock %}
-
-{% block page_title %}
-    <i class="bi bi-bar-chart-line"></i> 工数集計
-    <span class="badge bg-primary ms-2">{{ year_month }}</span>
-{% endblock %}
-
-{% block content %}
-<!-- フィルター・検索セクション -->
-<div class="card mb-4">
-    <div class="card-header">
-        <div class="row align-items-center">
-            <div class="col-md-6">
-                <h5 class="mb-0"><i class="bi bi-funnel"></i> 検索・フィルター</h5>
-            </div>
-            <div class="col-md-6 text-end">
-                <a href="{% url 'reports:workload_export' %}?year_month={{ year_month }}&format=csv" class="btn btn-success">
-                    <i class="bi bi-download"></i> CSV出力
-                </a>
-            </div>
-        </div>
-    </div>
-    <div class="card-body">
-        <form method="GET" class="row g-3">
-            <!-- 年月選択 -->
-            <div class="col-md-2">
-                <label for="year_month" class="form-label">年月</label>
-                <select name="year_month" id="year_month" class="form-select" onchange="this.form.submit()">
-                    {% for month in filter_options.available_months %}
-                        <option value="{{ month }}" {% if month == year_month %}selected{% endif %}>
-                            {{ month }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            
-            <!-- プロジェクト選択 -->
-            <div class="col-md-2">
-                <label for="project_id" class="form-label">プロジェクト</label>
-                <select name="project_id" id="project_id" class="form-select">
-                    <option value="">全て</option>
-                    {% for project in filter_options.projects %}
-                        <option value="{{ project.id }}" {% if project.id|stringformat:"s" == current_filters.project_id %}selected{% endif %}>
-                            {{ project.name|truncatechars:20 }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            
-            <!-- 部署選択 -->
-            <div class="col-md-2">
-                <label for="department_id" class="form-label">部署</label>
-                <select name="department_id" id="department_id" class="form-select">
-                    <option value="">全て</option>
-                    {% for dept in filter_options.departments %}
-                        <option value="{{ dept.id }}" {% if dept.id|stringformat:"s" == current_filters.department_id %}selected{% endif %}>
-                            {{ dept.name }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            
-            <!-- ステータス選択 -->
-            <div class="col-md-2">
-                <label for="status" class="form-label">ステータス</label>
-                <select name="status" id="status" class="form-select">
-                    <option value="">全て</option>
-                    {% for value, label in filter_options.statuses %}
-                        <option value="{{ value }}" {% if value == current_filters.status %}selected{% endif %}>
-                            {{ label }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            
-            <!-- 検索キーワード -->
-            <div class="col-md-3">
-                <label for="search" class="form-label">キーワード検索</label>
-                <input type="text" name="search" id="search" class="form-control" 
-                       placeholder="プロジェクト名、案件名、請求先..." 
-                       value="{{ current_filters.search }}">
-            </div>
-            
-            <!-- 検索ボタン -->
-            <div class="col-md-1 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary w-100">
-                    <i class="bi bi-search"></i>
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- 統計サマリー -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-graph-up"></i> 集計サマリー</h5>
-            </div>
-            <div class="card-body">
-                <div class="row text-center">
-                    <div class="col-md-2">
-                        <div class="h5 text-primary">¥{{ total_stats.total_budget|floatformat:0 }}</div>
-                        <small class="text-muted">総予算</small>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="h5 text-success">¥{{ total_stats.total_billing|floatformat:0 }}</div>
-                        <small class="text-muted">総請求額</small>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="h5 text-warning">{{ total_stats.total_estimated_workdays|floatformat:1 }}</div>
-                        <small class="text-muted">見積工数</small>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="h5 text-info">{{ total_stats.total_used_workdays|floatformat:1 }}</div>
-                        <small class="text-muted">使用工数</small>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="h5 text-secondary">{{ total_stats.total_newbie_workdays|floatformat:1 }}</div>
-                        <small class="text-muted">新入社員工数</small>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="h5 text-dark">¥{{ total_stats.total_wip_amount|floatformat:0 }}</div>
-                        <small class="text-muted">仕掛中金額</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 工数集計テーブル -->
-<div class="card">
-    <div class="card-header">
-        <h5 class="mb-0"><i class="bi bi-table"></i> 工数集計一覧</h5>
-    </div>
-    <div class="card-body p-0">
-        <div class="table-responsive" style="max-height: 600px;">
-            <table class="table table-hover mb-0 table-sm">
-                <thead class="table-light sticky-top">
-                    <tr>
-                        <th style="min-width: 120px;">プロジェクト名</th>
-                        <th style="min-width: 120px;">案件名</th>
-                        <th>部名</th>
-                        <th>ステータス</th>
-                        <th>案件分類</th>
-                        <th>見積日</th>
-                        <th>受注日</th>
-                        <th>終了予定</th>
-                        <th>終了実績</th>
-                        <th>検収日</th>
-                        <th class="text-end">予算(万円)</th>
-                        <th class="text-end">請求(万円)</th>
-                        <th class="text-end">外注費(万円)</th>
-                        <th class="text-end">見積工数</th>
-                        <th class="text-end bg-info text-white">使用工数</th>
-                        <th class="text-end">新人工数</th>
-                        <th class="text-end">残工数</th>
-                        <th class="text-end">残金額</th>
-                        <th class="text-end">利益率</th>
-                        <th class="text-end">仕掛中</th>
-                        <th style="min-width: 100px;">請求先</th>
-                        <th>MUB担当</th>
-                        <th style="min-width: 150px;">備考</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for project in aggregated_projects %}
-                        <tr>
-                            <td><strong>{{ project.detail.project_name|truncatechars:20 }}</strong></td>
-                            <td>{{ project.detail.case_name|truncatechars:20 }}</td>
-                            <td>{{ project.detail.department.name }}</td>
-                            <td>
-                                {% if project.detail.status == 'active' %}
-                                    <span class="badge bg-primary">{{ project.detail.get_status_display }}</span>
-                                {% elif project.detail.status == 'completed' %}
-                                    <span class="badge bg-success">{{ project.detail.get_status_display }}</span>
-                                {% elif project.detail.status == 'inspection_pending' %}
-                                    <span class="badge bg-warning">{{ project.detail.get_status_display }}</span>
-                                {% else %}
-                                    <span class="badge bg-secondary">{{ project.detail.get_status_display }}</span>
-                                {% endif %}
-                            </td>
-                            <td>{{ project.detail.get_case_classification_display }}</td>
-                            <td>{{ project.detail.estimate_date|date:"m/d"|default:"-" }}</td>
-                            <td>{{ project.detail.order_date|date:"m/d"|default:"-" }}</td>
-                            <td>{{ project.detail.planned_end_date|date:"m/d"|default:"-" }}</td>
-                            <td>{{ project.detail.actual_end_date|date:"m/d"|default:"-" }}</td>
-                            <td>{{ project.detail.inspection_date|date:"m/d"|default:"-" }}</td>
-                            <td class="text-end">{{ project.detail.budget_amount|div:10000|floatformat:1 }}</td>
-                            <td class="text-end">{{ project.detail.billing_amount|div:10000|floatformat:1 }}</td>
-                            <td class="text-end">{{ project.detail.outsourcing_cost|div:10000|floatformat:1 }}</td>
-                            <td class="text-end">{{ project.detail.estimated_workdays|floatformat:1 }}</td>
-                            <td class="text-end bg-info text-white"><strong>{{ project.monthly_used_workdays|floatformat:1 }}</strong></td>
-                            <td class="text-end">{{ project.monthly_newbie_workdays|floatformat:1 }}</td>
-                            <td class="text-end">
-                                {% if project.monthly_remaining_workdays < 0 %}
-                                    <span class="text-danger">{{ project.monthly_remaining_workdays|floatformat:1 }}</span>
-                                {% else %}
-                                    {{ project.monthly_remaining_workdays|floatformat:1 }}
-                                {% endif %}
-                            </td>
-                            <td class="text-end">{{ project.monthly_remaining_amount|div:10000|floatformat:1 }}</td>
-                            <td class="text-end">
-                                {% if project.profit_rate < 0 %}
-                                    <span class="text-danger">{{ project.profit_rate|floatformat:1 }}%</span>
-                                {% else %}
-                                    <span class="text-success">{{ project.profit_rate|floatformat:1 }}%</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-end">{{ project.monthly_wip_amount|div:10000|floatformat:1 }}</td>
-                            <td>{{ project.detail.billing_destination|truncatechars:15 }}</td>
-                            <td>{{ project.detail.mub_manager|truncatechars:10 }}</td>
-                            <td>{{ project.detail.remarks|truncatechars:20 }}</td>
-                        </tr>
-                    {% empty %}
-                        <tr>
-                            <td colspan="23" class="text-center py-4">
-                                <i class="bi bi-inbox fs-1 text-muted d-block mb-2"></i>
-                                <span class="text-muted">該当する案件がありません</span>
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-{% endblock %}
+{% block title %}工数集計レポート | 工数管理システム{% endblock %}
 
 {% block extra_css %}
 <style>
-.table th.sticky-top {
-    position: sticky;
-    top: 0;
-    background-color: #f8f9fa !important;
-    z-index: 10;
-    white-space: nowrap;
-    font-size: 0.875rem;
-}
-
-.table td {
-    white-space: nowrap;
-    font-size: 0.875rem;
-}
-
-.bg-info.text-white {
-    background-color: #17a2b8 !important;
-}
+    .stats-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .filter-section {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .table-responsive {
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        overflow-x: auto;
+    }
+    .status-badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.4rem;
+        white-space: nowrap;
+    }
+    .btn-group-sm .btn {
+        padding: 0.2rem 0.4rem;
+        font-size: 0.7rem;
+    }
+    .table th {
+        font-size: 0.8rem;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+    .table td {
+        font-size: 0.85rem;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+    .number-cell {
+        text-align: right;
+    }
+    .wide-table {
+        min-width: 2500px;
+    }
 </style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- ページヘッダー -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="bi bi-bar-chart-line"></i> 工数集計レポート
+            </h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">ホーム</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'reports:report_list' %}">レポート</a></li>
+                    <li class="breadcrumb-item active">工数集計レポート</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <a href="{% url 'reports:workload_aggregation_create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> 新規登録
+            </a>
+            <a href="{% url 'reports:workload_export' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" class="btn btn-success">
+                <i class="bi bi-download"></i> エクスポート
+            </a>
+        </div>
+    </div>
+
+    <!-- 統計カード -->
+    <div class="stats-card">
+        <div class="row text-center">
+            <div class="col-md-2">
+                <h4 class="mb-1">{{ total_stats.total_available_amount|floatformat:0 }}</h4>
+                <small>総使用可能金額（税別）</small>
+            </div>
+            <div class="col-md-2">
+                <h4 class="mb-1">{{ total_stats.total_billing_amount|floatformat:0 }}</h4>
+                <small>総請求金額（税別）</small>
+            </div>
+            <div class="col-md-2">
+                <h4 class="mb-1">{{ total_stats.total_outsourcing|floatformat:0 }}</h4>
+                <small>総外注費（税別）</small>
+            </div>
+            <div class="col-md-3">
+                <h4 class="mb-1">{{ total_stats.total_estimated_workdays|floatformat:1 }}</h4>
+                <small>総見積工数（人日）</small>
+            </div>
+            <div class="col-md-3">
+                <h4 class="mb-1">{{ total_stats.total_used_workdays|floatformat:1 }}</h4>
+                <small>総使用工数（人日）</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- フィルターセクション -->
+    <div class="filter-section">
+        <form method="get" class="row g-3">
+            <div class="col-md-2">
+                {{ filter_form.project_name.label_tag }}
+                {{ filter_form.project_name }}
+            </div>
+            <div class="col-md-2">
+                {{ filter_form.case_name.label_tag }}
+                {{ filter_form.case_name }}
+            </div>
+            <div class="col-md-2">
+                {{ filter_form.department.label_tag }}
+                {{ filter_form.department }}
+            </div>
+            <div class="col-md-2">
+                {{ filter_form.status.label_tag }}
+                {{ filter_form.status }}
+            </div>
+            <div class="col-md-2">
+                {{ filter_form.case_classification.label_tag }}
+                {{ filter_form.case_classification }}
+            </div>
+            <div class="col-md-2">
+                {{ filter_form.search.label_tag }}
+                {{ filter_form.search }}
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search"></i> 検索
+                </button>
+                <a href="{% url 'reports:workload_aggregation' %}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-clockwise"></i> リセット
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- データテーブル -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-table"></i> 工数集計一覧
+                <span class="badge bg-primary ms-2">{{ page_obj.paginator.count }}件</span>
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 wide-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th>プロジェクト名</th>
+                            <th>案件名</th>
+                            <th>部名</th>
+                            <th>ステータス</th>
+                            <th>案件分類</th>
+                            <th>見積日</th>
+                            <th>受注日</th>
+                            <th>終了日（予定）</th>
+                            <th>終了日実績</th>
+                            <th>検収日</th>
+                            <th>使用可能金額（税別）</th>
+                            <th>請求金額（税別）</th>
+                            <th>外注費（税別）</th>
+                            <th>見積工数（人日）</th>
+                            <th>使用工数（人日）</th>
+                            <th>新入社員使用工数（人日）</th>
+                            <th>使用工数合計（日）</th>
+                            <th>残工数（人日）</th>
+                            <th>残金額（税抜）</th>
+                            <th>利益率</th>
+                            <th>仕掛中金額</th>
+                            <th>税抜請求金額</th>
+                            <th>請求先</th>
+                            <th>請求先担当者</th>
+                            <th>MUB担当者</th>
+                            <th>単価（万円/月）</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in aggregated_projects %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'reports:workload_aggregation_detail' item.pk %}" class="text-decoration-none">
+                                    {{ item.project_name }}
+                                </a>
+                            </td>
+                            <td>{{ item.case_name.name }}</td>
+                            <td>{{ item.department.name }}</td>
+                            <td>
+                                {% if item.status == 'planning' %}
+                                    <span class="badge bg-secondary status-badge">{{ item.get_status_display }}</span>
+                                {% elif item.status == 'in_progress' %}
+                                    <span class="badge bg-primary status-badge">{{ item.get_status_display }}</span>
+                                {% elif item.status == 'completed' %}
+                                    <span class="badge bg-success status-badge">{{ item.get_status_display }}</span>
+                                {% elif item.status == 'inspection_waiting' %}
+                                    <span class="badge bg-warning status-badge">{{ item.get_status_display }}</span>
+                                {% elif item.status == 'inspected' %}
+                                    <span class="badge bg-info status-badge">{{ item.get_status_display }}</span>
+                                {% elif item.status == 'on_hold' %}
+                                    <span class="badge bg-secondary status-badge">{{ item.get_status_display }}</span>
+                                {% else %}
+                                    <span class="badge bg-danger status-badge">{{ item.get_status_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.get_case_classification_display }}</td>
+                            <td>{{ item.estimate_date|date:"Y/m/d"|default:"-" }}</td>
+                            <td>{{ item.order_date|date:"Y/m/d"|default:"-" }}</td>
+                            <td>{{ item.planned_end_date|date:"Y/m/d"|default:"-" }}</td>
+                            <td>{{ item.actual_end_date|date:"Y/m/d"|default:"-" }}</td>
+                            <td>{{ item.inspection_date|date:"Y/m/d"|default:"-" }}</td>
+                            <td class="number-cell">{{ item.available_amount|floatformat:0 }}</td>
+                            <td class="number-cell">{{ item.billing_amount_excluding_tax|floatformat:0 }}</td>
+                            <td class="number-cell">{{ item.outsourcing_cost_excluding_tax|floatformat:0 }}</td>
+                            <td class="number-cell">{{ item.estimated_workdays|floatformat:1 }}</td>
+                            <td class="number-cell">{{ item.used_workdays|floatformat:1 }}</td>
+                            <td class="number-cell">{{ item.newbie_workdays|floatformat:1 }}</td>
+                            <td class="number-cell">{{ item.total_used_workdays|floatformat:1 }}</td>
+                            <td class="number-cell">{{ item.remaining_workdays|floatformat:1 }}</td>
+                            <td class="number-cell">{{ item.remaining_amount|floatformat:0 }}</td>
+                            <td class="number-cell">{{ item.profit_rate|floatformat:1 }}%</td>
+                            <td class="number-cell">{{ item.wip_amount|floatformat:0 }}</td>
+                            <td class="number-cell">{{ item.tax_excluded_billing_amount|floatformat:0 }}</td>
+                            <td>{{ item.billing_destination|default:"-" }}</td>
+                            <td>{{ item.billing_contact|default:"-" }}</td>
+                            <td>
+                                {% if item.mub_manager %}
+                                    {{ item.mub_manager.get_full_name|default:item.mub_manager.username }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="number-cell">{{ item.unit_cost_per_month|floatformat:2 }}</td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="{% url 'reports:workload_aggregation_detail' item.pk %}" 
+                                       class="btn btn-outline-info" title="詳細">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a href="{% url 'reports:workload_aggregation_edit' item.pk %}" 
+                                       class="btn btn-outline-primary" title="編集">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <a href="{% url 'reports:workload_aggregation_delete' item.pk %}" 
+                                       class="btn btn-outline-danger" title="削除"
+                                       onclick="return confirm('この工数集計データを削除しますか？')">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="27" class="text-center py-4">
+                                <div class="text-muted">
+                                    <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                                    <p class="mt-2">データがありません</p>
+                                    <a href="{% url 'reports:workload_aggregation_create' %}" class="btn btn-primary">
+                                        <i class="bi bi-plus-circle"></i> 最初のデータを登録
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ページネーション -->
+    {% if is_paginated %}
+    <nav aria-label="ページネーション" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1{% if request.GET %}&{{ request.GET.urlencode }}{% endif %}">最初</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET %}&{{ request.GET.urlencode }}{% endif %}">前へ</a>
+                </li>
+            {% endif %}
+
+            {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ num }}</span>
+                    </li>
+                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% if request.GET %}&{{ request.GET.urlencode }}{% endif %}">{{ num }}</a>
+                    </li>
+                {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET %}&{{ request.GET.urlencode }}{% endif %}">次へ</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if request.GET %}&{{ request.GET.urlencode }}{% endif %}">最後</a>
+                </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // フィルター自動送信
-    const filterSelects = document.querySelectorAll('#project_id, #department_id, #status, #case_classification');
-    filterSelects.forEach(select => {
-        select.addEventListener('change', function() {
-            this.form.submit();
-        });
-    });
-    
-    // 検索フィールドでEnterキー
-    document.getElementById('search').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            this.form.submit();
-        }
-    });
+    console.log('工数集計レポート画面読み込み完了');
 });
 </script>
 {% endblock %}

@@ -25,27 +25,30 @@ class WorkloadAggregationListView(LoginRequiredMixin, ListView):
     
     def get_queryset(self):
         queryset = WorkloadAggregation.objects.select_related(
-            'project', 'project_detail', 'department', 'manager', 'created_by'
-        ).order_by('-year_month', '-created_at')
+            'case_name', 'department', 'mub_manager', 'created_by'
+        ).order_by('-order_date', '-created_at')
         
         # フィルター処理
         form = WorkloadAggregationFilterForm(self.request.GET)
         if form.is_valid():
-            if form.cleaned_data.get('year_month'):
-                queryset = queryset.filter(year_month=form.cleaned_data['year_month'])
-            if form.cleaned_data.get('project'):
-                queryset = queryset.filter(project=form.cleaned_data['project'])
+            if form.cleaned_data.get('project_name'):
+                queryset = queryset.filter(project_name__icontains=form.cleaned_data['project_name'])
+            if form.cleaned_data.get('case_name'):
+                queryset = queryset.filter(case_name=form.cleaned_data['case_name'])
             if form.cleaned_data.get('department'):
                 queryset = queryset.filter(department=form.cleaned_data['department'])
             if form.cleaned_data.get('status'):
                 queryset = queryset.filter(status=form.cleaned_data['status'])
-            if form.cleaned_data.get('manager'):
-                queryset = queryset.filter(manager=form.cleaned_data['manager'])
+            if form.cleaned_data.get('case_classification'):
+                queryset = queryset.filter(case_classification=form.cleaned_data['case_classification'])
+            if form.cleaned_data.get('mub_manager'):
+                queryset = queryset.filter(mub_manager=form.cleaned_data['mub_manager'])
             if form.cleaned_data.get('search'):
                 search_term = form.cleaned_data['search']
                 queryset = queryset.filter(
-                    Q(project__name__icontains=search_term) |
-                    Q(notes__icontains=search_term)
+                    Q(project_name__icontains=search_term) |
+                    Q(case_name__name__icontains=search_term) |
+                    Q(remarks__icontains=search_term)
                 )
         
         return queryset
@@ -56,22 +59,24 @@ class WorkloadAggregationListView(LoginRequiredMixin, ListView):
         # フィルターフォーム
         context['filter_form'] = WorkloadAggregationFilterForm(self.request.GET)
         
-        # 統計データ
+        # 統計データ（設計書に合わせて修正）
         queryset = self.get_queryset()
         context['total_stats'] = {
-            'total_budget': queryset.aggregate(total=Sum('budget'))['total'] or 0,
-            'total_billing': queryset.aggregate(total=Sum('billing_amount'))['total'] or 0,
-            'total_outsourcing': queryset.aggregate(total=Sum('outsourcing_cost'))['total'] or 0,
+            'total_available_amount': queryset.aggregate(total=Sum('available_amount'))['total'] or 0,
+            'total_billing_amount': queryset.aggregate(total=Sum('billing_amount_excluding_tax'))['total'] or 0,
+            'total_outsourcing': queryset.aggregate(total=Sum('outsourcing_cost_excluding_tax'))['total'] or 0,
             'total_estimated_workdays': queryset.aggregate(total=Sum('estimated_workdays'))['total'] or 0,
             'total_used_workdays': queryset.aggregate(total=Sum('used_workdays'))['total'] or 0,
+            'total_newbie_workdays': queryset.aggregate(total=Sum('newbie_workdays'))['total'] or 0,
         }
         
         # 現在のフィルター値
         context['current_filters'] = {
-            'year_month': self.request.GET.get('year_month', ''),
-            'project_id': self.request.GET.get('project', ''),
+            'project_name': self.request.GET.get('project_name', ''),
+            'case_name_id': self.request.GET.get('case_name', ''),
             'department_id': self.request.GET.get('department', ''),
             'status': self.request.GET.get('status', ''),
+            'case_classification': self.request.GET.get('case_classification', ''),
             'search': self.request.GET.get('search', ''),
         }
         
@@ -152,43 +157,55 @@ def workload_export(request):
     
     writer = csv.writer(response)
     writer.writerow([
-        'プロジェクト名', '年月', 'ステータス', '予算（万円）', '請求金額（万円）',
-        '外注費（万円）', '見積工数（人日）', '消化工数（人日）', '進捗率（%）',
-        '担当部署', 'プロジェクトマネージャー', '作成日時'
+        'プロジェクト名', '案件名', '部名', 'ステータス', '案件分類', '見積日', '受注日',
+        '終了日（予定）', '終了日実績', '検収日', '使用可能金額（税別）', '請求金額（税別）',
+        '外注費（税別）', '見積工数（人日）', '使用工数（人日）', '新入社員使用工数（人日）',
+        '使用工数合計', '残工数', '残金額', '利益率', '仕掛中金額', '請求先', 'MUB担当者', '作成日時'
     ])
     
     # フィルター適用
     queryset = WorkloadAggregation.objects.select_related(
-        'project', 'department', 'manager'
-    ).order_by('-year_month')
+        'case_name', 'department', 'mub_manager'
+    ).order_by('-order_date')
     
     # URLパラメータでフィルター
-    if request.GET.get('year_month'):
-        queryset = queryset.filter(year_month=request.GET['year_month'])
-    if request.GET.get('project'):
-        queryset = queryset.filter(project_id=request.GET['project'])
+    if request.GET.get('project_name'):
+        queryset = queryset.filter(project_name__icontains=request.GET['project_name'])
+    if request.GET.get('case_name'):
+        queryset = queryset.filter(case_name_id=request.GET['case_name'])
     if request.GET.get('status'):
         queryset = queryset.filter(status=request.GET['status'])
     
     for workload in queryset:
         writer.writerow([
-            workload.project.name,
-            workload.year_month,
+            workload.project_name,
+            workload.case_name.name,
+            workload.department.name,
             workload.get_status_display(),
-            str(workload.budget),
-            str(workload.billing_amount),
-            str(workload.outsourcing_cost),
+            workload.get_case_classification_display(),
+            workload.estimate_date.strftime('%Y-%m-%d') if workload.estimate_date else '',
+            workload.order_date.strftime('%Y-%m-%d') if workload.order_date else '',
+            workload.planned_end_date.strftime('%Y-%m-%d') if workload.planned_end_date else '',
+            workload.actual_end_date.strftime('%Y-%m-%d') if workload.actual_end_date else '',
+            workload.inspection_date.strftime('%Y-%m-%d') if workload.inspection_date else '',
+            str(workload.available_amount),
+            str(workload.billing_amount_excluding_tax),
+            str(workload.outsourcing_cost_excluding_tax),
             str(workload.estimated_workdays),
             str(workload.used_workdays),
-            workload.progress_rate,
-            workload.department.name if workload.department else '',
-            workload.manager.get_full_name() if workload.manager else '',
+            str(workload.newbie_workdays),
+            str(workload.total_used_workdays),
+            str(workload.remaining_workdays),
+            str(workload.remaining_amount),
+            str(workload.profit_rate),
+            str(workload.wip_amount),
+            workload.billing_destination,
+            workload.mub_manager.get_full_name() if workload.mub_manager else '',
             workload.created_at.strftime('%Y-%m-%d %H:%M:%S'),
         ])
     
     return response
 
-# 既存のビューは保持
 class ReportListView(LoginRequiredMixin, TemplateView):
     """レポート一覧画面"""
     template_name = 'reports/report_list.html'
