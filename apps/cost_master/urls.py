@@ -11,11 +11,11 @@ urlpatterns = [
     path('<int:pk>/edit/', views.CostMasterUpdateView.as_view(), name='cost_master_edit'),
     
     # 取引先別請求単価関連
-    path('client-rates/', views.ClientBillingRateListView.as_view(), name='client_billing_rate_list'),
-    path('client-rates/create/', views.ClientBillingRateCreateView.as_view(), name='client_billing_rate_create'),
-    path('client-rates/<int:pk>/', views.ClientBillingRateDetailView.as_view(), name='client_billing_rate_detail'),
-    path('client-rates/<int:pk>/edit/', views.ClientBillingRateUpdateView.as_view(), name='client_billing_rate_edit'),
-    path('client-rates/<int:pk>/delete/', views.ClientBillingRateDeleteView.as_view(), name='client_billing_rate_delete'),
+    # path('client-rates/', views.ClientBillingRateListView.as_view(), name='client_billing_rate_list'),
+    # path('client-rates/create/', views.ClientBillingRateCreateView.as_view(), name='client_billing_rate_create'),
+    # path('client-rates/<int:pk>/', views.ClientBillingRateDetailView.as_view(), name='client_billing_rate_detail'),
+    # path('client-rates/<int:pk>/edit/', views.ClientBillingRateUpdateView.as_view(), name='client_billing_rate_edit'),
+    # path('client-rates/<int:pk>/delete/', views.ClientBillingRateDeleteView.as_view(), name='client_billing_rate_delete'),
     
     # 案件別コスト設定関連（追加）
     path('project-settings/', views.ProjectCostSettingListView.as_view(), name='project_cost_setting_list'),
