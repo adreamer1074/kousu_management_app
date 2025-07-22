@@ -22,7 +22,7 @@ class CustomUserCreationForm(UserCreationForm):
 
     class Meta:
         model = CustomUser
-        fields = ('username', 'email', 'first_name', 'last_name', 'department', 'section', 
+        fields = ('username', 'email', 'first_name', 'last_name', 'department', 'section', 'employee_level',
                  'is_staff', 'is_active', 'password1', 'password2')
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-control'}),
@@ -33,6 +33,7 @@ class CustomUserCreationForm(UserCreationForm):
             'section': forms.Select(attrs={'class': 'form-select'}),
             'is_staff': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'employee_level': forms.Select(attrs={'class': 'form-select'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -59,6 +60,7 @@ class CustomUserForm(forms.ModelForm):
             'last_name': forms.TextInput(attrs={'class': 'form-control'}),
             'department': forms.Select(attrs={'class': 'form-select'}),
             'section': forms.Select(attrs={'class': 'form-select'}),
+            'employee_level': forms.Select(attrs={'class': 'form-select'}),
         }
 
 class SuperUserEditForm(UserChangeForm):
@@ -68,7 +70,7 @@ class SuperUserEditForm(UserChangeForm):
     class Meta:
         model = CustomUser
         fields = ['username', 'first_name', 'last_name', 'email', 'department', 'section', 
-                 'is_staff', 'is_superuser', 'is_active']
+                 'is_staff', 'is_superuser', 'is_active', 'employee_level']
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-control'}),
             'first_name': forms.TextInput(attrs={'class': 'form-control'}),
@@ -79,6 +81,7 @@ class SuperUserEditForm(UserChangeForm):
             'is_staff': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'is_superuser': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'employee_level': forms.Select(attrs={'class': 'form-select'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -87,6 +90,7 @@ class SuperUserEditForm(UserChangeForm):
         self.fields['section'].queryset = Section.objects.filter(is_active=True)
         self.fields['department'].empty_label = "選択してください"
         self.fields['section'].empty_label = "選択してください"
+        self.fields['employee_level'].empty_label = "選択してください"
 
 class UserEditForm(UserChangeForm):
     """一般管理者用ユーザー編集フォーム"""
@@ -94,7 +98,7 @@ class UserEditForm(UserChangeForm):
 
     class Meta:
         model = CustomUser
-        fields = ['username', 'first_name', 'last_name', 'email', 'department', 'section', 'is_staff', 'is_active']
+        fields = ['username', 'first_name', 'last_name', 'email', 'department', 'section', 'is_staff', 'is_active', 'employee_level']
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-control'}),
             'first_name': forms.TextInput(attrs={'class': 'form-control'}),
@@ -104,6 +108,7 @@ class UserEditForm(UserChangeForm):
             'section': forms.Select(attrs={'class': 'form-select'}),
             'is_staff': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'employee_level': forms.Select(attrs={'class': 'form-select'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -112,6 +117,7 @@ class UserEditForm(UserChangeForm):
         self.fields['section'].queryset = Section.objects.filter(is_active=True)
         self.fields['department'].empty_label = "選択してください"
         self.fields['section'].empty_label = "選択してください"
+        self.fields['employee_level'].empty_label = "選択してください"
 
 class ProfileEditForm(forms.ModelForm):
     """一般ユーザー用プロフィール編集フォーム（部署編集不可）"""

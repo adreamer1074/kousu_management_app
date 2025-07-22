@@ -3,6 +3,17 @@ from django.db import models
 
 class CustomUser(AbstractUser):
     """カスタムユーザーモデル"""
+    
+    # 社員レベル選択肢を追加
+    EMPLOYEE_LEVEL_CHOICES = [
+        ('junior', '新入社員'),
+        ('middle', '中堅社員'),
+        ('senior', 'シニア社員'),
+        ('lead', 'リード社員'),
+        ('manager', 'マネージャー'),
+        ('director', 'ディレクター'),
+    ]
+    
     department = models.ForeignKey(
         'Department',
         on_delete=models.SET_NULL,
@@ -19,6 +30,16 @@ class CustomUser(AbstractUser):
         related_name='users',
         verbose_name="所属課"
     )
+    
+    # 社員レベルフィールドを追加
+    employee_level = models.CharField(
+        '社員レベル',
+        max_length=20,
+        choices=EMPLOYEE_LEVEL_CHOICES,
+        null=True,
+        blank=True,
+        help_text='社員のスキルレベルや役職レベルを設定'
+    )
 
     class Meta:
         verbose_name = "ユーザー"
@@ -31,6 +52,13 @@ class CustomUser(AbstractUser):
             return f"{self.department.name} - {self.section.name}"
         elif self.department:
             return self.department.name
+        return "未設定"
+    
+    @property
+    def display_level(self):
+        """社員レベルの表示名"""
+        if self.employee_level:
+            return self.get_employee_level_display()
         return "未設定"
 
 class Department(models.Model):
