@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.db.models import Q
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse
-from django.views.decorators.http import require_http_methods
+from django.contrib.auth.decorators import login_required
 
 from .models import Project, ProjectTicket
 from .forms import ProjectForm, ProjectTicketForm
@@ -125,31 +125,26 @@ class ProjectTicketCreateView(LoginRequiredMixin, CreateView):
         context['project'] = get_object_or_404(Project, pk=self.kwargs['project_pk'])
         return context
 
-@require_http_methods(["GET"])
-def get_project_tickets_api(request, project_id):
-    """プロジェクトのチケット一覧を取得するAPI"""
+@login_required
+def get_tickets_api(request):
+    """プロジェクトのチケット一覧取得API"""
+    project_id = request.GET.get('project_id')
+    
+    if not project_id:
+        return JsonResponse({'success': False, 'tickets': []})
+    
     try:
-        project = get_object_or_404(Project, id=project_id, is_active=True)  # プロジェクトのis_activeをチェック
-        tickets = project.tickets.all().order_by('-created_at')  # チケットにはis_activeがないので削除
-        
-        tickets_data = []
-        for ticket in tickets:
-            tickets_data.append({
-                'id': ticket.id,
-                'title': ticket.title,
-                'status': ticket.status,
-                'status_display': ticket.get_status_display(),
-                'priority': ticket.priority,
-                'priority_display': ticket.get_priority_display(),
-            })
+        tickets = ProjectTicket.objects.filter(
+            project_id=project_id
+        ).values('id', 'title', 'status')
         
         return JsonResponse({
             'success': True,
-            'tickets': tickets_data
+            'tickets': list(tickets)
         })
-        
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': str(e),
+            'tickets': []
         })
