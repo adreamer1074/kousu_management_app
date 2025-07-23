@@ -12,6 +12,9 @@ from django.contrib.auth import get_user_model
 import json
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from django.contrib.auth.decorators import login_required
+from datetime import datetime, date
+import calendar
 
 from .models import ReportExport, WorkloadAggregation
 from .forms import WorkloadAggregationForm, WorkloadAggregationFilterForm
@@ -250,7 +253,7 @@ class ReportExportListView(LoginRequiredMixin, ListView):
 @login_required
 @require_http_methods(["POST"])
 def calculate_workdays_api(request):
-    """工数自動計算API（ProjectTicket対応版）"""
+    """工数自動計算API（Workloadモデル対応版）"""
     try:
         data = json.loads(request.body)
         case_id = data.get('case_id')  # これはProjectTicketのID
@@ -260,7 +263,7 @@ def calculate_workdays_api(request):
         if not case_id:
             return JsonResponse({'success': False, 'error': 'チケットIDが必要です。'})
         
-        from apps.workloads.models import WorkHour
+        from apps.workloads.models import Workload
         from apps.projects.models import ProjectTicket
         from decimal import Decimal
         
@@ -269,36 +272,96 @@ def calculate_workdays_api(request):
         except ProjectTicket.DoesNotExist:
             return JsonResponse({'success': False, 'error': '指定されたチケットが見つかりません。'})
         
-        # 工数を取得（ProjectTicket基準）
-        work_hours_query = WorkHour.objects.filter(ticket=ticket)
+        # 工数データの取得（Workloadモデル）
+        workloads_query = Workload.objects.filter(ticket=ticket)
         
-        # 日付フィルター適用
+        # 日付フィルター適用（年月ベースで）
+        target_year_months = set()
+        
         if order_date:
-            work_hours_query = work_hours_query.filter(date__gte=order_date)
+            start_date = datetime.strptime(order_date, '%Y-%m-%d').date()
+        else:
+            # デフォルトは現在年月から6ヶ月前
+            start_date = date.today().replace(day=1)
+        
         if actual_end_date:
-            work_hours_query = work_hours_query.filter(date__lte=actual_end_date)
+            end_date = datetime.strptime(actual_end_date, '%Y-%m-%d').date()
+        else:
+            # デフォルトは現在年月
+            end_date = date.today()
+        
+        # 対象年月のリストを作成
+        current_date = start_date.replace(day=1)
+        while current_date <= end_date:
+            target_year_months.add(current_date.strftime('%Y-%m'))
+            # 次の月へ
+            if current_date.month == 12:
+                current_date = current_date.replace(year=current_date.year + 1, month=1)
+            else:
+                current_date = current_date.replace(month=current_date.month + 1)
+        
+        # 対象年月でフィルター
+        if target_year_months:
+            workloads_query = workloads_query.filter(year_month__in=target_year_months)
         
         # 一般使用工数と新入社員工数を分離
         regular_workdays = Decimal('0.0')
         newbie_workdays = Decimal('0.0')
         
-        for work_hour in work_hours_query:
-            if hasattr(work_hour.user, 'employee_level') and work_hour.user.employee_level == 'junior':
-                newbie_workdays += work_hour.hours
-            else:
-                regular_workdays += work_hour.hours
+        for workload in workloads_query:
+            # ユーザーのemployee_levelを確認
+            is_junior = False
+            if hasattr(workload.user, 'employee_level') and workload.user.employee_level == 'junior':
+                is_junior = True
+            
+            # 各日の工数を合計（日付範囲内のみ）
+            workload_year_month = workload.year_month
+            year, month = map(int, workload_year_month.split('-'))
+            
+            # その月の日数を取得
+            days_in_month = calendar.monthrange(year, month)[1]
+            
+            for day in range(1, days_in_month + 1):
+                # 日付範囲チェック
+                current_day = date(year, month, day)
+                if order_date:
+                    start_check = datetime.strptime(order_date, '%Y-%m-%d').date()
+                    if current_day < start_check:
+                        continue
+                if actual_end_date:
+                    end_check = datetime.strptime(actual_end_date, '%Y-%m-%d').date()
+                    if current_day > end_check:
+                        continue
+                
+                # その日の工数を取得
+                day_hours = workload.get_day_value(day)
+                
+                # 工数の分類
+                if is_junior:
+                    newbie_workdays += Decimal(str(day_hours))
+                else:
+                    regular_workdays += Decimal(str(day_hours))
         
         # 時間を人日に変換（8時間=1人日として計算）
         used_workdays = regular_workdays / 8
-        newbie_workdays = newbie_workdays / 8
+        newbie_workdays_converted = newbie_workdays / 8
         
         return JsonResponse({
             'success': True,
             'used_workdays': float(used_workdays),
-            'newbie_workdays': float(newbie_workdays),
-            'total_workdays': float(used_workdays + newbie_workdays),
-            'ticket_name': ticket.title
+            'newbie_workdays': float(newbie_workdays_converted),
+            'total_workdays': float(used_workdays + newbie_workdays_converted),
+            'ticket_name': ticket.title,
+            'debug_info': {
+                'workload_records': workloads_query.count(),
+                'target_months': list(target_year_months),
+                'regular_hours': float(regular_workdays),
+                'newbie_hours': float(newbie_workdays)
+            }
         })
         
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({
+            'success': False, 
+            'error': f'サーバーエラー: {str(e)}'
+        })
