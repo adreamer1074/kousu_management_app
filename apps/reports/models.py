@@ -163,25 +163,77 @@ class WorkloadAggregation(models.Model):
         return f"{self.project_name.name} - {self.case_name.title}"
     
     def calculate_workdays_from_workload(self):
-        """工数登録機能から工数を自動計算（ProjectTicket対応版）"""
-        from apps.workloads.models import WorkHour
+        """工数登録機能から工数を自動計算（Workloadモデル対応版）"""
+        from apps.workloads.models import Workload
+        from decimal import Decimal
+        from datetime import datetime, date
+        import calendar
         
-        # ProjectTicketに関連する工数を取得
-        work_hours = WorkHour.objects.filter(
-            ticket=self.case_name,  # ProjectTicketを参照
-            date__gte=self.order_date if self.order_date else None,
-            date__lte=self.actual_end_date if self.actual_end_date else None
-        )
+        # チケットに関連する工数を取得
+        workloads = Workload.objects.filter(ticket=self.case_name)
+        
+        # 日付フィルター適用（年月ベースで）
+        target_year_months = set()
+        
+        if self.order_date:
+            start_date = self.order_date
+        else:
+            # デフォルトは現在年月から6ヶ月前
+            start_date = date.today().replace(day=1)
+        
+        if self.actual_end_date:
+            end_date = self.actual_end_date
+        else:
+            # デフォルトは現在年月
+            end_date = date.today()
+        
+        # 対象年月のリストを作成
+        current_date = start_date.replace(day=1)
+        while current_date <= end_date:
+            target_year_months.add(current_date.strftime('%Y-%m'))
+            # 次の月へ
+            if current_date.month == 12:
+                current_date = current_date.replace(year=current_date.year + 1, month=1)
+            else:
+                current_date = current_date.replace(month=current_date.month + 1)
+        
+        # 対象年月でフィルター
+        if target_year_months:
+            workloads = workloads.filter(year_month__in=target_year_months)
         
         # 一般使用工数と新入社員工数を分離
         regular_workdays = Decimal('0.0')
         newbie_workdays = Decimal('0.0')
         
-        for work_hour in work_hours:
-            if hasattr(work_hour.user, 'employee_level') and work_hour.user.employee_level == 'junior':
-                newbie_workdays += work_hour.hours
-            else:
-                regular_workdays += work_hour.hours
+        for workload in workloads:
+            # ユーザーのemployee_levelを確認
+            is_junior = False
+            if hasattr(workload.user, 'employee_level') and workload.user.employee_level == 'junior':
+                is_junior = True
+            
+            # 各日の工数を合計（日付範囲内のみ）
+            workload_year_month = workload.year_month
+            year, month = map(int, workload_year_month.split('-'))
+            
+            # その月の日数を取得
+            days_in_month = calendar.monthrange(year, month)[1]
+            
+            for day in range(1, days_in_month + 1):
+                # 日付範囲チェック
+                current_day = date(year, month, day)
+                if self.order_date and current_day < self.order_date:
+                    continue
+                if self.actual_end_date and current_day > self.actual_end_date:
+                    continue
+                
+                # その日の工数を取得
+                day_hours = workload.get_day_value(day)
+                
+                # 工数の分類
+                if is_junior:
+                    newbie_workdays += Decimal(str(day_hours))
+                else:
+                    regular_workdays += Decimal(str(day_hours))
         
         # 時間を人日に変換（8時間=1人日として計算）
         self.used_workdays = regular_workdays / 8
@@ -221,104 +273,143 @@ class WorkloadAggregation(models.Model):
     def wip_amount(self):
         """仕掛中金額（人日×単価）"""
         return self.used_workdays * (self.unit_cost_per_month / 20)  # 月20日計算
+    
+    @property
+    def wip_amount_partner(self):
+        """仕掛中合計（協力会社）"""
+        return self.newbie_workdays * (self.unit_cost_per_month / 20)
+    
+    @property
+    def tax_excluded_billing_amount(self):
+        """税抜請求金額（表示用）"""
+        return self.billing_amount_excluding_tax
 
-# 既存のReportExportモデルはそのまま維持
+
 class ReportExport(models.Model):
     """レポートエクスポート管理モデル"""
-    name = models.CharField(
-        max_length=200,
-        verbose_name="レポート名"
+    
+    class ExportTypeChoices(models.TextChoices):
+        WORKLOAD_AGGREGATION = 'workload_aggregation', '工数集計レポート'
+        WORKLOAD_DETAIL = 'workload_detail', '工数詳細レポート'
+        PROJECT_SUMMARY = 'project_summary', 'プロジェクト概要レポート'
+        USER_WORKLOAD = 'user_workload', 'ユーザー別工数レポート'
+    
+    class ExportFormatChoices(models.TextChoices):
+        EXCEL = 'excel', 'Excel (.xlsx)'
+        CSV = 'csv', 'CSV (.csv)'
+        PDF = 'pdf', 'PDF (.pdf)'
+    
+    class StatusChoices(models.TextChoices):
+        PENDING = 'pending', '処理待ち'
+        PROCESSING = 'processing', '処理中'
+        COMPLETED = 'completed', '完了'
+        FAILED = 'failed', '失敗'
+    
+    # 基本情報
+    export_type = models.CharField(
+        'エクスポート種類',
+        max_length=50,
+        choices=ExportTypeChoices.choices,
+        default=ExportTypeChoices.WORKLOAD_AGGREGATION
     )
-    report_type = models.CharField(
+    export_format = models.CharField(
+        'エクスポート形式',
         max_length=20,
-        choices=[
-            ('monthly', '月次レポート'),
-            ('project', 'プロジェクトレポート'),
-            ('department', '部署レポート'),
-        ],
-        verbose_name="レポートタイプ"
+        choices=ExportFormatChoices.choices,
+        default=ExportFormatChoices.EXCEL
     )
-    format = models.CharField(
-        max_length=10,
-        choices=[
-            ('pdf', 'PDF'),
-            ('excel', 'Excel'),
-            ('csv', 'CSV'),
-        ],
-        default='pdf',
-        verbose_name="フォーマット"
-    )
-    department = models.ForeignKey(
-        'users.Department',
-        on_delete=models.SET_NULL,
-        null=True,
+    
+    # ファイル情報
+    file_name = models.CharField('ファイル名', max_length=255)
+    file_path = models.CharField('ファイルパス', max_length=500, blank=True)
+    file_size = models.PositiveIntegerField('ファイルサイズ（バイト）', null=True, blank=True)
+    
+    # フィルター条件（JSON形式で保存）
+    filter_conditions = models.JSONField(
+        'フィルター条件',
+        default=dict,
         blank=True,
-        related_name='reports',
-        verbose_name="対象部署"
+        help_text='エクスポート時のフィルター条件をJSON形式で保存'
     )
-    project = models.ForeignKey(
-        'projects.Project',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='reports',
-        verbose_name="対象プロジェクト"
-    )
-    user = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='target_reports',
-        verbose_name="対象ユーザー"
-    )
-    start_date = models.DateField(
-        verbose_name="開始日"
-    )
-    end_date = models.DateField(
-        verbose_name="終了日"
-    )
-    file_path = models.CharField(
-        max_length=500,
-        blank=True,
-        null=True,
-        verbose_name="ファイルパス"
-    )
-    file_size = models.PositiveIntegerField(
-        blank=True,
-        null=True,
-        verbose_name="ファイルサイズ（バイト）"
-    )
+    
+    # ステータス
     status = models.CharField(
+        'ステータス',
         max_length=20,
-        choices=[
-            ('pending', '処理待ち'),
-            ('processing', '処理中'),
-            ('completed', '完了'),
-            ('failed', '失敗'),
-        ],
-        default='pending',
-        verbose_name="ステータス"
+        choices=StatusChoices.choices,
+        default=StatusChoices.PENDING
     )
-    created_by = models.ForeignKey(
+    
+    # 処理情報
+    total_records = models.PositiveIntegerField('総レコード数', null=True, blank=True)
+    exported_records = models.PositiveIntegerField('エクスポート済みレコード数', null=True, blank=True)
+    error_message = models.TextField('エラーメッセージ', blank=True)
+    
+    # 日時情報
+    requested_at = models.DateTimeField('リクエスト日時', auto_now_add=True)
+    started_at = models.DateTimeField('開始日時', null=True, blank=True)
+    completed_at = models.DateTimeField('完了日時', null=True, blank=True)
+    expires_at = models.DateTimeField('有効期限', null=True, blank=True)
+    
+    # ユーザー情報
+    requested_by = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='created_reports',
-        verbose_name="作成者"
+        related_name='requested_exports',
+        verbose_name='リクエストユーザー'
     )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name="作成日時"
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True,
-        verbose_name="更新日時"
-    )
-
+    
+    # 追加情報
+    description = models.TextField('説明', blank=True)
+    is_public = models.BooleanField('公開', default=False, help_text='他のユーザーがダウンロード可能か')
+    download_count = models.PositiveIntegerField('ダウンロード回数', default=0)
+    
     class Meta:
-        verbose_name = "レポートエクスポート"
-        verbose_name_plural = "レポートエクスポート"
-        ordering = ['-created_at']
-
+        verbose_name = 'レポートエクスポート'
+        verbose_name_plural = 'レポートエクスポート'
+        ordering = ['-requested_at']
+        indexes = [
+            models.Index(fields=['requested_by', '-requested_at']),
+            models.Index(fields=['status', '-requested_at']),
+            models.Index(fields=['export_type', '-requested_at']),
+        ]
+    
     def __str__(self):
-        return f"{self.name} ({self.get_report_type_display()})"
+        return f"{self.get_export_type_display()} - {self.file_name} ({self.get_status_display()})"
+    
+    @property
+    def is_downloadable(self):
+        """ダウンロード可能かどうか"""
+        return self.status == self.StatusChoices.COMPLETED and self.file_path
+    
+    @property
+    def processing_time(self):
+        """処理時間（秒）"""
+        if self.started_at and self.completed_at:
+            return (self.completed_at - self.started_at).total_seconds()
+        return None
+    
+    @property
+    def is_expired(self):
+        """有効期限切れかどうか"""
+        if self.expires_at:
+            from django.utils import timezone
+            return timezone.now() > self.expires_at
+        return False
+    
+    def get_file_size_display(self):
+        """ファイルサイズの表示用文字列"""
+        if not self.file_size:
+            return "不明"
+        
+        size = self.file_size
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size < 1024.0:
+                return f"{size:.1f} {unit}"
+            size /= 1024.0
+        return f"{size:.1f} TB"
+    
+    def increment_download_count(self):
+        """ダウンロード回数をインクリメント"""
+        self.download_count += 1
+        self.save(update_fields=['download_count'])

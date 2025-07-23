@@ -1,0 +1,773 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }} | 工数管理システム{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-section {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        border-left: 4px solid #007bff;
+    }
+    .section-title {
+        color: #495057;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #dee2e6;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .required-field {
+        color: #dc3545;
+        font-weight: bold;
+    }
+    .help-text {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+    .calculated-field {
+        background-color: #e9ecef;
+        border: 1px solid #ced4da;
+        border-radius: 0.375rem;
+        padding: 0.375rem 0.75rem;
+        font-weight: 600;
+        color: #495057;
+    }
+    .currency-input {
+        position: relative;
+    }
+    .currency-symbol {
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6c757d;
+        font-weight: 500;
+    }
+    .currency-input input {
+        padding-left: 30px;
+    }
+    .alert-info {
+        border-left: 4px solid #17a2b8;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- ページヘッダー -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="bi bi-{% if object %}pencil{% else %}plus-circle{% endif %}"></i> {{ title }}
+            </h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">ホーム</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'reports:report_list' %}">レポート</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'reports:workload_aggregation' %}">工数集計レポート</a></li>
+                    <li class="breadcrumb-item active">{{ title }}</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <a href="{% url 'reports:workload_aggregation' %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> 戻る
+            </a>
+        </div>
+    </div>
+
+    <!-- 入力指示 -->
+    <div class="alert alert-info mb-4">
+        <i class="bi bi-info-circle"></i>
+        <strong>入力のご案内:</strong>
+        <ul class="mb-0 mt-2">
+            <li>必須項目（<span class="required-field">*</span>マーク）は必ず入力してください</li>
+            <li>案件名は既に登録されている案件のみ選択可能です</li>
+            <li>部名は案件リスト登録画面にある部名のみ選択可能です</li>
+            <li>金額は税別で入力してください</li>
+        </ul>
+    </div>
+
+    <form method="post" novalidate id="workloadForm">
+        {% csrf_token %}
+        
+        <!-- 基本情報セクション -->
+        <div class="form-section">
+            <h5 class="section-title">
+                <i class="bi bi-info-circle"></i> 基本情報
+            </h5>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="{{ form.project_name.id_for_label }}" class="form-label">
+                        {{ form.project_name.label }} <span class="required-field">*</span>
+                    </label>
+                    {{ form.project_name }}
+                    <div class="help-text">プロジェクトリストから選択してください</div>
+                    {% if form.project_name.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.project_name.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <label for="{{ form.case_name.id_for_label }}" class="form-label">
+                        {{ form.case_name.label }} <span class="required-field">*</span>
+                    </label>
+                    {{ form.case_name }}
+                    <div class="help-text">案件リスト登録画面にある案件のみ選択可能</div>
+                    {% if form.case_name.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.case_name.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4">
+                    <label for="{{ form.department.id_for_label }}" class="form-label">
+                        {{ form.department.label }} <span class="required-field">*</span>
+                    </label>
+                    {{ form.department }}
+                    <div class="help-text">案件リスト登録画面にある部名のみ選択可能</div>
+                    {% if form.department.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.department.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4">
+                    <label for="{{ form.status.id_for_label }}" class="form-label">
+                        {{ form.status.label }} <span class="required-field">*</span>
+                    </label>
+                    {{ form.status }}
+                    {% if form.status.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.status.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4">
+                    <label for="{{ form.case_classification.id_for_label }}" class="form-label">
+                        {{ form.case_classification.label }} <span class="required-field">*</span>
+                    </label>
+                    {{ form.case_classification }}
+                    {% if form.case_classification.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.case_classification.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 日付情報セクション -->
+        <div class="form-section">
+            <h5 class="section-title">
+                <i class="bi bi-calendar3"></i> 日付情報
+            </h5>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="{{ form.estimate_date.id_for_label }}" class="form-label">
+                        {{ form.estimate_date.label }}
+                    </label>
+                    {{ form.estimate_date }}
+                    {% if form.estimate_date.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.estimate_date.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4">
+                    <label for="{{ form.order_date.id_for_label }}" class="form-label">
+                        {{ form.order_date.label }}
+                    </label>
+                    {{ form.order_date }}
+                    <div class="help-text">受注した日付</div>
+                    {% if form.order_date.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.order_date.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4">
+                    <label for="{{ form.planned_end_date.id_for_label }}" class="form-label">
+                        {{ form.planned_end_date.label }}
+                    </label>
+                    {{ form.planned_end_date }}
+                    {% if form.planned_end_date.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.planned_end_date.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <label for="{{ form.actual_end_date.id_for_label }}" class="form-label">
+                        {{ form.actual_end_date.label }}
+                    </label>
+                    {{ form.actual_end_date }}
+                    <div class="help-text">検収待ちの状態の実際の終了日</div>
+                    {% if form.actual_end_date.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.actual_end_date.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <label for="{{ form.inspection_date.id_for_label }}" class="form-label">
+                        {{ form.inspection_date.label }}
+                    </label>
+                    {{ form.inspection_date }}
+                    {% if form.inspection_date.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.inspection_date.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 金額情報セクション（税別） -->
+        <div class="form-section">
+            <h5 class="section-title">
+                <i class="bi bi-currency-yen"></i> 金額情報（税別）
+            </h5>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="{{ form.available_amount.id_for_label }}" class="form-label">
+                        {{ form.available_amount.label }}
+                    </label>
+                    <div class="input-group">
+                        <span class="input-group-text">¥</span>
+                        {{ form.available_amount }}
+                        <span class="input-group-text">円</span>
+                    </div>
+                    {% if form.available_amount.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.available_amount.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4">
+                    <label for="{{ form.billing_amount_excluding_tax.id_for_label }}" class="form-label">
+                        {{ form.billing_amount_excluding_tax.label }}
+                    </label>
+                    <div class="input-group">
+                        <span class="input-group-text">¥</span>
+                        {{ form.billing_amount_excluding_tax }}
+                        <span class="input-group-text">円</span>
+                    </div>
+                    {% if form.billing_amount_excluding_tax.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.billing_amount_excluding_tax.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4">
+                    <label for="{{ form.outsourcing_cost_excluding_tax.id_for_label }}" class="form-label">
+                        {{ form.outsourcing_cost_excluding_tax.label }}
+                    </label>
+                    <div class="input-group">
+                        <span class="input-group-text">¥</span>
+                        {{ form.outsourcing_cost_excluding_tax }}
+                        <span class="input-group-text">円</span>
+                    </div>
+                    {% if form.outsourcing_cost_excluding_tax.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.outsourcing_cost_excluding_tax.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">残金額（税抜）</label>
+                    <div class="calculated-field" id="remainingAmount">
+                        自動計算されます
+                    </div>
+                    <div class="help-text">使用可能金額 - 請求金額で自動計算</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">利益率</label>
+                    <div class="calculated-field" id="profitRate">
+                        自動計算されます
+                    </div>
+                    <div class="help-text">（請求金額 - 外注費）/ 請求金額 × 100</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 工数情報セクション（修正版） -->
+        <div class="form-section">
+            <h5 class="section-title">
+                <i class="bi bi-clock"></i> 工数情報
+            </h5>
+            
+            <!-- 工数自動計算オプション -->
+            <div class="row g-3 mb-3">
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        <div class="form-check">
+                            {{ form.auto_calculate_workdays }}
+                            <label class="form-check-label" for="{{ form.auto_calculate_workdays.id_for_label }}">
+                                <i class="bi bi-calculator"></i> {{ form.auto_calculate_workdays.label }}
+                            </label>
+                        </div>
+                        <small class="text-muted d-block mt-2">
+                            チェックすると、工数登録機能から使用工数と新入社員使用工数を自動計算します。<br>
+                            ※ユーザーレベルが「新入社員(junior)」の工数は新入社員使用工数に分類されます。
+                        </small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="{{ form.estimated_workdays.id_for_label }}" class="form-label">
+                        {{ form.estimated_workdays.label }}
+                    </label>
+                    <div class="input-group">
+                        {{ form.estimated_workdays }}
+                        <span class="input-group-text">人日</span>
+                    </div>
+                    {% if form.estimated_workdays.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.estimated_workdays.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4">
+                    <label for="{{ form.used_workdays.id_for_label }}" class="form-label">
+                        {{ form.used_workdays.label }}
+                        <i class="bi bi-info-circle" title="工数登録機能から自動計算"></i>
+                    </label>
+                    <div class="input-group">
+                        {{ form.used_workdays }}
+                        <span class="input-group-text">人日</span>
+                        <button type="button" class="btn btn-outline-secondary" id="calculateWorkdays" title="工数を再計算">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    </div>
+                    <div class="help-text">工数登録機能から自動計算（一般社員）</div>
+                    {% if form.used_workdays.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.used_workdays.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4">
+                    <label for="{{ form.newbie_workdays.id_for_label }}" class="form-label">
+                        {{ form.newbie_workdays.label }}
+                        <i class="bi bi-info-circle" title="ユーザーレベルがjuniorの工数を自動計算"></i>
+                    </label>
+                    <div class="input-group">
+                        {{ form.newbie_workdays }}
+                        <span class="input-group-text">人日</span>
+                    </div>
+                    <div class="help-text">工数登録機能から自動計算（新入社員レベル）</div>
+                    {% if form.newbie_workdays.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.newbie_workdays.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">使用工数合計（日）</label>
+                    <div class="calculated-field" id="totalUsedWorkdays">
+                        自動計算されます
+                    </div>
+                    <div class="help-text">使用工数 + 新入社員使用工数</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">残工数（人日）</label>
+                    <div class="calculated-field" id="remainingWorkdays">
+                        自動計算されます
+                    </div>
+                    <div class="help-text">見積工数 - 使用工数合計</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">仕掛中金額</label>
+                    <div class="calculated-field" id="wipAmount">
+                        自動計算されます
+                    </div>
+                    <div class="help-text">使用工数 × 単価</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 単価情報セクション -->
+        <div class="form-section">
+            <h5 class="section-title">
+                <i class="bi bi-calculator"></i> 単価情報
+            </h5>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="{{ form.unit_cost_per_month.id_for_label }}" class="form-label">
+                        {{ form.unit_cost_per_month.label }}
+                    </label>
+                    <div class="input-group">
+                        {{ form.unit_cost_per_month }}
+                        <span class="input-group-text">万円/月</span>
+                    </div>
+                    <div class="help-text">原価単価</div>
+                    {% if form.unit_cost_per_month.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.unit_cost_per_month.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <label for="{{ form.billing_unit_cost_per_month.id_for_label }}" class="form-label">
+                        {{ form.billing_unit_cost_per_month.label }}
+                    </label>
+                    <div class="input-group">
+                        {{ form.billing_unit_cost_per_month }}
+                        <span class="input-group-text">万円/月</span>
+                    </div>
+                    <div class="help-text">請求単価</div>
+                    {% if form.billing_unit_cost_per_month.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.billing_unit_cost_per_month.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 請求先情報セクション -->
+        <div class="form-section">
+            <h5 class="section-title">
+                <i class="bi bi-building"></i> 請求先情報
+            </h5>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="{{ form.billing_destination.id_for_label }}" class="form-label">
+                        {{ form.billing_destination.label }}
+                    </label>
+                    {{ form.billing_destination }}
+                    {% if form.billing_destination.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.billing_destination.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <label for="{{ form.billing_contact.id_for_label }}" class="form-label">
+                        {{ form.billing_contact.label }}
+                    </label>
+                    {{ form.billing_contact }}
+                    {% if form.billing_contact.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.billing_contact.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 担当者情報セクション -->
+        <div class="form-section">
+            <h5 class="section-title">
+                <i class="bi bi-person-badge"></i> 担当者情報
+            </h5>
+            <div class="row g-3">
+                <div class="col-md-12">
+                    <label for="{{ form.mub_manager.id_for_label }}" class="form-label">
+                        {{ form.mub_manager.label }}
+                    </label>
+                    {{ form.mub_manager }}
+                    {% if form.mub_manager.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.mub_manager.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 備考セクション -->
+        <div class="form-section">
+            <h5 class="section-title">
+                <i class="bi bi-chat-text"></i> 備考
+            </h5>
+            <div class="row g-3">
+                <div class="col-12">
+                    <label for="{{ form.remarks.id_for_label }}" class="form-label">
+                        {{ form.remarks.label }}
+                    </label>
+                    {{ form.remarks }}
+                    {% if form.remarks.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.remarks.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- フォーム全体のエラー -->
+        {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <!-- 操作ボタン -->
+        <div class="d-flex justify-content-between mb-4">
+            <a href="{% url 'reports:workload_aggregation' %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> キャンセル
+            </a>
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-{% if object %}check{% else %}plus{% endif %}-circle"></i>
+                {% if object %}更新{% else %}登録{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+<!-- JavaScriptセクション -->
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // DOM要素の取得
+    const projectSelect = document.getElementById('{{ form.project_name.id_for_label }}');
+    const caseNameSelect = document.getElementById('{{ form.case_name.id_for_label }}');
+    const orderDateInput = document.getElementById('{{ form.order_date.id_for_label }}');
+    const actualEndDateInput = document.getElementById('{{ form.actual_end_date.id_for_label }}');
+    const calculateButton = document.getElementById('calculateWorkdays');
+    const form = document.getElementById('workloadForm');
+    
+    // プロジェクト選択時のチケットフィルタリング
+    if (projectSelect) {
+        projectSelect.addEventListener('change', function() {
+            const projectId = this.value;
+            
+            // チケット選択肢をクリア
+            caseNameSelect.innerHTML = '<option value="">チケット（案件）を選択してください</option>';
+            
+            if (projectId) {
+                // AJAX でチケット一覧を取得
+                fetch(`/projects/api/tickets/?project_id=${projectId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            data.tickets.forEach(ticket => {
+                                const option = document.createElement('option');
+                                option.value = ticket.id;
+                                option.textContent = ticket.title;
+                                caseNameSelect.appendChild(option);
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        console.error('チケット取得エラー:', error);
+                    });
+            }
+        });
+    }
+    
+    // 工数自動取得機能
+    async function fetchWorkHours(caseId) {
+        if (!caseId) {
+            document.getElementById('{{ form.used_workdays.id_for_label }}').value = '0.0';
+            document.getElementById('{{ form.newbie_workdays.id_for_label }}').value = '0.0';
+            calculateValues();
+            return;
+        }
+        
+        try {
+            console.log('工数計算API呼び出し開始:', caseId);
+            
+            const response = await fetch('/reports/api/calculate-workdays/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({
+                    case_id: caseId,
+                    order_date: orderDateInput ? orderDateInput.value : null,
+                    actual_end_date: actualEndDateInput ? actualEndDateInput.value : null
+                })
+            });
+            
+            console.log('APIレスポンス状態:', response.status);
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log('APIレスポンスデータ:', data);
+                
+                if (data.success) {
+                    document.getElementById('{{ form.used_workdays.id_for_label }}').value = data.used_workdays.toFixed(1);
+                    document.getElementById('{{ form.newbie_workdays.id_for_label }}').value = data.newbie_workdays.toFixed(1);
+                    calculateValues();
+                    
+                    // 成功メッセージ表示
+                    console.log(`工数計算完了: 一般工数${data.used_workdays.toFixed(1)}人日, 新入社員工数${data.newbie_workdays.toFixed(1)}人日`);
+                    
+                    // デバッグ情報の表示（開発時のみ）
+                    if (data.debug_info) {
+                        console.log('工数計算詳細:', data.debug_info);
+                        
+                        // 対象月数の表示
+                        if (data.debug_info.target_months && data.debug_info.target_months.length > 0) {
+                            console.log('対象月:', data.debug_info.target_months.join(', '));
+                        }
+                    }
+                } else {
+                    console.error('工数取得エラー:', data.error);
+                    // エラーメッセージをユーザーに表示
+                    showErrorMessage('工数の取得に失敗しました: ' + data.error);
+                }
+            } else {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+        } catch (error) {
+            console.error('工数取得エラー:', error);
+            showErrorMessage('工数の取得中にエラーが発生しました。ネットワーク接続を確認してください。');
+        }
+    }
+    
+    // 案件選択時の工数自動取得
+    if (caseNameSelect) {
+        caseNameSelect.addEventListener('change', function() {
+            fetchWorkHours(this.value);
+        });
+        
+        // 初期値がある場合
+        if (caseNameSelect.value) {
+            fetchWorkHours(caseNameSelect.value);
+        }
+    }
+    
+    // 工数手動再計算ボタン
+    if (calculateButton) {
+        calculateButton.addEventListener('click', function() {
+            const caseId = caseNameSelect ? caseNameSelect.value : null;
+            
+            if (!caseId) {
+                alert('案件を選択してください。');
+                return;
+            }
+            
+            // 工数を再取得
+            fetchWorkHours(caseId).then(() => {
+                alert('工数を再計算しました。');
+            });
+        });
+    }
+    
+    // 自動計算機能
+    function calculateValues() {
+        // 金額計算
+        const availableAmount = parseFloat(document.getElementById('{{ form.available_amount.id_for_label }}').value) || 0;
+        const billingAmount = parseFloat(document.getElementById('{{ form.billing_amount_excluding_tax.id_for_label }}').value) || 0;
+        const outsourcingCost = parseFloat(document.getElementById('{{ form.outsourcing_cost_excluding_tax.id_for_label }}').value) || 0;
+        
+        // 工数計算
+        const estimatedWorkdays = parseFloat(document.getElementById('{{ form.estimated_workdays.id_for_label }}').value) || 0;
+        const usedWorkdays = parseFloat(document.getElementById('{{ form.used_workdays.id_for_label }}').value) || 0;
+        const newbieWorkdays = parseFloat(document.getElementById('{{ form.newbie_workdays.id_for_label }}').value) || 0;
+        const unitCost = parseFloat(document.getElementById('{{ form.unit_cost_per_month.id_for_label }}').value) || 0;
+        
+        // 残金額計算
+        const remainingAmount = availableAmount - billingAmount;
+        const remainingAmountElement = document.getElementById('remainingAmount');
+        if (remainingAmountElement) {
+            remainingAmountElement.textContent = `¥${remainingAmount.toLocaleString()}`;
+        }
+        
+        // 利益率計算
+        const profitRate = billingAmount > 0 ? ((billingAmount - outsourcingCost) / billingAmount * 100) : 0;
+        const profitRateElement = document.getElementById('profitRate');
+        if (profitRateElement) {
+            profitRateElement.textContent = `${profitRate.toFixed(1)}%`;
+        }
+        
+        // 使用工数合計計算
+        const totalUsedWorkdays = usedWorkdays + newbieWorkdays;
+        const totalUsedWorkdaysElement = document.getElementById('totalUsedWorkdays');
+        if (totalUsedWorkdaysElement) {
+            totalUsedWorkdaysElement.textContent = `${totalUsedWorkdays.toFixed(1)}人日`;
+        }
+        
+        // 残工数計算
+        const remainingWorkdays = Math.max(estimatedWorkdays - totalUsedWorkdays, 0);
+        const remainingWorkdaysElement = document.getElementById('remainingWorkdays');
+        if (remainingWorkdaysElement) {
+            remainingWorkdaysElement.textContent = `${remainingWorkdays.toFixed(1)}人日`;
+        }
+        
+        // 仕掛中金額計算（月20日として計算）
+        const wipAmount = usedWorkdays * (unitCost / 20);
+        const wipAmountElement = document.getElementById('wipAmount');
+        if (wipAmountElement) {
+            wipAmountElement.textContent = `¥${(wipAmount * 10000).toLocaleString()}`;
+        }
+    }
+    
+    // 計算対象フィールドのイベントリスナー設定
+    const calculationFields = [
+        '{{ form.available_amount.id_for_label }}',
+        '{{ form.billing_amount_excluding_tax.id_for_label }}',
+        '{{ form.outsourcing_cost_excluding_tax.id_for_label }}',
+        '{{ form.estimated_workdays.id_for_label }}',
+        '{{ form.used_workdays.id_for_label }}',
+        '{{ form.newbie_workdays.id_for_label }}',
+        '{{ form.unit_cost_per_month.id_for_label }}'
+    ];
+    
+    calculationFields.forEach(fieldId => {
+        const field = document.getElementById(fieldId);
+        if (field) {
+            field.addEventListener('input', calculateValues);
+            field.addEventListener('change', calculateValues);
+        }
+    });
+    
+    // フォームバリデーション
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            let isValid = true;
+            
+            // 必須フィールドのチェック
+            const requiredFields = [
+                '{{ form.project_name.id_for_label }}',
+                '{{ form.case_name.id_for_label }}',
+                '{{ form.department.id_for_label }}',
+                '{{ form.status.id_for_label }}',
+                '{{ form.case_classification.id_for_label }}'
+            ];
+            
+            requiredFields.forEach(fieldId => {
+                const field = document.getElementById(fieldId);
+                if (field && !field.value.trim()) {
+                    isValid = false;
+                    field.classList.add('is-invalid');
+                } else if (field) {
+                    field.classList.remove('is-invalid');
+                }
+            });
+            
+            if (!isValid) {
+                e.preventDefault();
+                alert('必須項目を入力してください。');
+                // 最初のエラーフィールドにフォーカス
+                const firstError = document.querySelector('.is-invalid');
+                if (firstError) {
+                    firstError.focus();
+                }
+            }
+        });
+    }
+    
+    // 初期計算
+    calculateValues();
+    
+    console.log('工数集計フォーム（統合版）読み込み完了');
+});
+</script>
+{% endblock %}
