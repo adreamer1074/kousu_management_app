@@ -95,7 +95,7 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0">
-                    <i class="bi bi-ticket"></i> チケット一覧
+                    <i class="bi bi-ticket"></i> チケット一覧 ({{ total_tickets }}件)
                 </h5>
                 <a href="{% url 'projects:ticket_create' project.pk %}" class="btn btn-sm btn-success">
                     <i class="bi bi-plus"></i> 新規チケット
@@ -107,66 +107,129 @@
                         <table class="table table-hover">
                             <thead class="table-light">
                                 <tr>
-                                    <th>タイトル</th>
-                                    <th>優先度</th>
-                                    <th>ステータス</th>
-                                    <th>担当者</th>
-                                    <th>期限</th>
-                                    <th>作成日</th>
+                                    <th style="width: 25%;">タイトル</th>
+                                    <th style="width: 12%;">分類</th>
+                                    <th style="width: 10%;">優先度</th>
+                                    <th style="width: 12%;">ステータス</th>
+                                    <th style="width: 12%;">請求ステータス</th>
+                                    <th style="width: 15%;">担当者</th>
+                                    <th style="width: 8%;">期限</th>
+                                    <th style="width: 6%;">操作</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for ticket in tickets %}
                                     <tr>
                                         <td>
-                                            <strong>{{ ticket.title }}</strong>
+                                            <strong class="d-block">{{ ticket.title }}</strong>
                                             {% if ticket.description %}
-                                                <br><small class="text-muted">{{ ticket.description|truncatechars:50 }}</small>
+                                                <small class="text-muted">{{ ticket.description|truncatechars:40 }}</small>
                                             {% endif %}
                                         </td>
                                         <td>
+                                            {% with classification=ticket.get_case_classification_display_with_color %}
+                                                <span class="badge bg-{{ classification.color }} text-white">
+                                                    {{ classification.text }}
+                                                </span>
+                                            {% endwith %}
+                                        </td>
+                                        <td>
                                             {% with priority_info=ticket.get_priority_display_with_color %}
-                                                <span class="badge bg-{{ priority_info.color }}">
+                                                <span class="badge bg-{{ priority_info.color }} text-white">
                                                     {{ priority_info.text }}
                                                 </span>
                                             {% endwith %}
                                         </td>
                                         <td>
                                             {% with status_info=ticket.get_status_display_with_color %}
-                                                <span class="badge bg-{{ status_info.color }}">
+                                                <span class="badge bg-{{ status_info.color }} text-white">
                                                     {{ status_info.text }}
                                                 </span>
                                             {% endwith %}
                                         </td>
                                         <td>
+                                            {% with billing_info=ticket.get_billing_status_display_with_color %}
+                                                <span class="badge bg-{{ billing_info.color }} text-white">
+                                                    {{ billing_info.text }}
+                                                </span>
+                                            {% endwith %}
+                                        </td>
+                                        <td>
                                             {% if ticket.assigned_user %}
-                                                {{ ticket.assigned_user.get_full_name|default:ticket.assigned_user.username }}
+                                                <div class="d-flex align-items-center">
+                                                    <div class="bg-primary rounded-circle d-flex align-items-center justify-content-center text-white me-2" style="width: 24px; height: 24px; font-size: 0.7rem;">
+                                                        {{ ticket.assigned_user.get_full_name.0|default:ticket.assigned_user.username.0|upper }}
+                                                    </div>
+                                                    <span class="small">{{ ticket.assigned_user.get_full_name|default:ticket.assigned_user.username }}</span>
+                                                </div>
                                             {% else %}
-                                                <span class="text-muted">未設定</span>
+                                                <span class="text-muted small">未設定</span>
                                             {% endif %}
                                         </td>
                                         <td>
                                             {% if ticket.due_date %}
-                                                {{ ticket.due_date|date:"Y/m/d" }}
+                                                <small class="{% if ticket.due_date < today %}text-danger{% endif %}">
+                                                    {{ ticket.due_date|date:"m/d" }}
+                                                </small>
                                             {% else %}
                                                 <span class="text-muted">-</span>
                                             {% endif %}
                                         </td>
                                         <td>
-                                            <small>{{ ticket.created_at|date:"m/d H:i" }}</small>
+                                            <div class="btn-group btn-group-sm">
+                                                <button type="button" class="btn btn-outline-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                                                    <i class="bi bi-three-dots"></i>
+                                                </button>
+                                                <ul class="dropdown-menu">
+                                                    <li><a class="dropdown-item" href="#"><i class="bi bi-eye"></i> 詳細</a></li>
+                                                    <li><a class="dropdown-item" href="#"><i class="bi bi-pencil"></i> 編集</a></li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li><a class="dropdown-item text-danger" href="#"><i class="bi bi-trash"></i> 削除</a></li>
+                                                </ul>
+                                            </div>
                                         </td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
+                    
+                    <!-- チケット統計 -->
+                    <div class="row mt-3">
+                        <div class="col-md-12">
+                            <div class="card bg-light">
+                                <div class="card-body py-2">
+                                    <div class="row text-center">
+                                        <div class="col">
+                                            <small class="text-muted">分類別統計</small>
+                                            <div class="mt-1">
+                                                {% regroup tickets by case_classification as classification_groups %}
+                                                {% for group in classification_groups %}
+                                                    <span class="badge bg-secondary me-1">{{ group.grouper|default:"未分類" }}: {{ group.list|length }}件</span>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        <div class="col">
+                                            <small class="text-muted">ステータス別統計</small>
+                                            <div class="mt-1">
+                                                {% regroup tickets by status as status_groups %}
+                                                {% for group in status_groups %}
+                                                    <span class="badge bg-info me-1">{{ group.grouper|default:"未設定" }}: {{ group.list|length }}件</span>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 {% else %}
-                    <div class="text-center text-muted py-4">
-                        <i class="bi bi-ticket fs-2 mb-2 d-block"></i>
-                        チケットがありません。
-                        <br>
-                        <a href="{% url 'projects:ticket_create' project.pk %}" class="btn btn-success mt-2">
-                            最初のチケットを作成
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-ticket fs-1 mb-3 d-block text-muted"></i>
+                        <h6>チケットがありません</h6>
+                        <p class="mb-3">このプロジェクトにはまだチケットが作成されていません。</p>
+                        <a href="{% url 'projects:ticket_create' project.pk %}" class="btn btn-success">
+                            <i class="bi bi-plus"></i> 最初のチケットを作成
                         </a>
                     </div>
                 {% endif %}
@@ -225,6 +288,50 @@
             </div>
         </div>
         
+        <!-- プロジェクト統計 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-bar-chart"></i> プロジェクト統計
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6 border-end">
+                        <div class="h4 mb-1 text-primary">{{ total_tickets }}</div>
+                        <small class="text-muted">総チケット数</small>
+                    </div>
+                    <div class="col-6">
+                        <div class="h4 mb-1 text-success">{{ closed_tickets }}</div>
+                        <small class="text-muted">完了チケット</small>
+                    </div>
+                </div>
+                <hr>
+                <div class="progress mb-2" style="height: 8px;">
+                    <div class="progress-bar bg-success" style="width: {{ progress_percent }}%"></div>
+                </div>
+                <small class="text-muted">進捗率: {{ progress_percent }}%</small>
+                
+                <!-- 詳細統計 -->
+                <div class="mt-3">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="text-secondary fw-bold">{{ open_tickets }}</div>
+                            <small class="text-muted">未着手</small>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-primary fw-bold">{{ in_progress_tickets }}</div>
+                            <small class="text-muted">進行中</small>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-success fw-bold">{{ closed_tickets }}</div>
+                            <small class="text-muted">完了</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- 作成・更新情報 -->
         <div class="card">
             <div class="card-header">
@@ -241,8 +348,39 @@
                     <strong>最終更新:</strong><br>
                     <small>{{ project.updated_at|date:"Y年m月d日 H:i" }}</small>
                 </div>
+                {% if project.created_by %}
+                    <div class="mt-2">
+                        <strong>作成者:</strong><br>
+                        <small>{{ project.created_by.get_full_name|default:project.created_by.username }}</small>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 今日の日付を取得（期限の色分け用）
+    const today = new Date();
+    
+    // 進捗バーのアニメーション
+    const progressBar = document.querySelector('.progress-bar');
+    if (progressBar) {
+        const width = progressBar.style.width;
+        progressBar.style.width = '0%';
+        setTimeout(() => {
+            progressBar.style.transition = 'width 1s ease-in-out';
+            progressBar.style.width = width;
+        }, 300);
+    }
+    
+    console.log('プロジェクト詳細ページ読み込み完了');
+    console.log('総チケット数:', {{ total_tickets }});
+    console.log('完了チケット数:', {{ closed_tickets }});
+    console.log('進捗率:', {{ progress_percent }});
+});
+</script>
 {% endblock %}

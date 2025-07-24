@@ -11,11 +11,12 @@ class WorkloadAggregation(models.Model):
     class StatusChoices(models.TextChoices):
         PLANNING = 'planning', '計画中'
         IN_PROGRESS = 'in_progress', '進行中'
+        BILLED = 'billed', '請求済み'
         COMPLETED = 'completed', '完了'
         INSPECTION_WAITING = 'inspection_waiting', '検収待ち'
         INSPECTED = 'inspected', '検収済み'
         ON_HOLD = 'on_hold', '保留'
-        CANCELLED = 'cancelled', 'キャンセル'
+        CANCELLED = 'cancelled', 'キャンセル（失注）'
     
     class CaseClassificationChoices(models.TextChoices):
         DEVELOPMENT = 'development', '開発'
