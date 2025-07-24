@@ -2,6 +2,7 @@ from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import TemplateView, ListView, CreateView, UpdateView, DeleteView, DetailView
 from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
@@ -11,6 +12,7 @@ from django.urls import reverse_lazy
 from django.contrib import messages
 import json
 import calendar
+from decimal import Decimal
 
 from .models import Workload
 from apps.projects.models import Project, ProjectTicket
@@ -208,49 +210,35 @@ class WorkloadDeleteView(LoginRequiredMixin, DeleteView):
 @login_required
 @require_http_methods(["POST"])
 def create_workload_ajax(request):
-    """AJAX工数行追加"""
+    """新規工数行作成AJAX"""
     try:
         data = json.loads(request.body)
         user_id = data.get('user_id')
-        ticket_id = data.get('ticket_id')  # オプション
+        project_id = data.get('project_id')
+        ticket_id = data.get('ticket_id')
         year_month = data.get('year_month')
         
-        # 必須項目のチェック
-        if not user_id:
-            return JsonResponse({'success': False, 'error': '担当者を選択してください'})
+        # バリデーション
+        if not all([user_id, project_id, ticket_id, year_month]):
+            return JsonResponse({
+                'success': False,
+                'error': '必須項目が不足しています。'
+            })
         
-        if not year_month:
-            return JsonResponse({'success': False, 'error': '年月を指定してください'})
+        from django.contrib.auth import get_user_model
+        from apps.projects.models import Project, ProjectTicket
         
-        user = get_object_or_404(User, id=user_id)
+        User = get_user_model()
         
-        # チケットが指定されている場合
-        if ticket_id:
-            ticket = get_object_or_404(ProjectTicket, id=ticket_id)
-            project = ticket.project
-        else:
-            # チケットが指定されていない場合は、デフォルトプロジェクトまたはエラー
-            # ここでは簡単なダミープロジェクトを作成するか、既存のプロジェクトを使用
-            project = None
-            ticket = None
-            # プロジェクトがない場合のデフォルト処理
-            default_project = Project.objects.filter(is_active=True).first()
-            if default_project:
-                project = default_project
-            else:
-                return JsonResponse({'success': False, 'error': 'プロジェクトまたはチケットを選択してください'})
-        
-        # 権限チェック
-        user_section = getattr(user, 'section', None)
-        request_user_section = getattr(request.user, 'section', None)
-        user_department = getattr(user, 'department', None)
-        request_user_department = getattr(request.user, 'department', None)
-        
-        if not (request.user.is_staff or request.user.is_superuser or 
-                user == request.user or
-                (request_user_section and user_section == request_user_section) or
-                (request_user_department and user_department == request_user_department)):
-            return JsonResponse({'success': False, 'error': '権限がありません'})
+        try:
+            user = User.objects.get(id=user_id)
+            project = Project.objects.get(id=project_id)
+            ticket = ProjectTicket.objects.get(id=ticket_id)
+        except (User.DoesNotExist, Project.DoesNotExist, ProjectTicket.DoesNotExist):
+            return JsonResponse({
+                'success': False,
+                'error': '指定されたユーザー、プロジェクト、またはチケットが見つかりません。'
+            })
         
         # 重複チェック
         existing_workload = Workload.objects.filter(
@@ -261,9 +249,12 @@ def create_workload_ajax(request):
         ).first()
         
         if existing_workload:
-            return JsonResponse({'success': False, 'error': 'この組み合わせの工数行は既に存在します'})
+            return JsonResponse({
+                'success': False,
+                'error': 'この組み合わせの工数行は既に存在します。'
+            })
         
-        # 工数行作成
+        # 新規工数行を作成
         workload = Workload.objects.create(
             user=user,
             project=project,
@@ -271,104 +262,192 @@ def create_workload_ajax(request):
             year_month=year_month
         )
         
-        return JsonResponse({'success': True, 'workload_id': workload.id})
+        return JsonResponse({
+            'success': True,
+            'workload_id': workload.id,
+            'message': '新しい工数行を作成しました。'
+        })
         
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({
+            'success': False,
+            'error': f'サーバーエラー: {str(e)}'
+        })
 
 @login_required
 @require_http_methods(["POST"])
 def update_workload_ajax(request):
-    """AJAX工数更新"""
+    """工数更新AJAX"""
     try:
         data = json.loads(request.body)
         workload_id = data.get('workload_id')
         day = data.get('day')
         value = data.get('value', 0)
         
-        workload = get_object_or_404(Workload, id=workload_id)
+        # バリデーション
+        if not workload_id or not day:
+            return JsonResponse({
+                'success': False,
+                'error': '必須パラメータが不足しています。'
+            })
         
-        # 権限チェック
-        user_section = getattr(request.user, 'section', None)
-        workload_user_section = getattr(workload.user, 'section', None)
-        user_department = getattr(request.user, 'department', None)
-        workload_user_department = getattr(workload.user, 'department', None)
-        
-        if not (request.user.is_staff or request.user.is_superuser or 
-                workload.user == request.user or
-                (user_section and workload_user_section == user_section) or
-                (user_department and workload_user_department == user_department)):
-            return JsonResponse({'success': False, 'error': '権限がありません'})
-        
-        # 工数更新
         try:
-            value = float(value) if value else 0
+            workload = Workload.objects.get(id=workload_id)
+        except Workload.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': '指定された工数データが見つかりません。'
+            })
+        
+        # 権限チェック（本人または管理者のみ）
+        if workload.user != request.user and not request.user.is_staff:
+            return JsonResponse({
+                'success': False,
+                'error': '編集権限がありません。'
+            })
+        
+        # 値の範囲チェック
+        try:
+            value = float(value) if value else 0.0
             if value < 0 or value > 24:
-                return JsonResponse({'success': False, 'error': '工数は0-24の範囲で入力してください'})
+                return JsonResponse({
+                    'success': False,
+                    'error': '工数は0-24の範囲で入力してください。'
+                })
         except (ValueError, TypeError):
-            return JsonResponse({'success': False, 'error': '正しい数値を入力してください'})
+            return JsonResponse({
+                'success': False,
+                'error': '無効な値です。'
+            })
         
-        # 日付の妥当性チェック
-        try:
-            day = int(day)
-            if day < 1 or day > 31:
-                return JsonResponse({'success': False, 'error': '正しい日付を入力してください'})
-        except (ValueError, TypeError):
-            return JsonResponse({'success': False, 'error': '正しい日付を入力してください'})
-        
+        # 工数を更新
         workload.set_day_value(day, value)
         workload.save()
         
         return JsonResponse({
-            'success': True, 
-            'total_hours': float(workload.total_hours),
-            'total_days': float(workload.total_days)
+            'success': True,
+            'total_hours': workload.total_hours,
+            'total_days': workload.total_days,
+            'message': f'{day}日の工数を更新しました。'
         })
         
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({
+            'success': False,
+            'error': f'サーバーエラー: {str(e)}'
+        })
+
+@login_required
+@require_http_methods(["POST"])
+def bulk_update_workload_ajax(request):
+    """一括工数更新AJAX"""
+    try:
+        data = json.loads(request.body)
+        changes = data.get('changes', [])
+        
+        if not changes:
+            return JsonResponse({
+                'success': False,
+                'error': '更新する項目がありません。'
+            })
+        
+        updated_count = 0
+        errors = []
+        
+        for change in changes:
+            workload_id = change.get('workload_id')
+            day = change.get('day')
+            value = change.get('value', 0)
+            
+            try:
+                workload = Workload.objects.get(id=workload_id)
+                
+                # 権限チェック
+                if workload.user != request.user and not request.user.is_staff:
+                    errors.append(f'工数ID {workload_id}: 編集権限がありません')
+                    continue
+                
+                # 値の範囲チェック
+                value = float(value) if value else 0.0
+                if value < 0 or value > 24:
+                    errors.append(f'工数ID {workload_id}, {day}日: 値が範囲外です')
+                    continue
+                
+                # 工数を更新
+                workload.set_day_value(day, value)
+                workload.save()
+                updated_count += 1
+                
+            except Workload.DoesNotExist:
+                errors.append(f'工数ID {workload_id}: データが見つかりません')
+                continue
+            except (ValueError, TypeError):
+                errors.append(f'工数ID {workload_id}, {day}日: 無効な値です')
+                continue
+            except Exception as e:
+                errors.append(f'工数ID {workload_id}: {str(e)}')
+                continue
+        
+        if updated_count > 0:
+            return JsonResponse({
+                'success': True,
+                'updated_count': updated_count,
+                'errors': errors,
+                'message': f'{updated_count}件の工数を更新しました。'
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': '更新に失敗しました。',
+                'errors': errors
+            })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'サーバーエラー: {str(e)}'
+        })
 
 @login_required
 @require_http_methods(["POST"])
 def delete_workload_ajax(request):
-    """AJAX工数行削除"""
+    """工数行削除AJAX"""
     try:
         data = json.loads(request.body)
         workload_id = data.get('workload_id')
         
         if not workload_id:
-            return JsonResponse({'success': False, 'error': '工数IDが指定されていません'})
+            return JsonResponse({
+                'success': False,
+                'error': '工数IDが指定されていません。'
+            })
         
-        workload = get_object_or_404(Workload, id=workload_id)
+        try:
+            workload = Workload.objects.get(id=workload_id)
+        except Workload.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': '指定された工数データが見つかりません。'
+            })
         
-        # 権限チェック
-        user_section = getattr(request.user, 'section', None)
-        workload_user_section = getattr(workload.user, 'section', None)
-        user_department = getattr(request.user, 'department', None)
-        workload_user_department = getattr(workload.user, 'department', None)
+        # 権限チェック（本人または管理者のみ）
+        if workload.user != request.user and not request.user.is_staff:
+            return JsonResponse({
+                'success': False,
+                'error': '削除権限がありません。'
+            })
         
-        if not (request.user.is_staff or request.user.is_superuser or 
-                workload.user == request.user or
-                (user_section and workload_user_section == user_section) or
-                (user_department and workload_user_department == user_department)):
-            return JsonResponse({'success': False, 'error': '削除権限がありません'})
-        
-        # 削除実行
-        workload_info = {
-            'user': workload.user.get_full_name() or workload.user.username,
-            'project': workload.project.name,
-            'ticket': workload.ticket.title if workload.ticket else 'なし'
-        }
-        
+        # 工数行を削除
+        workload_info = f"{workload.user.get_full_name()} - {workload.ticket.title if workload.ticket else workload.project.name}"
         workload.delete()
         
         return JsonResponse({
-            'success': True, 
-            'message': f"{workload_info['user']}の{workload_info['ticket']}の工数行を削除しました"
+            'success': True,
+            'message': f'工数行を削除しました: {workload_info}'
         })
         
     except Exception as e:
-        import traceback
-        print(f"Error in delete_workload_ajax: {str(e)}")
-        print(traceback.format_exc())
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({
+            'success': False,
+            'error': f'サーバーエラー: {str(e)}'
+        })
