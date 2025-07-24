@@ -676,9 +676,277 @@ function getCookie(name) {
     return cookieValue;
 }
 
+// 新規行追加フォームの表示/非表示
+function toggleAddForm() {
+    const addForm = document.getElementById('addRowForm');
+    if (addForm) {
+        if (addForm.style.display === 'none' || addForm.style.display === '') {
+            addForm.style.display = 'block';
+            // フォームが表示されたら最初のフィールドにフォーカス
+            const firstInput = addForm.querySelector('select, input');
+            if (firstInput) {
+                firstInput.focus();
+            }
+        } else {
+            addForm.style.display = 'none';
+            // フォームを閉じる時にリセット
+            resetAddForm();
+        }
+    }
+}
+
+// 新規行追加フォームのリセット
+function resetAddForm() {
+    const form = document.getElementById('addRowForm');
+    if (form) {
+        // 全ての選択肢をリセット
+        const selects = form.querySelectorAll('select');
+        selects.forEach(select => {
+            select.selectedIndex = 0;
+        });
+        
+        // チケット選択肢をリセット
+        const ticketSelect = document.getElementById('newTicket');
+        if (ticketSelect) {
+            ticketSelect.innerHTML = '<option value="">案件を先に選択してください</option>';
+        }
+    }
+}
+
+// 新規行追加
+function addNewRow() {
+    const userId = document.getElementById('newUser').value;
+    const projectId = document.getElementById('newProject').value;
+    const ticketId = document.getElementById('newTicket').value;
+    
+    // バリデーション
+    if (!userId) {
+        alert('担当者を選択してください。');
+        document.getElementById('newUser').focus();
+        return;
+    }
+    
+    if (!projectId) {
+        alert('案件を選択してください。');
+        document.getElementById('newProject').focus();
+        return;
+    }
+    
+    if (!ticketId) {
+        alert('チケットを選択してください。');
+        document.getElementById('newTicket').focus();
+        return;
+    }
+    
+    // 現在の年月を取得
+    const yearMonth = document.getElementById('yearMonthPicker').value;
+    
+    // 新規工数行を作成
+    fetch('{% url "workloads:create_workload_ajax" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+        },
+        body: JSON.stringify({
+            user_id: userId,
+            project_id: projectId,
+            ticket_id: ticketId,
+            year_month: yearMonth
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // ページをリロードして新しい行を表示
+            showSuccessMessage('新しい工数行を追加しました。');
+            
+            // フォームを閉じる
+            toggleAddForm();
+            
+            // 少し遅延してからページリロード
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            alert('エラー: ' + (data.error || '工数行の追加に失敗しました。'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('エラーが発生しました。');
+    });
+}
+
+// 一括保存機能
+function saveAllChanges() {
+    const changedInputs = [];
+    
+    // 変更された入力フィールドを収集
+    document.querySelectorAll('.workload-input').forEach(input => {
+        const originalValue = input.getAttribute('data-original-value') || '0';
+        const currentValue = input.value || '0';
+        
+        if (originalValue !== currentValue) {
+            changedInputs.push({
+                workload_id: input.dataset.workloadId,
+                day: input.dataset.day,
+                value: currentValue
+            });
+        }
+    });
+    
+    if (changedInputs.length === 0) {
+        showSuccessMessage('変更はありません。');
+        return;
+    }
+    
+    // 一括保存API呼び出し
+    fetch('{% url "workloads:bulk_update_workload_ajax" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+        },
+        body: JSON.stringify({
+            changes: changedInputs
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccessMessage(`${changedInputs.length}件の変更を保存しました。`);
+            
+            // 元の値を更新
+            changedInputs.forEach(change => {
+                const input = document.querySelector(
+                    `input[data-workload-id="${change.workload_id}"][data-day="${change.day}"]`
+                );
+                if (input) {
+                    input.setAttribute('data-original-value', change.value);
+                }
+            });
+        } else {
+            alert('エラー: ' + (data.error || '一括保存に失敗しました。'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('一括保存中にエラーが発生しました。');
+    });
+}
+
+// 削除ボタンの初期化
+function initDeleteButtons() {
+    document.querySelectorAll('.delete-workload-btn').forEach(button => {
+        button.addEventListener('click', handleDeleteWorkload);
+    });
+}
+
+// 工数行削除処理
+function handleDeleteWorkload(event) {
+    const button = event.target.closest('.delete-workload-btn');
+    if (!button) return;
+    
+    const workloadId = button.dataset.workloadId;
+    
+    if (!confirm('この工数行を削除してもよろしいですか？')) {
+        return;
+    }
+    
+    fetch('{% url "workloads:delete_workload_ajax" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+        },
+        body: JSON.stringify({
+            workload_id: workloadId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 該当行を削除
+            const row = button.closest('tr');
+            if (row) {
+                row.remove();
+                showSuccessMessage('工数行を削除しました。');
+                updateGlobalStatistics();
+            }
+        } else {
+            alert('エラー: ' + (data.error || '削除に失敗しました。'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('削除中にエラーが発生しました。');
+    });
+}
+
+// 年月変更
+function changeYearMonth(yearMonth) {
+    const url = new URL(window.location);
+    const params = new URLSearchParams(url.search);
+    
+    // year_monthパラメータを更新
+    params.set('year_month', yearMonth);
+    
+    // 現在のフィルター値を保持
+    const departmentFilter = document.getElementById('departmentFilter');
+    const sectionFilter = document.getElementById('sectionFilter');
+    
+    if (departmentFilter && departmentFilter.value) {
+        params.set('department', departmentFilter.value);
+    }
+    
+    if (sectionFilter && sectionFilter.value) {
+        params.set('section', sectionFilter.value);
+    }
+    
+    // ページ遷移
+    window.location.href = url.pathname + '?' + params.toString();
+}
+
+// 部署フィルター
+function filterByDepartment() {
+    const departmentId = document.getElementById('departmentFilter').value;
+    const url = new URL(window.location);
+    const params = new URLSearchParams(url.search);
+    
+    if (departmentId) {
+        params.set('department', departmentId);
+    } else {
+        params.delete('department');
+    }
+    
+    // セクションフィルターをリセット
+    params.delete('section');
+    
+    window.location.href = url.pathname + '?' + params.toString();
+}
+
+// 課フィルター
+function filterBySection() {
+    const sectionId = document.getElementById('sectionFilter').value;
+    const url = new URL(window.location);
+    const params = new URLSearchParams(url.search);
+    
+    if (sectionId) {
+        params.set('section', sectionId);
+    } else {
+        params.delete('section');
+    }
+    
+    window.location.href = url.pathname + '?' + params.toString();
+}
+
 // 工数入力の初期化
 function initWorkloadInputs() {
     document.querySelectorAll('.workload-input').forEach(function(input) {
+        // 元の値を保存（一括保存用）
+        input.setAttribute('data-original-value', input.value || '0');
+        
         // 既存のイベントリスナーを削除
         input.removeEventListener('change', handleWorkloadChange);
         input.removeEventListener('blur', handleWorkloadBlur);
@@ -837,7 +1105,7 @@ function updateGlobalStatistics() {
     }
 }
 
-// 新規チケット読み込み
+// 新規チケット読み込み（既存のコード）
 function loadNewTickets() {
     const projectId = document.getElementById('newProject').value;
     const ticketSelect = document.getElementById('newTicket');
@@ -849,196 +1117,96 @@ function loadNewTickets() {
     
     ticketSelect.innerHTML = '<option value="">読み込み中...</option>';
     
+    // URLを修正: 正しいエンドポイントを使用
     fetch(`/projects/api/${projectId}/tickets/`, {
         method: 'GET',
         headers: {
             'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/json',
         },
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        // レスポンスがJSONかどうかチェック
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('レスポンスがJSON形式ではありません');
+        }
+        
+        return response.json();
+    })
     .then(data => {
+        console.log('API Response:', data);
+        
         if (data.success) {
             ticketSelect.innerHTML = '<option value="">チケットを選択</option>';
-            data.tickets.forEach(ticket => {
-                const option = document.createElement('option');
-                option.value = ticket.id;
-                option.textContent = ticket.title;
-                ticketSelect.appendChild(option);
-            });
-        } else {
-            ticketSelect.innerHTML = '<option value="">チケットの読み込みに失敗しました</option>';
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        ticketSelect.innerHTML = '<option value="">エラーが発生しました</option>';
-    });
-}
-
-// 新規行追加フォームの表示切り替え
-function toggleAddForm() {
-    const form = document.getElementById('addRowForm');
-    if (form.style.display === 'none') {
-        form.style.display = 'block';
-    } else {
-        form.style.display = 'none';
-        // フォームをリセット
-        document.getElementById('newUser').value = '';
-        document.getElementById('newProject').value = '';
-        document.getElementById('newTicket').innerHTML = '<option value="">案件を先に選択してください</option>';
-    }
-}
-
-// 新規行追加
-function addNewRow() {
-    const userId = document.getElementById('newUser').value;
-    const ticketId = document.getElementById('newTicket').value || null;
-    
-    if (!userId) {
-        alert('担当者を選択してください。');
-        return;
-    }
-    
-    fetch('{% url "workloads:create_workload_ajax" %}', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken'),
-        },
-        body: JSON.stringify({
-            user_id: userId,
-            ticket_id: ticketId,
-            year_month: '{{ year_month }}'
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            toggleAddForm();
-            location.reload(); // ページをリロードして新しい行を表示
-        } else {
-            alert('エラー: ' + data.error);
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('エラーが発生しました。');
-    });
-}
-
-// 年月変更
-function changeYearMonth(yearMonth) {
-    const url = new URL(window.location);
-    url.searchParams.set('year_month', yearMonth);
-    window.location.href = url.toString();
-}
-
-// 部署フィルター
-function filterByDepartment() {
-    const departmentId = document.getElementById('departmentFilter').value;
-    const url = new URL(window.location);
-    if (departmentId) {
-        url.searchParams.set('department', departmentId);
-    } else {
-        url.searchParams.delete('department');
-    }
-    url.searchParams.delete('section'); // 課フィルターをリセット
-    window.location.href = url.toString();
-}
-
-// 課フィルター
-function filterBySection() {
-    const sectionId = document.getElementById('sectionFilter').value;
-    const url = new URL(window.location);
-    if (sectionId) {
-        url.searchParams.set('section', sectionId);
-    } else {
-        url.searchParams.delete('section');
-    }
-    window.location.href = url.toString();
-}
-
-// 一括保存（予約機能）
-function saveAllChanges() {
-    alert('一括保存機能は実装予定です。現在は個別に自動保存されています。');
-}
-
-// 削除ボタンのイベントリスナーを追加
-function initDeleteButtons() {
-    document.querySelectorAll('.delete-workload-btn').forEach(function(button) {
-        button.removeEventListener('click', handleDeleteWorkload);
-        button.addEventListener('click', handleDeleteWorkload);
-    });
-}
-
-// 削除ボタンクリックハンドラー
-function handleDeleteWorkload(event) {
-    const button = event.currentTarget;
-    const workloadId = button.dataset.workloadId;
-    const row = button.closest('tr');
-    
-    // 確認ダイアログ
-    const userInfo = row.querySelector('.user-name').textContent;
-    const ticketInfo = row.querySelector('.ticket-title').textContent;
-    
-    if (!confirm(`${userInfo}の「${ticketInfo}」の工数行を削除しますか？\n※この操作は取り消せません。`)) {
-        return;
-    }
-    
-    // 削除実行
-    deleteWorkload(workloadId, row);
-}
-
-// 工数行削除AJAX
-function deleteWorkload(workloadId, row) {
-    fetch('{% url "workloads:delete_workload_ajax" %}', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken'),
-        },
-        body: JSON.stringify({
-            workload_id: workloadId
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // 行を非表示にしてフェードアウト
-            row.style.transition = 'opacity 0.3s ease';
-            row.style.opacity = '0';
             
-            setTimeout(() => {
-                row.remove();
-                updateGlobalStatistics();
-                
-                // 成功メッセージを表示
-                showSuccessMessage(data.message);
-                
-                // テーブルが空になった場合の処理
-                const tbody = document.querySelector('.workload-table tbody');
-                if (tbody.children.length === 0) {
-                    const colspan = document.querySelectorAll('.workload-table thead th').length;
-                    tbody.innerHTML = `
-                        <tr>
-                            <td colspan="${colspan}" class="text-center text-muted py-4">
-                                工数データがありません。「行追加」ボタンから新しい工数行を追加してください。
-                            </td>
-                        </tr>
-                    `;
-                }
-            }, 300);
+            if (data.tickets && data.tickets.length > 0) {
+                data.tickets.forEach(ticket => {
+                    const option = document.createElement('option');
+                    option.value = ticket.id;
+                    option.textContent = ticket.title;
+                    option.title = ticket.description || ''; // ツールチップに説明を表示
+                    ticketSelect.appendChild(option);
+                });
+            } else {
+                ticketSelect.innerHTML = '<option value="">このプロジェクトにはチケットがありません</option>';
+            }
         } else {
-            alert('削除エラー: ' + data.error);
+            console.error('API Error:', data.error);
+            ticketSelect.innerHTML = '<option value="">チケットの読み込みに失敗しました</option>';
+            showErrorMessage(data.error || 'チケットの読み込みに失敗しました');
         }
     })
     .catch(error => {
-        console.error('Error:', error);
-        alert('削除中にエラーが発生しました。');
+        console.error('Fetch Error:', error);
+        ticketSelect.innerHTML = '<option value="">エラーが発生しました</option>';
+        showErrorMessage(`チケット読み込みエラー: ${error.message}`);
     });
 }
 
-// 成功メッセージ表示
+// エラーメッセージ表示関数
+function showErrorMessage(message) {
+    // 既存のメッセージを削除
+    const existingAlert = document.querySelector('.alert-danger-custom');
+    if (existingAlert) {
+        existingAlert.remove();
+    }
+    
+    // 新しいメッセージを作成
+    const alertDiv = document.createElement('div');
+    alertDiv.className = 'alert alert-danger alert-danger-custom alert-dismissible fade show';
+    alertDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        min-width: 300px;
+        max-width: 500px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    `;
+    alertDiv.innerHTML = `
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(alertDiv);
+    
+    // 5秒後に自動削除
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// 成功メッセージ表示関数
 function showSuccessMessage(message) {
     // 既存のメッセージを削除
     const existingAlert = document.querySelector('.alert-success-custom');
@@ -1075,8 +1243,16 @@ function showSuccessMessage(message) {
 // ページ読み込み時の初期化
 document.addEventListener('DOMContentLoaded', function() {
     initWorkloadInputs();
-    initDeleteButtons();  // 削除ボタンの初期化を追加
+    initDeleteButtons();
     updateGlobalStatistics();
+    
+    // プロジェクト選択時の初期化
+    const projectSelect = document.getElementById('newProject');
+    if (projectSelect) {
+        projectSelect.addEventListener('change', loadNewTickets);
+    }
+    
+    console.log('工数カレンダー初期化完了');
 });
 
 // 動的に追加された要素に対するイベント委譲

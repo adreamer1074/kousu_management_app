@@ -287,14 +287,14 @@
                     <div class="calculated-field" id="remainingAmount">
                         自動計算されます
                     </div>
-                    <div class="help-text">使用可能金額 - 請求金額で自動計算</div>
+                    <div class="help-text">残工数 × 請求単価</div>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">利益率</label>
                     <div class="calculated-field" id="profitRate">
                         自動計算されます
                     </div>
-                    <div class="help-text">（請求金額 - 外注費）/ 請求金額 × 100</div>
+                    <div class="help-text">（請求金額 / 残金額（税抜）</div>
                 </div>
             </div>
         </div>
@@ -392,7 +392,8 @@
                     <div class="calculated-field" id="wipAmount">
                         自動計算されます
                     </div>
-                    <div class="help-text">使用工数 × 単価</div>
+                    <div class="help-text">使用工数合計 × 請求単価 + 外注費</div>
+                    <div class="help-text">進行中の保守案件のみ自動計算されます</div>
                 </div>
             </div>
         </div>
@@ -672,16 +673,16 @@ document.addEventListener('DOMContentLoaded', function() {
         const usedWorkdays = parseFloat(document.getElementById('{{ form.used_workdays.id_for_label }}').value) || 0;
         const newbieWorkdays = parseFloat(document.getElementById('{{ form.newbie_workdays.id_for_label }}').value) || 0;
         const unitCost = parseFloat(document.getElementById('{{ form.unit_cost_per_month.id_for_label }}').value) || 0;
-        
+        const billingUnitCost = parseFloat(document.getElementById('{{ form.billing_unit_cost_per_month.id_for_label }}').value) || 0;  
         // 残金額計算
-        const remainingAmount = availableAmount - billingAmount;
+        const remainingAmount = remainingWorkdays * (billingUnitCost*20/10000);
         const remainingAmountElement = document.getElementById('remainingAmount');
         if (remainingAmountElement) {
             remainingAmountElement.textContent = `¥${remainingAmount.toLocaleString()}`;
         }
         
         // 利益率計算
-        const profitRate = billingAmount > 0 ? ((billingAmount - outsourcingCost) / billingAmount * 100) : 0;
+        const profitRate = billingAmount > 0 ? ((remainingAmount-billingAmount) / billingAmount * 100) : 0;
         const profitRateElement = document.getElementById('profitRate');
         if (profitRateElement) {
             profitRateElement.textContent = `${profitRate.toFixed(1)}%`;
@@ -702,10 +703,24 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // 仕掛中金額計算（月20日として計算）
-        const wipAmount = usedWorkdays * (unitCost / 20);
         const wipAmountElement = document.getElementById('wipAmount');
-        if (wipAmountElement) {
+        if (form.case_classification.value === 'development' && (form.status.value === 'in_progress' || form.status.value === 'active')) {
+            // 開発案件の場合のみ自動計算（月20日で計算）
+            const wipAmount = (totalUsedWorkdays * (billingUnitCost / 20)) + outsourcingCost;
+            if (wipAmountElement) {
             wipAmountElement.textContent = `¥${(wipAmount * 10000).toLocaleString()}`;
+            }
+        } else {
+            // それ以外は空表示
+            if (wipAmountElement) {
+            wipAmountElement.textContent = '0.0';
+            }
+        }
+        // 案件分類の変更時も再計算
+        const caseClassificationField = document.getElementById('{{ form.case_classification.id_for_label }}');
+        if (caseClassificationField && !caseClassificationField._wipListenerAdded) {
+            caseClassificationField.addEventListener('change', calculateValues);
+            caseClassificationField._wipListenerAdded = true;
         }
     }
     
