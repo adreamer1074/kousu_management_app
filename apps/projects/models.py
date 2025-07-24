@@ -102,19 +102,32 @@ class Project(models.Model):
 
 class ProjectTicket(models.Model):
     """プロジェクトチケットモデル"""
-    PRIORITY_CHOICES = [
-        ('low', '低'),
-        ('normal', '中'),
-        ('high', '高'),
-        ('urgent', '緊急'),
-    ]
     
-    STATUS_CHOICES = [
-        ('open', 'オープン'),
-        ('in_progress', '進行中'),
-        ('review', 'レビュー中'),
-        ('closed', 'クローズ'),
-    ]
+    class PriorityChoices(models.TextChoices):
+        LOW = 'low', '低'
+        NORMAL = 'normal', '中'
+        HIGH = 'high', '高'
+        URGENT = 'urgent', '緊急'
+    
+    class StatusChoices(models.TextChoices):
+        OPEN = 'open', '未着手'
+        ESTIMATE = 'estimate', '見積'
+        IN_PROGRESS = 'in_progress', '進行中'
+        ON_HOLD = 'on_hold', '保留'
+        CLOSED = 'closed', 'クローズ'
+    
+    class CaseClassificationChoices(models.TextChoices):
+        DEVELOPMENT = 'development', '開発'
+        MAINTENANCE = 'maintenance', '保守'
+        CONSULTING = 'consulting', 'コンサルティング'
+        SUPPORT = 'support', 'サポート'
+        OTHER = 'other', 'その他'
+    
+    class BillingStatusChoices(models.TextChoices):
+        ESTIMATE = 'estimate', '見積'
+        LOST = 'lost', '失注'
+        BILLED = 'billed', '請求済み'
+        IN_PROGRESS = 'in_progress', '着手'
     
     project = models.ForeignKey(
         Project,
@@ -124,18 +137,36 @@ class ProjectTicket(models.Model):
     )
     title = models.CharField(max_length=200, verbose_name="タイトル")
     description = models.TextField(blank=True, verbose_name="説明")
+    
     priority = models.CharField(
         max_length=20,
-        choices=PRIORITY_CHOICES,
-        default='normal',
+        choices=PriorityChoices.choices,
+        default=PriorityChoices.NORMAL,
         verbose_name="優先度"
     )
+    
     status = models.CharField(
         max_length=20,
-        choices=STATUS_CHOICES,
-        default='open',
+        choices=StatusChoices.choices,
+        default=StatusChoices.OPEN,
         verbose_name="ステータス"
     )
+    
+    case_classification = models.CharField(
+        max_length=30,
+        choices=CaseClassificationChoices.choices,
+        default=CaseClassificationChoices.OTHER,
+        verbose_name="分類"
+    )
+    
+    billing_status = models.CharField(
+        '請求ステータス',
+        max_length=20,
+        choices=BillingStatusChoices.choices,
+        default=BillingStatusChoices.ESTIMATE,
+        help_text='チケットの請求状況'
+    )
+    
     assigned_user = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -143,9 +174,11 @@ class ProjectTicket(models.Model):
         blank=True,
         verbose_name="担当者"
     )
+    
     due_date = models.DateField(blank=True, null=True, verbose_name="期限")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="作成日時")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新日時")
+    is_active = models.BooleanField('アクティブ', default=True)
 
     class Meta:
         verbose_name = "チケット"
@@ -159,7 +192,7 @@ class ProjectTicket(models.Model):
         """優先度の色付き表示"""
         priority_colors = {
             'low': 'success',
-            'normal': 'info',
+            'normal': 'info', 
             'high': 'warning',
             'urgent': 'danger',
         }
@@ -172,13 +205,41 @@ class ProjectTicket(models.Model):
         """ステータスの色付き表示"""
         status_colors = {
             'open': 'secondary',
+            'estimate': 'info',
             'in_progress': 'primary',
-            'review': 'warning',
+            'on_hold': 'warning',
             'closed': 'success',
         }
         return {
             'text': self.get_status_display(),
             'color': status_colors.get(self.status, 'secondary')
+        }
+    
+    def get_case_classification_display_with_color(self):
+        """案件分類の色付き表示"""
+        classification_colors = {
+            'development': 'primary',
+            'maintenance': 'success',
+            'consulting': 'info',
+            'support': 'warning',
+            'other': 'secondary',
+        }
+        return {
+            'text': self.get_case_classification_display(),
+            'color': classification_colors.get(self.case_classification, 'secondary')
+        }
+    
+    def get_billing_status_display_with_color(self):
+        """請求ステータスの色付き表示"""
+        billing_colors = {
+            'estimate': 'secondary',
+            'lost': 'danger',
+            'billed': 'success',
+            'in_progress': 'primary',
+        }
+        return {
+            'text': self.get_billing_status_display(),
+            'color': billing_colors.get(self.billing_status, 'secondary')
         }
 
 class ProjectDetail(models.Model):

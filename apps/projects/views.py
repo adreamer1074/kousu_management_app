@@ -3,6 +3,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.urls import reverse_lazy, reverse
 from django.contrib import messages
+from datetime import date
 from django.db.models import Q
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse
@@ -61,14 +62,41 @@ class ProjectListView(LoginRequiredMixin, ListView):
         return context
 
 class ProjectDetailView(LoginRequiredMixin, DetailView):
-    """プロジェクト詳細"""
+    """プロジェクト詳細ビュー"""
     model = Project
     template_name = 'projects/project_detail.html'
     context_object_name = 'project'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['tickets'] = self.object.tickets.all().order_by('-created_at')
+        
+        # プロジェクトに関連するチケット一覧を取得
+        tickets = self.object.tickets.filter(
+            is_active=True
+        ).select_related('assigned_user').order_by('-created_at')
+        
+        context['tickets'] = tickets
+        
+        # 今日の日付を追加（期限の色分け用）
+        context['today'] = date.today()
+        
+        # チケット統計を計算
+        total_tickets = tickets.count()
+        closed_tickets = tickets.filter(status='closed').count()
+        
+        # 進捗率を計算
+        progress_percent = 0
+        if total_tickets > 0:
+            progress_percent = round((closed_tickets / total_tickets) * 100, 1)
+        
+        context.update({
+            'total_tickets': total_tickets,
+            'closed_tickets': closed_tickets,
+            'in_progress_tickets': tickets.filter(status='in_progress').count(),
+            'open_tickets': tickets.filter(status='open').count(),
+            'progress_percent': progress_percent,
+        })
+        
         return context
 
 class ProjectCreateView(LoginRequiredMixin, CreateView):
@@ -127,7 +155,7 @@ class ProjectTicketCreateView(LoginRequiredMixin, CreateView):
 
 @login_required
 def get_tickets_api(request):
-    """プロジェクトのチケット一覧取得API"""
+    """プロジェクトのチケット一覧取得API（既存）"""
     project_id = request.GET.get('project_id')
     
     if not project_id:
@@ -146,5 +174,39 @@ def get_tickets_api(request):
         return JsonResponse({
             'success': False,
             'error': str(e),
+            'tickets': []
+        })
+
+@login_required
+def get_project_tickets_api(request, project_id):
+    """特定プロジェクトのチケット一覧取得API（新規追加）"""
+    try:
+        # プロジェクトが存在するかチェック
+        project = get_object_or_404(Project, id=project_id)
+        
+        # そのプロジェクトのチケット一覧を取得
+        tickets = ProjectTicket.objects.filter(
+            project=project,
+            is_active=True  # アクティブなチケットのみ
+        ).select_related('project').values(
+            'id', 'title', 'status', 'priority', 'description'
+        ).order_by('title')
+        
+        return JsonResponse({
+            'success': True,
+            'tickets': list(tickets),
+            'project_name': project.name
+        })
+        
+    except Project.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': '指定されたプロジェクトが見つかりません。',
+            'tickets': []
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'サーバーエラー: {str(e)}',
             'tickets': []
         })
