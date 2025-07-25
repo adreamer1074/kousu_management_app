@@ -1,130 +1,248 @@
 from django import forms
+from django.contrib.auth import get_user_model
 from datetime import date
-from .models import CostMaster
-from apps.users.models import Department, CustomUser
+from .models import BusinessPartner, OutsourcingCost
+from apps.projects.models import Project, ProjectTicket
 
-class CostMasterForm(forms.ModelForm):
-    """コストマスターフォーム"""
+User = get_user_model()
+
+class BusinessPartnerForm(forms.ModelForm):
+    """ビジネスパートナー登録フォーム"""
     
     class Meta:
-        model = CostMaster
+        model = BusinessPartner
         fields = [
-            'client_name', 'billing_type', 'department', 'manager', 'employee_level',
-            'monthly_billing', 'daily_billing', 'hourly_billing', 'fixed_billing',
-            'discount_rate', 'minimum_billing_amount', 'special_conditions',
-            'contract_type', 'payment_terms', 'effective_from', 'effective_to', 'is_active'
+            'name', 'email', 'phone', 'company',
+            'hourly_rate', 'projects', 'notes'
         ]
         widgets = {
-            'client_name': forms.TextInput(attrs={
+            'name': forms.TextInput(attrs={
                 'class': 'form-control',
-                'placeholder': '請求先名を入力してください',
+                'placeholder': '氏名を入力してください'
             }),
-            'billing_type': forms.Select(attrs={'class': 'form-select'}),
-            'department': forms.Select(attrs={'class': 'form-select'}),
-            'manager': forms.Select(attrs={'class': 'form-select'}),
-            'employee_level': forms.Select(attrs={'class': 'form-select'}),
-            'monthly_billing': forms.NumberInput(attrs={
+            'email': forms.EmailInput(attrs={
                 'class': 'form-control',
-                'step': '0.01',
+                'placeholder': 'email@example.com'
+            }),
+            'phone': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': '090-1234-5678'
+            }),
+            'company': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': '所属会社名'
+            }),
+            'hourly_rate': forms.NumberInput(attrs={
+                'class': 'form-control',
                 'min': '0',
-                'placeholder': '0.00'
+                'step': '100',
+                'placeholder': '5000'
             }),
-            'daily_billing': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'step': '0.01',
-                'min': '0',
-                'placeholder': '0.00'
+            'projects': forms.SelectMultiple(attrs={
+                'class': 'form-select',
+                'multiple': True,
+                'size': '8'
             }),
-            'hourly_billing': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'step': '1',
-                'min': '0',
-                'placeholder': '0'
-            }),
-            'fixed_billing': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'step': '0.01',
-                'min': '0',
-                'placeholder': '0.00'
-            }),
-            'discount_rate': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'step': '0.1',
-                'min': '0',
-                'max': '100',
-                'placeholder': '0.0'
-            }),
-            'minimum_billing_amount': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'step': '0.01',
-                'min': '0',
-                'placeholder': '0.00'
-            }),
-            'special_conditions': forms.Textarea(attrs={
+            'notes': forms.Textarea(attrs={
                 'class': 'form-control',
                 'rows': 3,
-                'placeholder': '割引条件や特別な取り決めなど'
+                'placeholder': '備考があれば入力してください'
             }),
-            'contract_type': forms.Select(attrs={'class': 'form-select'}),
-            'payment_terms': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': '例：月末締め翌月末払い'
-            }),
-            'effective_from': forms.DateInput(attrs={
-                'class': 'form-control',
-                'type': 'date'
-            }),
-            'effective_to': forms.DateInput(attrs={
-                'class': 'form-control',
-                'type': 'date'
-            }),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
-
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        # 空の選択肢を追加
-        # self.fields['department'].empty_label = "部署を選択（任意）"
-        # self.fields['manager'].empty_label = "責任者を選択（任意）"
-        # self.fields['employee_level'].empty_label = "レベルを選択（任意）"
-        
-        # 責任者の選択肢をアクティブなユーザーに限定
-        self.fields['manager'].queryset = CustomUser.objects.filter(
+        # プロジェクトの選択肢を設定
+        self.fields['projects'].queryset = Project.objects.filter(
             is_active=True
-        ).order_by('last_name', 'first_name')
+        ).order_by('name')
         
-        # デフォルト値設定
-        if not self.instance.pk:  # 新規作成時のみ
-            self.fields['is_active'].initial = True
-            self.fields['effective_from'].initial = date.today()
-            self.fields['discount_rate'].initial = 0
-            self.fields['minimum_billing_amount'].initial = 0
+        # 必須フィールドの設定
+        self.fields['name'].required = True
+        self.fields['hourly_rate'].required = True
+        
+        # ヘルプテキスト設定
+        self.fields['hourly_rate'].help_text = '時間単価を円単位で入力してください'
+        self.fields['projects'].help_text = 'このBPが参加可能なプロジェクトを選択（複数選択可）'
 
+
+class OutsourcingCostForm(forms.ModelForm):
+    """外注費登録フォーム"""
+    
+    class Meta:
+        model = OutsourcingCost
+        fields = [
+            'year_month', 'business_partner', 'project', 'ticket',
+            'status', 'case_classification', 'work_hours', 'notes'
+        ]
+        widgets = {
+            'year_month': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': '2024-01',
+                'pattern': r'\d{4}-\d{2}'
+            }),
+            'business_partner': forms.Select(attrs={
+                'class': 'form-select',
+                'id': 'id_business_partner'
+            }),
+            'project': forms.Select(attrs={
+                'class': 'form-select',
+                'id': 'id_project'
+            }),
+            'ticket': forms.Select(attrs={
+                'class': 'form-select',
+                'id': 'id_ticket'
+            }),
+            'status': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'case_classification': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'work_hours': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '0',
+                'step': '0.1',
+                'placeholder': '8.0'
+            }),
+            'notes': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 2,
+                'placeholder': '備考があれば入力してください'
+            }),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # 初期値設定
+        if not self.instance.pk:
+            # 新規作成時のデフォルト年月
+            current_date = date.today()
+            self.fields['year_month'].initial = current_date.strftime('%Y-%m')
+        
+        # ビジネスパートナーの選択肢
+        self.fields['business_partner'].queryset = BusinessPartner.objects.filter(
+            is_active=True
+        ).order_by('name')
+        self.fields['business_partner'].empty_label = "ビジネスパートナーを選択"
+        
+        # プロジェクトの選択肢
+        self.fields['project'].queryset = Project.objects.filter(
+            is_active=True
+        ).order_by('name')
+        self.fields['project'].empty_label = "プロジェクトを選択"
+        
+        # チケットの選択肢（初期は空）
+        if self.instance.pk and self.instance.project:
+            # 編集時：選択されたプロジェクトのチケットのみ表示
+            self.fields['ticket'].queryset = ProjectTicket.objects.filter(
+                project=self.instance.project,
+                is_active=True
+            ).order_by('title')
+        elif 'project' in self.data:
+            # フォーム送信時：選択されたプロジェクトのチケットのみ表示
+            try:
+                project_id = int(self.data.get('project'))
+                self.fields['ticket'].queryset = ProjectTicket.objects.filter(
+                    project_id=project_id,
+                    is_active=True
+                ).order_by('title')
+            except (ValueError, TypeError):
+                self.fields['ticket'].queryset = ProjectTicket.objects.none()
+        else:
+            # 新規作成時：プロジェクト未選択のため空
+            self.fields['ticket'].queryset = ProjectTicket.objects.none()
+        
+        self.fields['ticket'].empty_label = "チケットを選択"
+        
+        # 必須フィールドの設定
+        self.fields['year_month'].required = True
+        self.fields['business_partner'].required = True
+        self.fields['project'].required = True
+        self.fields['ticket'].required = True
+        self.fields['work_hours'].required = True
+        
+        # ヘルプテキスト設定
+        self.fields['year_month'].help_text = 'YYYY-MM形式で入力（例：2024-01）'
+        self.fields['work_hours'].help_text = '作業時間を時間単位で入力（例：8.0）'
+    
+    def clean_year_month(self):
+        """年月の形式チェック"""
+        year_month = self.cleaned_data.get('year_month')
+        if year_month:
+            import re
+            if not re.match(r'^\d{4}-\d{2}$', year_month):
+                raise forms.ValidationError('YYYY-MM形式で入力してください（例：2024-01）')
+            
+            # 年月の妥当性チェック
+            try:
+                year, month = map(int, year_month.split('-'))
+                if month < 1 or month > 12:
+                    raise forms.ValidationError('月は01〜12の範囲で入力してください')
+            except ValueError:
+                raise forms.ValidationError('正しい年月を入力してください')
+        
+        return year_month
+    
     def clean(self):
+        """フォーム全体のバリデーション"""
         cleaned_data = super().clean()
-        billing_type = cleaned_data.get('billing_type')
         
-        # 請求タイプに応じた単価の必須チェック
-        if billing_type == 'monthly' and not cleaned_data.get('monthly_billing'):
-            raise forms.ValidationError('月額請求タイプの場合、月額請求単価は必須です。')
-        elif billing_type == 'daily' and not cleaned_data.get('daily_billing'):
-            raise forms.ValidationError('日額請求タイプの場合、日額請求単価は必須です。')
-        elif billing_type == 'hourly' and not cleaned_data.get('hourly_billing'):
-            raise forms.ValidationError('時間請求タイプの場合、時間請求単価は必須です。')
-        elif billing_type == 'fixed' and not cleaned_data.get('fixed_billing'):
-            raise forms.ValidationError('固定請求タイプの場合、固定請求料金は必須です。')
+        # プロジェクトとチケットの整合性チェック
+        project = cleaned_data.get('project')
+        ticket = cleaned_data.get('ticket')
         
-        # 有効期間の整合性チェック
-        effective_from = cleaned_data.get('effective_from')
-        effective_to = cleaned_data.get('effective_to')
+        if project and ticket:
+            if ticket.project != project:
+                self.add_error('ticket', '選択されたチケットは選択されたプロジェクトに属していません。')
         
-        if effective_from and effective_to and effective_from >= effective_to:
-            raise forms.ValidationError('有効終了日は有効開始日より後の日付を設定してください。')
+        # ビジネスパートナーとプロジェクトの参加チェック
+        business_partner = cleaned_data.get('business_partner')
+        project = cleaned_data.get('project')
         
-        # 割引率の妥当性チェック
-        discount_rate = cleaned_data.get('discount_rate', 0)
-        if discount_rate < 0 or discount_rate > 100:
-            raise forms.ValidationError('割引率は0%から100%の範囲で設定してください。')
+        if business_partner and project:
+            if project not in business_partner.projects.all():
+                self.add_error('project', 'このビジネスパートナーは選択されたプロジェクトに参加していません。')
         
         return cleaned_data
+
+
+class OutsourcingCostFilterForm(forms.Form):
+    """外注費フィルターフォーム"""
+    
+    year_month = forms.CharField(
+        label='年月',
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': '2024-01'
+        })
+    )
+    business_partner = forms.ModelChoiceField(
+        label='ビジネスパートナー',
+        queryset=BusinessPartner.objects.filter(is_active=True).order_by('name'),
+        required=False,
+        empty_label="全てのBP",
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    project = forms.ModelChoiceField(
+        label='プロジェクト',
+        queryset=Project.objects.filter(is_active=True).order_by('name'),
+        required=False,
+        empty_label="全てのプロジェクト",
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    status = forms.ChoiceField(
+        label='ステータス',
+        choices=[('', '全てのステータス')] + OutsourcingCost.STATUS_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    case_classification = forms.ChoiceField(
+        label='案件分類',
+        choices=[('', '全ての案件分類')] + OutsourcingCost.CASE_CLASSIFICATION_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
