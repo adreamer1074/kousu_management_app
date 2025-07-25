@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from datetime import date, datetime
 from .models import WorkloadAggregation
-from apps.users.models import Department
+from apps.users.models import Department, Section
 from apps.projects.models import Project, ProjectTicket  # 既存のProjectTicketを使用
 
 User = get_user_model()
@@ -22,7 +22,7 @@ class WorkloadAggregationForm(forms.ModelForm):
         model = WorkloadAggregation
         fields = [
             # 基本情報
-            'project_name', 'case_name', 'department', 'status', 'case_classification',
+            'project_name', 'case_name', 'section', 'status', 'case_classification',
             # 日付関連
             'estimate_date', 'order_date', 'planned_end_date', 'actual_end_date', 'inspection_date',
             # 金額関連
@@ -40,7 +40,7 @@ class WorkloadAggregationForm(forms.ModelForm):
             # 基本情報
             'project_name': forms.Select(attrs={'class': 'form-select'}),
             'case_name': forms.Select(attrs={'class': 'form-select'}),
-            'department': forms.Select(attrs={'class': 'form-select'}),
+            'section': forms.Select(attrs={'class': 'form-select'}),
             'status': forms.Select(attrs={'class': 'form-select'}),
             'case_classification': forms.Select(attrs={'class': 'form-select'}),
             
@@ -117,9 +117,9 @@ class WorkloadAggregationForm(forms.ModelForm):
             ).order_by('title')
         
         # 部名
-        self.fields['department'].queryset = Department.objects.filter(is_active=True)
-        self.fields['department'].empty_label = "部署を選択してください"
-        
+        self.fields['section'].queryset = Section.objects.filter(is_active=True)
+        self.fields['section'].empty_label = "部署を選択してください"
+
         # MUB担当者
         self.fields['mub_manager'].queryset = User.objects.filter(
             is_active=True
@@ -178,11 +178,11 @@ class WorkloadAggregationFilterForm(forms.Form):
         empty_label="全てのチケット",
         widget=forms.Select(attrs={'class': 'form-select'})
     )
-    department = forms.ModelChoiceField(
-        label='部名',
-        queryset=Department.objects.filter(is_active=True),
+    section = forms.ModelChoiceField(
+        label='課名',
+        queryset=Section.objects.filter(is_active=True),
         required=False,
-        empty_label="全ての部署",
+        empty_label="全ての課",
         widget=forms.Select(attrs={'class': 'form-select'})
     )
     status = forms.ChoiceField(
