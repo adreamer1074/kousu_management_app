@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{% if object %}ビジネスパートナー編集{% else %}ビジネスパートナー登録{% endif %} | 工数管理システム{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- ページヘッダー -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="bi bi-person-plus"></i> 
+                {% if object %}ビジネスパートナー編集{% else %}ビジネスパートナー登録{% endif %}
+            </h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'cost_master:dashboard' %}">外注費管理</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'cost_master:business_partner_list' %}">ビジネスパートナー一覧</a></li>
+                    <li class="breadcrumb-item active">
+                        {% if object %}編集{% else %}新規登録{% endif %}
+                    </li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <a href="{% url 'cost_master:business_partner_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> 一覧に戻る
+            </a>
+        </div>
+    </div>
+
+    <!-- フォーム -->
+    <div class="row">
+        <div class="col-lg-8">
+            <form method="post">
+                {% csrf_token %}
+                
+                <!-- 基本情報 -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-person"></i> 基本情報
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.name.id_for_label }}" class="form-label">
+                                        {{ form.name.label }} <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.name }}
+                                    {% if form.name.errors %}
+                                    <div class="text-danger small">{{ form.name.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.company.id_for_label }}" class="form-label">
+                                        {{ form.company.label }}
+                                    </label>
+                                    {{ form.company }}
+                                    {% if form.company.errors %}
+                                    <div class="text-danger small">{{ form.company.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.email.id_for_label }}" class="form-label">
+                                        {{ form.email.label }}
+                                    </label>
+                                    {{ form.email }}
+                                    {% if form.email.errors %}
+                                    <div class="text-danger small">{{ form.email.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.phone.id_for_label }}" class="form-label">
+                                        {{ form.phone.label }}
+                                    </label>
+                                    {{ form.phone }}
+                                    {% if form.phone.errors %}
+                                    <div class="text-danger small">{{ form.phone.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 契約情報 -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-currency-yen"></i> 契約情報
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.hourly_rate.id_for_label }}" class="form-label">
+                                        {{ form.hourly_rate.label }} <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.hourly_rate }}
+                                    {% if form.hourly_rate.help_text %}
+                                    <div class="form-text">{{ form.hourly_rate.help_text }}</div>
+                                    {% endif %}
+                                    {% if form.hourly_rate.errors %}
+                                    <div class="text-danger small">{{ form.hourly_rate.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="mb-3">
+                                    <label for="{{ form.projects.id_for_label }}" class="form-label">
+                                        {{ form.projects.label }}
+                                    </label>
+                                    {{ form.projects }}
+                                    {% if form.projects.help_text %}
+                                    <div class="form-text">{{ form.projects.help_text }}</div>
+                                    {% endif %}
+                                    {% if form.projects.errors %}
+                                    <div class="text-danger small">{{ form.projects.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 備考 -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-chat-text"></i> 備考
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="{{ form.notes.id_for_label }}" class="form-label">
+                                {{ form.notes.label }}
+                            </label>
+                            {{ form.notes }}
+                            {% if form.notes.errors %}
+                            <div class="text-danger small">{{ form.notes.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- フォームエラー -->
+                {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {{ form.non_field_errors }}
+                </div>
+                {% endif %}
+
+                <!-- 送信ボタン -->
+                <div class="d-flex justify-content-between">
+                    <a href="{% url 'cost_master:business_partner_list' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-x-circle"></i> キャンセル
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle"></i> 
+                        {% if object %}更新{% else %}登録{% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- サイドバー -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="bi bi-info-circle"></i> 入力ガイド
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <h6><i class="bi bi-person text-primary"></i> 基本情報</h6>
+                    <ul class="small">
+                        <li><strong>氏名</strong>: 必須項目です</li>
+                        <li><strong>会社名</strong>: 所属会社（任意）</li>
+                        <li><strong>連絡先</strong>: メール・電話番号（任意）</li>
+                    </ul>
+
+                    <h6 class="mt-3"><i class="bi bi-currency-yen text-primary"></i> 契約情報</h6>
+                    <ul class="small">
+                        <li><strong>時間単価</strong>: 必須項目です</li>
+                        <li>外注費計算に使用されます</li>
+                        <li><strong>参加プロジェクト</strong>: 複数選択可能</li>
+                    </ul>
+
+                    <h6 class="mt-3"><i class="bi bi-gear text-primary"></i> 設定</h6>
+                    <ul class="small">
+                        <li>プロジェクト未参加でも登録可能</li>
+                        <li>後からプロジェクト追加可能</li>
+                        <li>無効化で削除代替可能</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
