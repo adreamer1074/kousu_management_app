@@ -38,10 +38,10 @@ class WorkloadAggregation(models.Model):
         verbose_name='案件名（チケット）',
         related_name='workload_aggregations'
     )
-    department = models.ForeignKey(
-        'users.Department',
+    section = models.ForeignKey(
+        'users.Section',
         on_delete=models.CASCADE,
-        verbose_name='部名'
+        verbose_name='課名'
     )
     
     # 既存のフィールドはそのまま維持

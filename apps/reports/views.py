@@ -18,7 +18,7 @@ import calendar
 
 from .models import ReportExport, WorkloadAggregation
 from .forms import WorkloadAggregationForm, WorkloadAggregationFilterForm
-from apps.users.models import Department
+from apps.users.models import Department, Section
 
 User = get_user_model()
 
@@ -31,7 +31,7 @@ class WorkloadAggregationListView(LoginRequiredMixin, ListView):
     
     def get_queryset(self):
         queryset = WorkloadAggregation.objects.select_related(
-            'case_name', 'department', 'mub_manager', 'created_by'
+            'case_name', 'section', 'mub_manager', 'created_by'
         ).order_by('-order_date', '-created_at')
         
         # フィルター処理
@@ -41,8 +41,8 @@ class WorkloadAggregationListView(LoginRequiredMixin, ListView):
                 queryset = queryset.filter(project_name__icontains=form.cleaned_data['project_name'])
             if form.cleaned_data.get('case_name'):
                 queryset = queryset.filter(case_name=form.cleaned_data['case_name'])
-            if form.cleaned_data.get('department'):
-                queryset = queryset.filter(department=form.cleaned_data['department'])
+            if form.cleaned_data.get('section'):
+                queryset = queryset.filter(section=form.cleaned_data['section'])
             if form.cleaned_data.get('status'):
                 queryset = queryset.filter(status=form.cleaned_data['status'])
             if form.cleaned_data.get('case_classification'):
@@ -80,7 +80,7 @@ class WorkloadAggregationListView(LoginRequiredMixin, ListView):
         context['current_filters'] = {
             'project_name': self.request.GET.get('project_name', ''),
             'case_name_id': self.request.GET.get('case_name', ''),
-            'department_id': self.request.GET.get('department', ''),
+            'section_id': self.request.GET.get('section', ''),
             'status': self.request.GET.get('status', ''),
             'case_classification': self.request.GET.get('case_classification', ''),
             'search': self.request.GET.get('search', ''),
@@ -171,7 +171,7 @@ def workload_export(request):
     
     # フィルター適用
     queryset = WorkloadAggregation.objects.select_related(
-        'case_name', 'department', 'mub_manager'
+        'case_name', 'section', 'mub_manager'
     ).order_by('-order_date')
     
     # URLパラメータでフィルター
@@ -186,7 +186,7 @@ def workload_export(request):
         writer.writerow([
             workload.project_name,
             workload.case_name.name,
-            workload.department.name,
+            workload.section.name,
             workload.get_status_display(),
             workload.get_case_classification_display(),
             workload.estimate_date.strftime('%Y-%m-%d') if workload.estimate_date else '',

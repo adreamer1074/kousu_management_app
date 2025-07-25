@@ -15,13 +15,13 @@ except ImportError as e:
 class WorkloadAggregationAdmin(admin.ModelAdmin):
     """工数集計管理"""
     list_display = [
-        'project_name', 'case_name', 'department', 'status', 'case_classification',
+        'project_name', 'case_name', 'section', 'status', 'case_classification',
         'order_date', 'actual_end_date', 'available_amount', 'billing_amount_excluding_tax',
         'used_workdays', 'newbie_workdays', 'total_used_workdays_display',
         'remaining_amount_display', 'profit_rate_display', 'created_at'
     ]
     list_filter = [
-        'status', 'case_classification', 'department', 'order_date', 'actual_end_date',
+        'status', 'case_classification', 'section', 'order_date', 'actual_end_date',
         'created_at', 'updated_at'
     ]
     search_fields = [
@@ -36,7 +36,7 @@ class WorkloadAggregationAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('基本情報', {
-            'fields': ('project_name', 'case_name', 'department', 'status', 'case_classification')
+            'fields': ('project_name', 'case_name', 'section', 'status', 'case_classification')
         }),
         ('日付情報', {
             'fields': ('estimate_date', 'order_date', 'planned_end_date', 'actual_end_date', 'inspection_date')
