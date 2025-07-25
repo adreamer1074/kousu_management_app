@@ -101,15 +101,15 @@
                                 <i class="bi bi-calculator"></i> コスト管理
                             </a>
                             <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="{% url 'cost_master:cost_master_list' %}">
-                                    <i class="bi bi-list-ul"></i> コストマスター一覧
+                                <li><a class="dropdown-item" href="{% url 'cost_master:dashboard' %}">
+                                    <i class="bi bi-list-ul"></i> 外注費
                                 </a></li>
-                                <li><a class="dropdown-item" href="{% url 'cost_master:cost_master_create' %}">
+                                <li><a class="dropdown-item" href="{% url 'cost_master:outsourcing_cost_create' %}">
                                     <i class="bi bi-plus-circle"></i> 新規作成
                                 </a></li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{% url 'cost_master:project_cost_setting_list' %}">
-                                    <i class="bi bi-gear"></i> 案件別設定
+                                <li><a class="dropdown-item" href="{% url 'cost_master:outsourcing_cost_list' %}">
+                                    <i class="bi bi-gear"></i> 外注費一覧
                                 </a></li>
                             </ul>
                         </li>
