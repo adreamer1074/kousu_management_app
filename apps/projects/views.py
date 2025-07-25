@@ -33,10 +33,6 @@ class ProjectListView(LoginRequiredMixin, ListView):
                 Q(description__icontains=search)
             )
         
-        # ステータスフィルター
-        status = self.request.GET.get('status', '')
-        if status:
-            queryset = queryset.filter(status=status)
         
         # 担当課フィルター
         assigned_section = self.request.GET.get('assigned_section', '')
@@ -49,14 +45,14 @@ class ProjectListView(LoginRequiredMixin, ListView):
         context = super().get_context_data(**kwargs)
         
         # フィルター用のデータ
-        context['status_choices'] = Project.STATUS_CHOICES
+        # context['status_choices'] = Project.STATUS_CHOICES
         
         from apps.users.models import Section
         context['sections'] = Section.objects.filter(is_active=True).select_related('department').order_by('department__name', 'name')
         
         # 現在のフィルター値
         context['current_search'] = self.request.GET.get('search', '')
-        context['current_status'] = self.request.GET.get('status', '')
+        # context['current_status'] = self.request.GET.get('status', '')
         context['current_assigned_section'] = self.request.GET.get('assigned_section', '')
         
         return context
@@ -179,17 +175,11 @@ def get_tickets_api(request):
 
 @login_required
 def get_project_tickets_api(request, project_id):
-    """特定プロジェクトのチケット一覧取得API（新規追加）"""
+    """プロジェクトのチケット一覧取得API"""
     try:
-        # プロジェクトが存在するかチェック
-        project = get_object_or_404(Project, id=project_id)
-        
-        # そのプロジェクトのチケット一覧を取得
-        tickets = ProjectTicket.objects.filter(
-            project=project,
-            is_active=True  # アクティブなチケットのみ
-        ).select_related('project').values(
-            'id', 'title', 'status', 'priority', 'description'
+        project = get_object_or_404(Project, pk=project_id, is_active=True)
+        tickets = project.tickets.filter(is_active=True).values(
+            'id', 'title', 'case_classification', 'status'
         ).order_by('title')
         
         return JsonResponse({
@@ -197,16 +187,9 @@ def get_project_tickets_api(request, project_id):
             'tickets': list(tickets),
             'project_name': project.name
         })
-        
-    except Project.DoesNotExist:
-        return JsonResponse({
-            'success': False,
-            'error': '指定されたプロジェクトが見つかりません。',
-            'tickets': []
-        })
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'サーバーエラー: {str(e)}',
+            'error': str(e),
             'tickets': []
         })

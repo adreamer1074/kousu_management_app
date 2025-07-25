@@ -11,7 +11,7 @@ from datetime import date, datetime, timedelta
 from django.contrib.auth import get_user_model
 import json
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_POST
 from django.contrib.auth.decorators import login_required
 from datetime import datetime, date
 import calendar
@@ -19,6 +19,7 @@ import calendar
 from .models import ReportExport, WorkloadAggregation
 from .forms import WorkloadAggregationForm, WorkloadAggregationFilterForm
 from apps.users.models import Department, Section
+from apps.projects.models import ProjectTicket
 
 User = get_user_model()
 
@@ -264,16 +265,10 @@ def calculate_workdays_api(request):
             return JsonResponse({'success': False, 'error': 'チケットIDが必要です。'})
         
         from apps.workloads.models import Workload
-        from apps.projects.models import ProjectTicket
         from decimal import Decimal
         
-        try:
-            ticket = ProjectTicket.objects.get(id=case_id)
-        except ProjectTicket.DoesNotExist:
-            return JsonResponse({'success': False, 'error': '指定されたチケットが見つかりません。'})
-        
         # 工数データの取得（Workloadモデル）
-        workloads_query = Workload.objects.filter(ticket=ticket)
+        workloads_query = Workload.objects.filter(ticket__id=case_id)
         
         # 日付フィルター適用（年月ベースで）
         target_year_months = set()
@@ -364,4 +359,53 @@ def calculate_workdays_api(request):
         return JsonResponse({
             'success': False, 
             'error': f'サーバーエラー: {str(e)}'
+        })
+
+@login_required
+@require_POST
+def calculate_workdays_ajax(request):
+    """AJAX工数計算エンドポイント"""
+    try:
+        ticket_id = request.POST.get('ticket_id')
+        classification = request.POST.get('classification', 'development')
+        
+        if not ticket_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'チケットIDが指定されていません'
+            })
+        
+        # チケットを取得
+        try:
+            ticket = ProjectTicket.objects.get(id=ticket_id, is_active=True)
+        except ProjectTicket.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': '指定されたチケットが見つかりません'
+            })
+        
+        # 一時的な工数集計インスタンスを作成
+        temp_aggregation = WorkloadAggregation()
+        temp_aggregation.case_name = ticket
+        temp_aggregation.case_classification = classification
+        
+        # 工数計算実行
+        result = temp_aggregation.calculate_workdays_from_workload()
+        
+        return JsonResponse({
+            'success': True,
+            'used_workdays': float(result['used_workdays']),
+            'newbie_workdays': float(result['newbie_workdays']),
+            'total_workdays': float(result['total_workdays']),
+            'debug_info': result['debug_info']
+        })
+        
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"AJAX工数計算エラー: {str(e)}")
+        
+        return JsonResponse({
+            'success': False,
+            'error': f'計算エラー: {str(e)}'
         })

@@ -56,6 +56,10 @@
     .alert-info {
         border-left: 4px solid #17a2b8;
     }
+    .workdays-calculation-info {
+        font-size: 0.9rem;
+        margin-top: 0.5rem;
+    }
 </style>
 {% endblock %}
 
@@ -529,20 +533,24 @@
 </div>
 {% endblock %}
 
-<!-- JavaScriptセクション -->
+<!-- 統合されたJavaScriptセクション -->
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // DOM要素の取得
     const projectSelect = document.getElementById('{{ form.project_name.id_for_label }}');
     const caseNameSelect = document.getElementById('{{ form.case_name.id_for_label }}');
+    const classificationSelect = document.getElementById('{{ form.case_classification.id_for_label }}');
+    const autoCalculateCheckbox = document.getElementById('{{ form.auto_calculate_workdays.id_for_label }}');
+    const usedWorkdaysField = document.getElementById('{{ form.used_workdays.id_for_label }}');
+    const newbieWorkdaysField = document.getElementById('{{ form.newbie_workdays.id_for_label }}');
     const orderDateInput = document.getElementById('{{ form.order_date.id_for_label }}');
     const actualEndDateInput = document.getElementById('{{ form.actual_end_date.id_for_label }}');
     const calculateButton = document.getElementById('calculateWorkdays');
     const form = document.getElementById('workloadForm');
     
-    // プロジェクト選択時のチケットフィルタリング
-    if (projectSelect) {
+    // プロジェクト選択時にチケット一覧を更新
+    if (projectSelect && caseNameSelect) {
         projectSelect.addEventListener('change', function() {
             const projectId = this.value;
             
@@ -559,6 +567,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 const option = document.createElement('option');
                                 option.value = ticket.id;
                                 option.textContent = ticket.title;
+                                option.setAttribute('data-classification', ticket.case_classification);
                                 caseNameSelect.appendChild(option);
                             });
                         }
@@ -570,11 +579,119 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // 工数自動取得機能
+    // チケット選択時に工数をリアルタイム計算
+    if (caseNameSelect) {
+        caseNameSelect.addEventListener('change', function() {
+            const ticketId = this.value;
+            const selectedOption = this.options[this.selectedIndex];
+            
+            if (ticketId && autoCalculateCheckbox && autoCalculateCheckbox.checked) {
+                // 案件分類を自動設定
+                const classification = selectedOption.getAttribute('data-classification');
+                if (classification && classificationSelect) {
+                    classificationSelect.value = classification;
+                }
+                
+                // 工数をリアルタイム計算
+                calculateWorkdays(ticketId, classification);
+            } else {
+                // 工数をリセット
+                fetchWorkHours(ticketId);
+            }
+        });
+        
+        // 初期値がある場合
+        if (caseNameSelect.value) {
+            fetchWorkHours(caseNameSelect.value);
+        }
+    }
+    
+    // 案件分類変更時にも工数を再計算
+    if (classificationSelect) {
+        classificationSelect.addEventListener('change', function() {
+            const ticketId = caseNameSelect ? caseNameSelect.value : null;
+            const classification = this.value;
+            
+            if (ticketId && autoCalculateCheckbox && autoCalculateCheckbox.checked) {
+                calculateWorkdays(ticketId, classification);
+            }
+        });
+    }
+    
+    // 工数計算関数（リアルタイム用）
+    function calculateWorkdays(ticketId, classification) {
+        if (!ticketId) return;
+        
+        // ローディング表示
+        if (usedWorkdaysField) {
+            usedWorkdaysField.value = '計算中...';
+            usedWorkdaysField.style.backgroundColor = '#fff3cd';
+        }
+        if (newbieWorkdaysField) {
+            newbieWorkdaysField.value = '計算中...';
+            newbieWorkdaysField.style.backgroundColor = '#fff3cd';
+        }
+        
+        // AJAX で工数計算
+        const formData = new FormData();
+        formData.append('ticket_id', ticketId);
+        formData.append('classification', classification || 'development');
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        
+        fetch('/reports/calculate-workdays/', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (usedWorkdaysField) {
+                    usedWorkdaysField.value = parseFloat(data.used_workdays).toFixed(1);
+                    usedWorkdaysField.style.backgroundColor = '#d1edff';
+                }
+                if (newbieWorkdaysField) {
+                    newbieWorkdaysField.value = parseFloat(data.newbie_workdays).toFixed(1);
+                    newbieWorkdaysField.style.backgroundColor = '#d1edff';
+                }
+                
+                // デバッグ情報をコンソールに出力
+                console.log('工数計算結果:', data.debug_info);
+                
+                // 分類説明を表示
+                showClassificationInfo(classification, data.debug_info);
+                
+                // 自動計算を実行
+                calculateValues();
+            } else {
+                console.error('工数計算エラー:', data.error);
+                if (usedWorkdaysField) {
+                    usedWorkdaysField.value = '0.0';
+                    usedWorkdaysField.style.backgroundColor = '#f8d7da';
+                }
+                if (newbieWorkdaysField) {
+                    newbieWorkdaysField.value = '0.0';
+                    newbieWorkdaysField.style.backgroundColor = '#f8d7da';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('AJAX エラー:', error);
+            if (usedWorkdaysField) {
+                usedWorkdaysField.value = 'エラー';
+                usedWorkdaysField.style.backgroundColor = '#f8d7da';
+            }
+            if (newbieWorkdaysField) {
+                newbieWorkdaysField.value = 'エラー';
+                newbieWorkdaysField.style.backgroundColor = '#f8d7da';
+            }
+        });
+    }
+    
+    // 従来の工数自動取得機能（期間考慮版）
     async function fetchWorkHours(caseId) {
         if (!caseId) {
-            document.getElementById('{{ form.used_workdays.id_for_label }}').value = '0.0';
-            document.getElementById('{{ form.newbie_workdays.id_for_label }}').value = '0.0';
+            if (usedWorkdaysField) usedWorkdaysField.value = '0.0';
+            if (newbieWorkdaysField) newbieWorkdaysField.value = '0.0';
             calculateValues();
             return;
         }
@@ -602,8 +719,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('APIレスポンスデータ:', data);
                 
                 if (data.success) {
-                    document.getElementById('{{ form.used_workdays.id_for_label }}').value = data.used_workdays.toFixed(1);
-                    document.getElementById('{{ form.newbie_workdays.id_for_label }}').value = data.newbie_workdays.toFixed(1);
+                    if (usedWorkdaysField) usedWorkdaysField.value = data.used_workdays.toFixed(1);
+                    if (newbieWorkdaysField) newbieWorkdaysField.value = data.newbie_workdays.toFixed(1);
                     calculateValues();
                     
                     // 成功メッセージ表示
@@ -620,7 +737,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 } else {
                     console.error('工数取得エラー:', data.error);
-                    // エラーメッセージをユーザーに表示
                     showErrorMessage('工数の取得に失敗しました: ' + data.error);
                 }
             } else {
@@ -632,15 +748,65 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // 案件選択時の工数自動取得
-    if (caseNameSelect) {
-        caseNameSelect.addEventListener('change', function() {
-            fetchWorkHours(this.value);
-        });
+    // 分類情報表示
+    function showClassificationInfo(classification, debugInfo) {
+        // 既存の情報を削除
+        const existingInfo = document.querySelector('.workdays-calculation-info');
+        if (existingInfo) existingInfo.remove();
         
-        // 初期値がある場合
-        if (caseNameSelect.value) {
-            fetchWorkHours(caseNameSelect.value);
+        // 新しい情報を作成
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'alert alert-info workdays-calculation-info mt-2';
+        
+        let infoText = '';
+        if (classification === 'development') {
+            infoText = `<i class="bi bi-info-circle"></i> <strong>開発案件</strong>: 全期間の工数が計算されました<br>`;
+            if (debugInfo && debugInfo.対象工数レコード数 !== undefined) {
+                infoText += `対象レコード数: ${debugInfo.対象工数レコード数}`;
+                if (debugInfo.全工数レコード数 !== undefined) {
+                    infoText += ` / ${debugInfo.全工数レコード数}`;
+                }
+                infoText += `<br>`;
+            }
+            if (debugInfo && debugInfo.適用期間) {
+                infoText += `適用期間: ${debugInfo.適用期間}`;
+            }
+        } else {
+            infoText = `<i class="bi bi-calendar"></i> <strong>保守・その他</strong>: 受注日〜終了日の期間で計算されました<br>`;
+            if (debugInfo && debugInfo.対象工数レコード数 !== undefined) {
+                infoText += `対象レコード数: ${debugInfo.対象工数レコード数}`;
+                if (debugInfo.全工数レコード数 !== undefined) {
+                    infoText += ` / ${debugInfo.全工数レコード数}`;
+                }
+                infoText += `<br>`;
+            }
+            if (debugInfo && debugInfo.適用期間) {
+                infoText += `適用期間: ${debugInfo.適用期間}`;
+            }
+        }
+        
+        infoDiv.innerHTML = infoText;
+        
+        // 工数フィールドの後に挿入
+        if (newbieWorkdaysField && newbieWorkdaysField.parentNode) {
+            newbieWorkdaysField.parentNode.parentNode.appendChild(infoDiv);
+        }
+    }
+    
+    // エラーメッセージ表示
+    function showErrorMessage(message) {
+        // 既存のエラーメッセージを削除
+        const existingError = document.querySelector('.workdays-error-message');
+        if (existingError) existingError.remove();
+        
+        // 新しいエラーメッセージを作成
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'alert alert-danger workdays-error-message mt-2';
+        errorDiv.innerHTML = `<i class="bi bi-exclamation-triangle"></i> ${message}`;
+        
+        // 工数フィールドの後に挿入
+        if (newbieWorkdaysField && newbieWorkdaysField.parentNode) {
+            newbieWorkdaysField.parentNode.parentNode.appendChild(errorDiv);
         }
     }
     
@@ -648,6 +814,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (calculateButton) {
         calculateButton.addEventListener('click', function() {
             const caseId = caseNameSelect ? caseNameSelect.value : null;
+            const classification = classificationSelect ? classificationSelect.value : 'development';
             
             if (!caseId) {
                 alert('案件を選択してください。');
@@ -655,9 +822,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // 工数を再取得
-            fetchWorkHours(caseId).then(() => {
-                alert('工数を再計算しました。');
-            });
+            if (autoCalculateCheckbox && autoCalculateCheckbox.checked) {
+                calculateWorkdays(caseId, classification);
+            } else {
+                fetchWorkHours(caseId);
+            }
         });
     }
     
@@ -673,20 +842,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const usedWorkdays = parseFloat(document.getElementById('{{ form.used_workdays.id_for_label }}').value) || 0;
         const newbieWorkdays = parseFloat(document.getElementById('{{ form.newbie_workdays.id_for_label }}').value) || 0;
         const unitCost = parseFloat(document.getElementById('{{ form.unit_cost_per_month.id_for_label }}').value) || 0;
-        const billingUnitCost = parseFloat(document.getElementById('{{ form.billing_unit_cost_per_month.id_for_label }}').value) || 0;  
-        // 残金額計算
-        const remainingAmount = remainingWorkdays * (billingUnitCost*20/10000);
-        const remainingAmountElement = document.getElementById('remainingAmount');
-        if (remainingAmountElement) {
-            remainingAmountElement.textContent = `¥${remainingAmount.toLocaleString()}`;
-        }
-        
-        // 利益率計算
-        const profitRate = billingAmount > 0 ? ((remainingAmount-billingAmount) / billingAmount * 100) : 0;
-        const profitRateElement = document.getElementById('profitRate');
-        if (profitRateElement) {
-            profitRateElement.textContent = `${profitRate.toFixed(1)}%`;
-        }
+        const billingUnitCost = parseFloat(document.getElementById('{{ form.billing_unit_cost_per_month.id_for_label }}').value) || 0;
         
         // 使用工数合計計算
         const totalUsedWorkdays = usedWorkdays + newbieWorkdays;
@@ -702,25 +858,33 @@ document.addEventListener('DOMContentLoaded', function() {
             remainingWorkdaysElement.textContent = `${remainingWorkdays.toFixed(1)}人日`;
         }
         
+        // 残金額計算
+        const remainingAmount = remainingWorkdays * (billingUnitCost * 20 / 10000);
+        const remainingAmountElement = document.getElementById('remainingAmount');
+        if (remainingAmountElement) {
+            remainingAmountElement.textContent = `¥${remainingAmount.toLocaleString()}`;
+        }
+        
+        // 利益率計算
+        const profitRate = billingAmount > 0 ? ((remainingAmount - billingAmount) / billingAmount * 100) : 0;
+        const profitRateElement = document.getElementById('profitRate');
+        if (profitRateElement) {
+            profitRateElement.textContent = `${profitRate.toFixed(1)}%`;
+        }
+        
         // 仕掛中金額計算（月20日として計算）
         const wipAmountElement = document.getElementById('wipAmount');
-        if (form.case_classification.value === 'development' && (form.status.value === 'in_progress' || form.status.value === 'active')) {
+        if (classificationSelect && classificationSelect.value === 'development') {
             // 開発案件の場合のみ自動計算（月20日で計算）
             const wipAmount = (totalUsedWorkdays * (billingUnitCost / 20)) + outsourcingCost;
             if (wipAmountElement) {
-            wipAmountElement.textContent = `¥${(wipAmount * 10000).toLocaleString()}`;
+                wipAmountElement.textContent = `¥${(wipAmount * 10000).toLocaleString()}`;
             }
         } else {
             // それ以外は空表示
             if (wipAmountElement) {
-            wipAmountElement.textContent = '0.0';
+                wipAmountElement.textContent = '0.0';
             }
-        }
-        // 案件分類の変更時も再計算
-        const caseClassificationField = document.getElementById('{{ form.case_classification.id_for_label }}');
-        if (caseClassificationField && !caseClassificationField._wipListenerAdded) {
-            caseClassificationField.addEventListener('change', calculateValues);
-            caseClassificationField._wipListenerAdded = true;
         }
     }
     
@@ -732,7 +896,8 @@ document.addEventListener('DOMContentLoaded', function() {
         '{{ form.estimated_workdays.id_for_label }}',
         '{{ form.used_workdays.id_for_label }}',
         '{{ form.newbie_workdays.id_for_label }}',
-        '{{ form.unit_cost_per_month.id_for_label }}'
+        '{{ form.unit_cost_per_month.id_for_label }}',
+        '{{ form.billing_unit_cost_per_month.id_for_label }}'
     ];
     
     calculationFields.forEach(fieldId => {
@@ -743,6 +908,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
+    // 案件分類の変更時も再計算
+    if (classificationSelect) {
+        classificationSelect.addEventListener('change', calculateValues);
+    }
+    
     // フォームバリデーション
     if (form) {
         form.addEventListener('submit', function(e) {
@@ -752,7 +922,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const requiredFields = [
                 '{{ form.project_name.id_for_label }}',
                 '{{ form.case_name.id_for_label }}',
-                '{{ form.department.id_for_label }}',
+                '{{ form.section.id_for_label }}',
                 '{{ form.status.id_for_label }}',
                 '{{ form.case_classification.id_for_label }}'
             ];

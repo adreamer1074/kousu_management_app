@@ -164,7 +164,7 @@ class WorkloadAggregation(models.Model):
         return f"{self.project_name.name} - {self.case_name.title}"
     
     def calculate_workdays_from_workload(self):
-        """工数登録機能から工数を自動計算（Workloadモデル対応版）"""
+        """工数登録機能から工数を自動計算（開発タイプは全期間対応版）"""
         from apps.workloads.models import Workload
         from decimal import Decimal
         from datetime import datetime, date
@@ -173,34 +173,41 @@ class WorkloadAggregation(models.Model):
         # チケットに関連する工数を取得
         workloads = Workload.objects.filter(ticket=self.case_name)
         
-        # 日付フィルター適用（年月ベースで）
-        target_year_months = set()
+        # チケットの分類を確認（開発タイプかどうか）
+        is_development = self.case_classification == self.CaseClassificationChoices.DEVELOPMENT
         
-        if self.order_date:
-            start_date = self.order_date
-        else:
-            # デフォルトは現在年月から6ヶ月前
-            start_date = date.today().replace(day=1)
-        
-        if self.actual_end_date:
-            end_date = self.actual_end_date
-        else:
-            # デフォルトは現在年月
-            end_date = date.today()
-        
-        # 対象年月のリストを作成
-        current_date = start_date.replace(day=1)
-        while current_date <= end_date:
-            target_year_months.add(current_date.strftime('%Y-%m'))
-            # 次の月へ
-            if current_date.month == 12:
-                current_date = current_date.replace(year=current_date.year + 1, month=1)
+        # 開発タイプでない場合のみ期間フィルターを適用
+        if not is_development:
+            # 保守・その他のタイプの場合は従来通り期間フィルター適用
+            target_year_months = set()
+            
+            if self.order_date:
+                start_date = self.order_date
             else:
-                current_date = current_date.replace(month=current_date.month + 1)
+                # デフォルトは現在年月から6ヶ月前
+                start_date = date.today().replace(day=1)
+            
+            if self.actual_end_date:
+                end_date = self.actual_end_date
+            else:
+                # デフォルトは現在年月
+                end_date = date.today()
+            
+            # 対象年月のリストを作成
+            current_date = start_date.replace(day=1)
+            while current_date <= end_date:
+                target_year_months.add(current_date.strftime('%Y-%m'))
+                # 次の月へ
+                if current_date.month == 12:
+                    current_date = current_date.replace(year=current_date.year + 1, month=1)
+                else:
+                    current_date = current_date.replace(month=current_date.month + 1)
+            
+            # 対象年月でフィルター（保守・その他のみ）
+            if target_year_months:
+                workloads = workloads.filter(year_month__in=target_year_months)
         
-        # 対象年月でフィルター
-        if target_year_months:
-            workloads = workloads.filter(year_month__in=target_year_months)
+        # 開発タイプの場合はworkloadsをそのまま使用（全期間対象）
         
         # 一般使用工数と新入社員工数を分離
         regular_workdays = Decimal('0.0')
@@ -212,7 +219,7 @@ class WorkloadAggregation(models.Model):
             if hasattr(workload.user, 'employee_level') and workload.user.employee_level == 'junior':
                 is_junior = True
             
-            # 各日の工数を合計（日付範囲内のみ）
+            # 各日の工数を合計
             workload_year_month = workload.year_month
             year, month = map(int, workload_year_month.split('-'))
             
@@ -220,12 +227,14 @@ class WorkloadAggregation(models.Model):
             days_in_month = calendar.monthrange(year, month)[1]
             
             for day in range(1, days_in_month + 1):
-                # 日付範囲チェック
-                current_day = date(year, month, day)
-                if self.order_date and current_day < self.order_date:
-                    continue
-                if self.actual_end_date and current_day > self.actual_end_date:
-                    continue
+                # 開発タイプの場合は日付範囲チェックを完全にスキップ
+                if not is_development:
+                    # 保守・その他のタイプの場合のみ日付範囲チェック
+                    current_day = date(year, month, day)
+                    if self.order_date and current_day < self.order_date:
+                        continue
+                    if self.actual_end_date and current_day > self.actual_end_date:
+                        continue
                 
                 # その日の工数を取得
                 day_hours = workload.get_day_value(day)
@@ -240,10 +249,42 @@ class WorkloadAggregation(models.Model):
         self.used_workdays = regular_workdays / 8
         self.newbie_workdays = newbie_workdays / 8
         
+        # デバッグ情報を返す
+        all_workloads_count = Workload.objects.filter(ticket=self.case_name).count()
+        filtered_workloads_count = workloads.count()
+        
+        debug_info = {
+            'チケット分類': self.get_case_classification_display(),
+            '開発タイプ判定': is_development,
+            '期間フィルター適用': not is_development,
+            '全工数レコード数': all_workloads_count,
+            '対象工数レコード数': filtered_workloads_count,
+            '一般工数（時間）': float(regular_workdays),
+            '新入社員工数（時間）': float(newbie_workdays),
+            '一般工数（人日）': float(self.used_workdays),
+            '新入社員工数（人日）': float(self.newbie_workdays),
+        }
+        
+        if is_development:
+            debug_info['適用期間'] = "開発タイプのため全期間対象"
+            debug_info['年月フィルター'] = "なし（全期間）"
+        else:
+            if self.order_date and self.actual_end_date:
+                debug_info['適用期間'] = f"{self.order_date} ～ {self.actual_end_date}"
+            else:
+                debug_info['適用期間'] = "受注日・終了日未設定のため制限なし"
+            
+            # 対象年月をデバッグ情報に追加
+            if 'target_year_months' in locals():
+                debug_info['対象年月リスト'] = sorted(list(target_year_months))
+            else:
+                debug_info['対象年月リスト'] = "フィルターなし"
+        
         return {
             'used_workdays': self.used_workdays,
             'newbie_workdays': self.newbie_workdays,
-            'total_workdays': self.used_workdays + self.newbie_workdays
+            'total_workdays': self.used_workdays + self.newbie_workdays,
+            'debug_info': debug_info
         }
     
     # 既存のpropertyメソッドはそのまま維持
