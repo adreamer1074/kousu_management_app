@@ -11,7 +11,7 @@ class ProjectForm(forms.ModelForm):
     class Meta:
         model = Project
         fields = [
-            'name', 'description', 'client', 'status', 
+            'name', 'description', 'client', 
             'start_date', 'end_date', 'budget', 
             'assigned_section', 'assigned_users'
         ]
@@ -28,9 +28,6 @@ class ProjectForm(forms.ModelForm):
             'client': forms.TextInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'クライアント名を入力してください'
-            }),
-            'status': forms.Select(attrs={
-                'class': 'form-select'
             }),
             'start_date': forms.DateInput(attrs={
                 'class': 'form-control',

@@ -18,4 +18,7 @@ urlpatterns = [
     
     # 工数自動計算API
     path('api/calculate-workdays/', views.calculate_workdays_api, name='calculate_workdays_api'),
+    
+    # AJAX工数計算
+    path('calculate-workdays/', views.calculate_workdays_ajax, name='calculate_workdays_ajax'),
 ]

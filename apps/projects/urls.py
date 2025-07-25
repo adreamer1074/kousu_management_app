@@ -15,6 +15,6 @@ urlpatterns = [
     path('<int:project_pk>/tickets/create/', views.ProjectTicketCreateView.as_view(), name='ticket_create'),
     
     # API関連のURL
+    path('api/<int:project_id>/tickets/', views.get_project_tickets_api, name='get_project_tickets_api'),
     path('api/tickets/', views.get_tickets_api, name='get_tickets_api'),
-    path('api/<int:project_id>/tickets/', views.get_project_tickets_api, name='get_project_tickets_api'),  # 新規追加
 ]
