@@ -1,303 +1,321 @@
-from django.shortcuts import render, redirect, get_object_or_404
-from django.views.generic import ListView, CreateView, DetailView, UpdateView, DeleteView
+from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
-from django.contrib.admin.views.decorators import staff_member_required
-from django.utils.decorators import method_decorator
 from django.contrib import messages
+from django.views.generic import ListView, CreateView, UpdateView, DeleteView
 from django.urls import reverse_lazy
-from django.http import JsonResponse, HttpResponse
-from django.db.models import Q, Count, Avg
-from datetime import date, datetime, timedelta
+from django.http import JsonResponse
+from django.db.models import Q, Sum, Count
+from django.core.paginator import Paginator
+from datetime import date
+import json
 
-from .models import CostMaster  # 存在するモデルのみインポート
-from .forms import CostMasterForm
-from apps.users.models import Department, CustomUser
+from .models import BusinessPartner, OutsourcingCost, OutsourcingCostSummary
+from .forms import BusinessPartnerForm, OutsourcingCostForm, OutsourcingCostFilterForm
+from apps.projects.models import Project, ProjectTicket
 
-@method_decorator(staff_member_required, name='dispatch')
-class CostMasterListView(LoginRequiredMixin, ListView):
-    """コストマスター一覧画面"""
-    model = CostMaster
-    template_name = 'cost_master/cost_master_list.html'
-    context_object_name = 'cost_masters'
+
+# ダッシュボード
+@login_required
+def outsourcing_dashboard(request):
+    """外注費管理ダッシュボード"""
+    current_month = date.today().strftime('%Y-%m')
+    
+    # 当月の集計
+    current_summary = OutsourcingCostSummary.calculate_summary(current_month)
+    
+    # 最近の外注費レコード
+    recent_costs = OutsourcingCost.objects.select_related(
+        'business_partner', 'project', 'ticket'
+    ).order_by('-created_at')[:10]
+    
+    # アクティブなBP数
+    active_bp_count = BusinessPartner.objects.filter(is_active=True).count()
+    
+    # 月別集計（直近6ヶ月）
+    monthly_summaries = OutsourcingCostSummary.objects.order_by('-year_month')[:6]
+    
+    context = {
+        'current_month': current_month,
+        'current_summary': current_summary,
+        'recent_costs': recent_costs,
+        'active_bp_count': active_bp_count,
+        'monthly_summaries': monthly_summaries,
+    }
+    
+    return render(request, 'cost_master/dashboard.html', context)
+
+
+# ビジネスパートナー管理
+class BusinessPartnerListView(LoginRequiredMixin, ListView):
+    """ビジネスパートナー一覧"""
+    model = BusinessPartner
+    template_name = 'cost_master/business_partner_list.html'
+    context_object_name = 'business_partners'
     paginate_by = 20
     
     def get_queryset(self):
-        queryset = CostMaster.objects.select_related('department', 'manager').order_by('-created_at')
+        queryset = BusinessPartner.objects.select_related().prefetch_related('projects')
         
         # 検索フィルター
-        search = self.request.GET.get('search')
+        search = self.request.GET.get('search', '')
         if search:
             queryset = queryset.filter(
-                Q(client_name__icontains=search) |
-                Q(special_conditions__icontains=search) |
-                Q(payment_terms__icontains=search)
+                Q(name__icontains=search) |
+                Q(company__icontains=search) |
+                Q(email__icontains=search)
             )
         
-        # フィルター処理
-        billing_type = self.request.GET.get('billing_type')
-        if billing_type:
-            queryset = queryset.filter(billing_type=billing_type)
-        
-        department = self.request.GET.get('department')
-        if department:
-            queryset = queryset.filter(department_id=department)
-        
-        contract_type = self.request.GET.get('contract_type')
-        if contract_type:
-            queryset = queryset.filter(contract_type=contract_type)
-        
-        is_active = self.request.GET.get('is_active')
-        if is_active == 'true':
+        # 有効/無効フィルター
+        status = self.request.GET.get('status', 'active')
+        if status == 'active':
             queryset = queryset.filter(is_active=True)
-        elif is_active == 'false':
+        elif status == 'inactive':
             queryset = queryset.filter(is_active=False)
         
-        return queryset
+        return queryset.order_by('name')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
-        # フィルター用データ
-        context['departments'] = Department.objects.all()
-        context['billing_types'] = CostMaster.BILLING_TYPE_CHOICES
-        context['contract_types'] = CostMaster.CONTRACT_TYPE_CHOICES
-        
-        # 統計データ
-        total_count = CostMaster.objects.count()
-        active_count = CostMaster.objects.filter(is_active=True).count()
-        context['stats'] = {
-            'total': total_count,
-            'active': active_count,
-            'inactive': total_count - active_count,
-        }
-        
+        context['search'] = self.request.GET.get('search', '')
+        context['status'] = self.request.GET.get('status', 'active')
         return context
 
-@method_decorator(staff_member_required, name='dispatch')
-class CostMasterCreateView(LoginRequiredMixin, CreateView):
-    """コストマスター作成画面"""
-    model = CostMaster
-    form_class = CostMasterForm
-    template_name = 'cost_master/cost_master_form.html'
-    success_url = reverse_lazy('cost_master:cost_master_list')
+
+class BusinessPartnerCreateView(LoginRequiredMixin, CreateView):
+    """ビジネスパートナー作成"""
+    model = BusinessPartner
+    form_class = BusinessPartnerForm
+    template_name = 'cost_master/business_partner_form.html'
+    success_url = reverse_lazy('cost_master:business_partner_list')
     
     def form_valid(self, form):
         form.instance.created_by = self.request.user
-        messages.success(self.request, f'コストマスター「{form.cleaned_data["client_name"]}」が正常に作成されました。')
+        messages.success(self.request, 'ビジネスパートナーを登録しました。')
         return super().form_valid(form)
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['title'] = 'コストマスター - 新規作成'
-        
-        # 複製の場合
-        copy_id = self.request.GET.get('copy')
-        if copy_id:
-            try:
-                original = CostMaster.objects.get(pk=copy_id)
-                context['title'] = f'コストマスター - 複製作成（元: {original.client_name}）'
-                context['copy_source'] = original
-            except CostMaster.DoesNotExist:
-                pass
-        
-        return context
-    
-    def get_initial(self):
-        initial = super().get_initial()
-        
-        # 複製の場合
-        copy_id = self.request.GET.get('copy')
-        if copy_id:
-            try:
-                original = CostMaster.objects.get(pk=copy_id)
-                initial.update({
-                    'client_name': f"{original.client_name}_コピー",
-                    'billing_type': original.billing_type,
-                    'department': original.department,
-                    'employee_level': original.employee_level,
-                    'monthly_billing': original.monthly_billing,
-                    'daily_billing': original.daily_billing,
-                    'hourly_billing': original.hourly_billing,
-                    'fixed_billing': original.fixed_billing,
-                    'discount_rate': original.discount_rate,
-                    'minimum_billing_amount': original.minimum_billing_amount,
-                    'contract_type': original.contract_type,
-                    'payment_terms': original.payment_terms,
-                    'effective_from': date.today(),
-                    'is_active': True,
-                })
-            except CostMaster.DoesNotExist:
-                pass
-        
-        return initial
 
-@method_decorator(staff_member_required, name='dispatch')
-class CostMasterDetailView(LoginRequiredMixin, DetailView):
-    """コストマスター詳細画面"""
-    model = CostMaster
-    template_name = 'cost_master/cost_master_detail.html'
-    context_object_name = 'cost_master'
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        
-        # 換算計算
-        cost_master = self.object
-        conversions = {}
-        
-        if cost_master.billing_type == 'monthly' and cost_master.monthly_billing:
-            conversions['monthly'] = float(cost_master.monthly_billing)
-            conversions['daily'] = float(cost_master.monthly_billing) / 20
-            conversions['hourly'] = float(cost_master.monthly_billing) * 10000 / 20 / 8
-        elif cost_master.billing_type == 'daily' and cost_master.daily_billing:
-            conversions['monthly'] = float(cost_master.daily_billing) * 20
-            conversions['daily'] = float(cost_master.daily_billing)
-            conversions['hourly'] = float(cost_master.daily_billing) * 10000 / 8
-        elif cost_master.billing_type == 'hourly' and cost_master.hourly_billing:
-            conversions['monthly'] = float(cost_master.hourly_billing) * 8 * 20 / 10000
-            conversions['daily'] = float(cost_master.hourly_billing) * 8 / 10000
-            conversions['hourly'] = float(cost_master.hourly_billing)
-        elif cost_master.billing_type == 'fixed' and cost_master.fixed_billing:
-            conversions['monthly'] = float(cost_master.fixed_billing)
-            conversions['daily'] = None
-            conversions['hourly'] = None
-        else:
-            conversions = {'monthly': None, 'daily': None, 'hourly': None}
-        
-        context['conversions'] = conversions
-        
-        # 割引後単価の計算例
-        if conversions['monthly']:
-            sample_amount = conversions['monthly']
-            context['discounted_amount'] = cost_master.get_discounted_billing(sample_amount)
-        
-        return context
 
-@method_decorator(staff_member_required, name='dispatch')
-class CostMasterUpdateView(LoginRequiredMixin, UpdateView):
-    """コストマスター編集画面"""
-    model = CostMaster
-    form_class = CostMasterForm
-    template_name = 'cost_master/cost_master_form.html'
-    success_url = reverse_lazy('cost_master:cost_master_list')
+class BusinessPartnerUpdateView(LoginRequiredMixin, UpdateView):
+    """ビジネスパートナー編集"""
+    model = BusinessPartner
+    form_class = BusinessPartnerForm
+    template_name = 'cost_master/business_partner_form.html'
+    success_url = reverse_lazy('cost_master:business_partner_list')
     
     def form_valid(self, form):
-        messages.success(self.request, f'コストマスター「{form.cleaned_data["client_name"]}」が正常に更新されました。')
+        messages.success(self.request, 'ビジネスパートナー情報を更新しました。')
         return super().form_valid(form)
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['title'] = 'コストマスター - 編集'
-        return context
 
-@method_decorator(staff_member_required, name='dispatch')
-class CostMasterDeleteView(LoginRequiredMixin, DeleteView):
-    """コストマスター削除画面"""
-    model = CostMaster
-    template_name = 'cost_master/cost_master_confirm_delete.html'
-    success_url = reverse_lazy('cost_master:cost_master_list')
-    
-    def delete(self, request, *args, **kwargs):
-        client_name = self.get_object().client_name
-        messages.success(request, f'コストマスター「{client_name}」を削除しました。')
-        return super().delete(request, *args, **kwargs)
 
-# 案件別コスト設定関連（仮実装）
-@method_decorator(staff_member_required, name='dispatch')
-class ProjectCostSettingListView(LoginRequiredMixin, ListView):
-    """案件別コスト設定一覧画面（仮実装）"""
-    template_name = 'cost_master/project_cost_setting_list.html'
-    context_object_name = 'project_settings'
-    paginate_by = 20
+@login_required
+def business_partner_delete(request, pk):
+    """ビジネスパートナー削除"""
+    bp = get_object_or_404(BusinessPartner, pk=pk)
     
-    def get_queryset(self):
-        # 現在は空のリストを返す（将来的にプロジェクト管理機能と連携）
-        return []
+    if request.method == 'POST':
+        bp.is_active = False
+        bp.save()
+        messages.success(request, f'{bp.name}を無効化しました。')
+        return redirect('cost_master:business_partner_list')
     
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['title'] = '案件別コスト設定'
-        return context
+    return render(request, 'cost_master/business_partner_confirm_delete.html', {'object': bp})
 
-@method_decorator(staff_member_required, name='dispatch')
-class ProjectCostSettingCreateView(LoginRequiredMixin, CreateView):
-    """案件別コスト設定作成画面（仮実装）"""
-    template_name = 'cost_master/project_cost_setting_form.html'
-    success_url = reverse_lazy('cost_master:project_cost_setting_list')
+
+# 外注費管理
+@login_required
+def outsourcing_cost_list(request):
+    """外注費一覧・管理画面"""
+    # フィルターフォーム
+    filter_form = OutsourcingCostFilterForm(request.GET)
     
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['title'] = '案件別コスト設定 - 新規作成'
-        return context
-
-@method_decorator(staff_member_required, name='dispatch')
-class ProjectCostSettingDetailView(LoginRequiredMixin, DetailView):
-    """案件別コスト設定詳細画面（仮実装）"""
-    template_name = 'cost_master/project_cost_setting_detail.html'
-    context_object_name = 'project_setting'
+    # 基本クエリセット
+    queryset = OutsourcingCost.objects.select_related(
+        'business_partner', 'project', 'ticket'
+    )
     
-    def get_object(self):
-        # 仮の実装
-        return None
-
-@method_decorator(staff_member_required, name='dispatch')
-class ProjectCostSettingUpdateView(LoginRequiredMixin, UpdateView):
-    """案件別コスト設定編集画面（仮実装）"""
-    template_name = 'cost_master/project_cost_setting_form.html'
-    success_url = reverse_lazy('cost_master:project_cost_setting_list')
-
-@method_decorator(staff_member_required, name='dispatch')
-class ProjectCostSettingDeleteView(LoginRequiredMixin, DeleteView):
-    """案件別コスト設定削除画面（仮実装）"""
-    template_name = 'cost_master/project_cost_setting_confirm_delete.html'
-    success_url = reverse_lazy('cost_master:project_cost_setting_list')
-
-# AJAX API
-@staff_member_required
-def get_cost_master_data(request):
-    """コストマスターデータ取得API"""
-    cost_masters = CostMaster.objects.filter(is_active=True).select_related('department')
+    # フィルター適用
+    if filter_form.is_valid():
+        if filter_form.cleaned_data.get('year_month'):
+            queryset = queryset.filter(year_month=filter_form.cleaned_data['year_month'])
+        if filter_form.cleaned_data.get('business_partner'):
+            queryset = queryset.filter(business_partner=filter_form.cleaned_data['business_partner'])
+        if filter_form.cleaned_data.get('project'):
+            queryset = queryset.filter(project=filter_form.cleaned_data['project'])
+        if filter_form.cleaned_data.get('status'):
+            queryset = queryset.filter(status=filter_form.cleaned_data['status'])
+        if filter_form.cleaned_data.get('case_classification'):
+            queryset = queryset.filter(case_classification=filter_form.cleaned_data['case_classification'])
     
-    data = []
-    for cm in cost_masters:
-        data.append({
-            'id': cm.id,
-            'client_name': cm.client_name,
-            'billing_type': cm.get_billing_type_display(),
-            'billing_amount': cm.get_billing_amount(),
-            'department': cm.department.name if cm.department else '全部署',
-            'contract_type': cm.get_contract_type_display(),
-        })
+    # 並び順
+    queryset = queryset.order_by('-year_month', 'business_partner__name')
     
-    return JsonResponse({'data': data})
-
-@staff_member_required
-def cost_analysis_data(request):
-    """コスト分析データ取得API"""
-    # 基本統計
-    stats = {
-        'total_clients': CostMaster.objects.values('client_name').distinct().count(),
-        'active_contracts': CostMaster.objects.filter(is_active=True).count(),
-        'avg_discount': CostMaster.objects.aggregate(avg_discount=Avg('discount_rate'))['avg_discount'] or 0,
+    # ページネーション
+    paginator = Paginator(queryset, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # 集計情報
+    total_costs = queryset.aggregate(
+        total_hours=Sum('work_hours'),
+        total_amount=Sum('total_cost'),
+        count=Count('id')
+    )
+    
+    context = {
+        'filter_form': filter_form,
+        'page_obj': page_obj,
+        'total_costs': total_costs,
     }
     
-    # 請求タイプ別分布
-    billing_type_dist = list(
-        CostMaster.objects.values('billing_type')
-        .annotate(count=Count('id'))
-        .order_by('billing_type')
-    )
+    return render(request, 'cost_master/outsourcing_cost_list.html', context)
+
+
+@login_required
+def outsourcing_cost_create(request):
+    """外注費登録"""
+    if request.method == 'POST':
+        form = OutsourcingCostForm(request.POST)
+        if form.is_valid():
+            instance = form.save(commit=False)
+            instance.created_by = request.user
+            instance.save()
+            
+            # 月次集計を更新
+            OutsourcingCostSummary.calculate_summary(instance.year_month)
+            
+            messages.success(request, '外注費を登録しました。')
+            return redirect('cost_master:outsourcing_cost_list')
+    else:
+        form = OutsourcingCostForm()
     
-    # 契約タイプ別分布
-    contract_type_dist = list(
-        CostMaster.objects.values('contract_type')
-        .annotate(count=Count('id'))
-        .order_by('contract_type')
-    )
+    context = {
+        'form': form,
+        'title': '外注費登録',
+        'submit_text': '登録'
+    }
     
-    return JsonResponse({
-        'stats': stats,
-        'billing_type_distribution': billing_type_dist,
-        'contract_type_distribution': contract_type_dist,
-    })
+    return render(request, 'cost_master/outsourcing_cost_form.html', context)
+
+
+@login_required
+def outsourcing_cost_update(request, pk):
+    """外注費編集"""
+    cost = get_object_or_404(OutsourcingCost, pk=pk)
+    
+    if request.method == 'POST':
+        form = OutsourcingCostForm(request.POST, instance=cost)
+        if form.is_valid():
+            old_year_month = cost.year_month
+            instance = form.save()
+            
+            # 旧月と新月の集計を更新
+            OutsourcingCostSummary.calculate_summary(old_year_month)
+            if instance.year_month != old_year_month:
+                OutsourcingCostSummary.calculate_summary(instance.year_month)
+            
+            messages.success(request, '外注費を更新しました。')
+            return redirect('cost_master:outsourcing_cost_list')
+    else:
+        form = OutsourcingCostForm(instance=cost)
+    
+    context = {
+        'form': form,
+        'object': cost,
+        'title': '外注費編集',
+        'submit_text': '更新'
+    }
+    
+    return render(request, 'cost_master/outsourcing_cost_form.html', context)
+
+
+@login_required
+def outsourcing_cost_delete(request, pk):
+    """外注費削除"""
+    cost = get_object_or_404(OutsourcingCost, pk=pk)
+    
+    if request.method == 'POST':
+        year_month = cost.year_month
+        cost.delete()
+        
+        # 月次集計を更新
+        OutsourcingCostSummary.calculate_summary(year_month)
+        
+        messages.success(request, '外注費を削除しました。')
+        return redirect('cost_master:outsourcing_cost_list')
+    
+    return render(request, 'cost_master/outsourcing_cost_confirm_delete.html', {'object': cost})
+
+
+# API エンドポイント
+@login_required
+def get_project_tickets_api(request):
+    """プロジェクトのチケット一覧取得API"""
+    project_id = request.GET.get('project_id')
+    
+    if not project_id:
+        return JsonResponse({'success': False, 'tickets': []})
+    
+    try:
+        tickets = ProjectTicket.objects.filter(
+            project_id=project_id,
+            is_active=True
+        ).values('id', 'title', 'case_classification').order_by('title')
+        
+        return JsonResponse({
+            'success': True,
+            'tickets': list(tickets)
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'tickets': []
+        })
+
+
+@login_required
+def get_bp_hourly_rate_api(request):
+    """ビジネスパートナーの単価取得API"""
+    bp_id = request.GET.get('bp_id')
+    
+    if not bp_id:
+        return JsonResponse({'success': False, 'hourly_rate': 0})
+    
+    try:
+        bp = BusinessPartner.objects.get(id=bp_id, is_active=True)
+        return JsonResponse({
+            'success': True,
+            'hourly_rate': float(bp.hourly_rate)
+        })
+    except BusinessPartner.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'ビジネスパートナーが見つかりません',
+            'hourly_rate': 0
+        })
+
+
+@login_required
+def get_bp_projects_api(request):
+    """ビジネスパートナーの参加プロジェクト取得API"""
+    bp_id = request.GET.get('bp_id')
+    
+    if not bp_id:
+        return JsonResponse({'success': False, 'projects': []})
+    
+    try:
+        bp = BusinessPartner.objects.get(id=bp_id, is_active=True)
+        projects = bp.projects.filter(is_active=True).values(
+            'id', 'name'
+        ).order_by('name')
+        
+        return JsonResponse({
+            'success': True,
+            'projects': list(projects)
+        })
+    except BusinessPartner.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'ビジネスパートナーが見つかりません',
+            'projects': []
+        })
