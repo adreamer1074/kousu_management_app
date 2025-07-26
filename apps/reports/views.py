@@ -223,7 +223,7 @@ class ReportListView(LoginRequiredMixin, TemplateView):
         # レポートメニューの定義
         reports = [
             {
-                'name': '工数集計レポート',
+                'name': '工数集計',
                 'description': '工数集計一覧の管理と分析',
                 'url': 'reports:workload_aggregation',
                 'icon': 'bi-bar-chart-line',

@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="alert alert-info">
+        <h5>デバッグ情報</h5>
+        <ul>
+            <li><strong>リクエストユーザー:</strong> {{ debug_info.request_user }} (ID: {{ debug_info.request_user_id }})</li>
+            <li><strong>対象ユーザー:</strong> {{ debug_info.target_user }} (ID: {{ debug_info.target_user_id }})</li>
+            <li><strong>URL pk:</strong> {{ debug_info.url_pk }}</li>
+            <li><strong>user_obj:</strong> {{ user_obj.username }} (ID: {{ user_obj.id }})</li>
+            <li><strong>request.user:</strong> {{ request.user.username }} (ID: {{ request.user.id }})</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h4>ユーザー詳細: {{ user_obj.username }}</h4>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>ID:</strong> {{ user_obj.id }}</p>
+                    <p><strong>ユーザー名:</strong> {{ user_obj.username }}</p>
+                    <p><strong>メール:</strong> {{ user_obj.email|default:"未設定" }}</p>
+                    <p><strong>姓:</strong> {{ user_obj.last_name|default:"未設定" }}</p>
+                    <p><strong>名:</strong> {{ user_obj.first_name|default:"未設定" }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>部署:</strong> {{ user_obj.department|default:"未設定" }}</p>
+                    <p><strong>課:</strong> {{ user_obj.section|default:"未設定" }}</p>
+                    <p><strong>権限レベル:</strong> {{ user_obj.get_employee_level_display|default:"未設定" }}</p>
+                    <p><strong>スタッフ権限:</strong> {{ user_obj.is_staff|yesno:"あり,なし" }}</p>
+                    <p><strong>アクティブ:</strong> {{ user_obj.is_active|yesno:"有効,無効" }}</p>
+                    <p><strong>作成日:</strong> {{ user_obj.date_joined|date:"Y-m-d H:i" }}</p>
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                {% if can_edit %}
+                <a href="{% url 'users:user_edit' pk=user_obj.pk %}" class="btn btn-primary">編集</a>
+                {% endif %}
+                
+                {% if can_delete %}
+                <a href="#" class="btn btn-danger">削除</a>
+                {% endif %}
+                
+                <a href="{% url 'users:user_list' %}" class="btn btn-secondary">一覧に戻る</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

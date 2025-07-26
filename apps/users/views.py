@@ -6,11 +6,14 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import TemplateView, ListView, DetailView, UpdateView, CreateView, DeleteView
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import JsonResponse, Http404
 from django.db.models import Count, Q
 from django.db import models
 from .models import CustomUser, Department, Section
 from .forms import CustomUserCreationForm, UserEditForm, ProfileEditForm, DepartmentForm, SectionForm, SuperUserEditForm
+import logging
+
+logger = logging.getLogger(__name__)
 
 def is_staff_or_superuser(user):
     """スタッフまたはスーパーユーザーかどうかを判定"""
@@ -19,19 +22,64 @@ def is_staff_or_superuser(user):
 @login_required
 @user_passes_test(is_staff_or_superuser)
 def register(request):
-    """ユーザー登録ビュー（スタッフ・管理者のみ）"""
+    """ユーザー登録ビュー（完全自動ログイン防止版）"""
     if request.method == 'POST':
         form = CustomUserCreationForm(request.POST)
         if form.is_valid():
-            user = form.save()
-            username = form.cleaned_data.get('username')
-            messages.success(
-                request, 
-                f'ユーザー「{username}」を作成しました。'
-            )
-            return redirect('users:user_detail', pk=user.pk)
+            # 現在のログインユーザーを確実に保存
+            original_user = request.user
+            original_user_id = original_user.id
+            original_session_key = request.session.session_key
+            
+            logger.info(f"Before save: User={original_user.username}, ID={original_user_id}")
+            
+            # ユーザーを作成
+            try:
+                # commit=Falseで作成してから手動保存
+                new_user = form.save(commit=False)
+                new_user.created_by = original_user
+                new_user.save()
+                
+                # 保存後のセッション状態を確認
+                current_user_after_save = request.user
+                logger.info(f"After save: User={current_user_after_save.username}, ID={current_user_after_save.id}")
+                
+                # セッションが変更された場合は強制復元
+                if request.user.id != original_user_id:
+                    logger.warning(f"Session hijacked! Restoring from {request.user.username} to {original_user.username}")
+                    
+                    # 完全にセッションをクリアして再ログイン
+                    logout(request)
+                    
+                    # 元のユーザーで再ログイン
+                    login(request, original_user, backend='django.contrib.auth.backends.ModelBackend')
+                    
+                    # 再度確認
+                    if request.user.id == original_user_id:
+                        logger.info(f"Session successfully restored to: {request.user.username}")
+                    else:
+                        logger.error(f"Session restoration failed! Current: {request.user.username}")
+                
+                messages.success(
+                    request, 
+                    f'ユーザー「{new_user.username}」を作成しました。現在のログイン: {request.user.username}'
+                )
+                
+                # リダイレクト前に再度セッション確認
+                final_user = request.user
+                logger.info(f"Before redirect: User={final_user.username}, ID={final_user.id}")
+                
+                # ユーザー一覧にリダイレクト（詳細画面ではなく）
+                return redirect('users:user_list')
+                
+            except Exception as e:
+                logger.error(f"Error during user creation: {e}")
+                messages.error(request, f'ユーザー作成エラー: {e}')
+        else:
+            logger.warning(f"Form is invalid: {form.errors}")
     else:
         form = CustomUserCreationForm()
+    
     return render(request, 'users/user/user_register.html', {'form': form})
 
 class UserListView(LoginRequiredMixin, ListView):
@@ -51,7 +99,65 @@ class UserListView(LoginRequiredMixin, ListView):
 class UserDetailView(LoginRequiredMixin, DetailView):
     model = CustomUser
     template_name = 'users/user/user_detail.html'
-    context_object_name = 'user'
+    context_object_name = 'user_obj'
+
+    def dispatch(self, request, *args, **kwargs):
+        """リクエスト処理前にパラメータを確認"""
+        pk = kwargs.get('pk')
+        current_user = request.user
+        
+        logger.info(f"UserDetailView - Current user: {current_user.username} (ID: {current_user.id})")
+        logger.info(f"UserDetailView - Requested user pk: {pk}")
+        
+        # pkが存在しない場合のチェック
+        if not pk:
+            logger.error("No pk provided in URL")
+            messages.error(request, "ユーザーIDが指定されていません。")
+            return redirect('users:user_list')
+        
+        # 存在確認
+        try:
+            target_user = CustomUser.objects.get(pk=pk)
+            logger.info(f"UserDetailView - Target user: {target_user.username} (ID: {target_user.id})")
+        except CustomUser.DoesNotExist:
+            logger.error(f"User with pk {pk} does not exist")
+            messages.error(request, "指定されたユーザーが見つかりません。")
+            return redirect('users:user_list')
+        
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_object(self, queryset=None):
+        """URLパラメータから明示的にオブジェクトを取得"""
+        pk = self.kwargs.get('pk')
+        
+        if queryset is None:
+            queryset = self.get_queryset()
+        
+        try:
+            obj = queryset.get(pk=pk)
+            logger.info(f"get_object - Retrieved user: {obj.username} (ID: {obj.id})")
+            return obj
+        except queryset.model.DoesNotExist:
+            logger.error(f"get_object - User with pk {pk} not found")
+            raise Http404("ユーザーが見つかりません")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # 現在のログインユーザーと表示対象ユーザーを明確に分離
+        current_user = self.request.user
+        target_user = self.object
+        
+        logger.info(f"Context - Current login user: {current_user.username} (ID: {current_user.id})")
+        logger.info(f"Context - Display target user: {target_user.username} (ID: {target_user.id})")
+        
+        # 権限判定は現在のログインユーザーで行う
+        context['can_edit'] = current_user.is_superuser or current_user.is_staff
+        context['can_delete'] = current_user.is_superuser
+        context['current_login_user'] = current_user
+        context['is_own_profile'] = current_user.id == target_user.id
+        
+        return context
 
 class UserEditView(LoginRequiredMixin, UpdateView):
     """ユーザー編集ビュー"""
@@ -249,3 +355,43 @@ def custom_logout(request):
     logout(request)
     messages.success(request, 'ログアウトしました。')
     return redirect('login')
+
+@login_required
+@user_passes_test(is_staff_or_superuser)
+def user_create(request):
+    """ユーザー作成（registerのエイリアス）"""
+    return register(request)  # registerに転送
+
+@login_required
+def user_detail_debug(request, pk):
+    """デバッグ用ユーザー詳細ビュー"""
+    # ログ出力
+    logger.info(f"DEBUG - Request user: {request.user.username} (ID: {request.user.id})")
+    logger.info(f"DEBUG - URL pk parameter: {pk}")
+    
+    # ユーザーを明示的に取得
+    try:
+        target_user = CustomUser.objects.get(pk=pk)
+        logger.info(f"DEBUG - Target user found: {target_user.username} (ID: {target_user.id})")
+    except CustomUser.DoesNotExist:
+        logger.error(f"DEBUG - User with pk {pk} not found")
+        messages.error(request, "ユーザーが見つかりません。")
+        return redirect('users:user_list')
+    
+    # コンテキストを明示的に作成
+    context = {
+        'user_obj': target_user,
+        'current_login_user': request.user,
+        'requested_pk': pk,
+        'can_edit': request.user.is_superuser or request.user.is_staff,
+        'can_delete': request.user.is_superuser,
+        'debug_info': {
+            'request_user': request.user.username,
+            'request_user_id': request.user.id,
+            'target_user': target_user.username,
+            'target_user_id': target_user.id,
+            'url_pk': pk,
+        }
+    }
+    
+    return render(request, 'users/user/user_detail_debug.html', context)

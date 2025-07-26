@@ -1,146 +1,138 @@
-from django.shortcuts import render
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.shortcuts import render, redirect
+from django.contrib.auth.views import LoginView
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import TemplateView
-from django.db.models import Count, Q
-from django.utils import timezone
-from datetime import datetime
+from django.urls import reverse
+from django.contrib import messages
 from apps.users.models import CustomUser, Department
 from apps.projects.models import Project, ProjectTicket
 from apps.workloads.models import Workload
+from datetime import datetime, date
 
-class HomeView(LoginRequiredMixin, TemplateView):
-    template_name = 'core/home.html'
+class CustomLoginView(LoginView):
+    """ユーザー権限別リダイレクト機能付きログインビュー"""
+    template_name = 'registration/login.html'
+    
+    def get_success_url(self):
+        user = self.request.user
+        
+        # ログイン成功メッセージ
+        messages.success(self.request, f'ようこそ、{user.username}さん！')
+        
+        if user.is_superuser:
+            # スーパーユーザー → 管理ダッシュボード
+            return reverse('core:admin_dashboard')
+        elif user.is_staff:
+            # スタッフ → スタッフダッシュボード
+            return reverse('core:staff_dashboard')
+        else:
+            # 一般ユーザー → 個人ダッシュボード
+            return reverse('core:user_dashboard')
+
+class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    """スーパーユーザー専用ダッシュボード"""
+    template_name = 'dashboard/admin_dashboard.html'
+    
+    def test_func(self):
+        return self.request.user.is_superuser
+    
+    def handle_no_permission(self):
+        messages.error(self.request, 'アクセス権限がありません。')
+        return redirect('core:user_dashboard')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # 現在の年月を取得
-        current_date = timezone.now()
-        current_year = current_date.year
-        current_month = current_date.month
-        year_month = f"{current_year}-{current_month:02d}"
+        # システム統計情報
+        total_users = CustomUser.objects.count()
+        active_users = CustomUser.objects.filter(is_active=True).count()
+        staff_users = CustomUser.objects.filter(is_staff=True).count()
         
-        # 基本統計
-        stats = {
-            'total_departments': Department.objects.count(),
-            'total_projects': Project.objects.filter(is_active=True).count(),
-        }
-        
-        # 今月の工数合計を計算
-        if self.request.user.is_staff or self.request.user.is_superuser:
-            # 管理者は全ユーザーの工数を表示
-            current_month_workloads = Workload.objects.filter(year_month=year_month)
-        else:
-            # 一般ユーザーは自分の工数のみ
-            current_month_workloads = Workload.objects.filter(
-                year_month=year_month,
-                user=self.request.user
-            )
-        
-        # 今月の合計工数時間を計算
-        total_hours_this_month = sum(w.total_hours for w in current_month_workloads)
-        stats['current_month_hours'] = total_hours_this_month
-        
-        # 今月の総チケット数を計算（工数入力で使用されているチケット）
-        # 重複を除いてユニークなチケット数をカウント
-        if self.request.user.is_staff or self.request.user.is_superuser:
-            # 管理者は全チケットを対象
-            current_month_tickets = Workload.objects.filter(
-                year_month=year_month,
-                ticket__isnull=False  # チケットが設定されている工数のみ
-            ).values('ticket').distinct().count()
-        else:
-            # 一般ユーザーは自分の工数のチケットのみ
-            current_month_tickets = Workload.objects.filter(
-                year_month=year_month,
-                user=self.request.user,
-                ticket__isnull=False
-            ).values('ticket').distinct().count()
-        
-        stats['current_month_tickets'] = current_month_tickets
-        
-        # 最近のプロジェクト
-        if self.request.user.is_staff or self.request.user.is_superuser:
-            recent_projects = Project.objects.filter(is_active=True).order_by('-created_at')[:5]
-        else:
-            # 一般ユーザーは関連するプロジェクトのみ
-            recent_projects = Project.objects.filter(
-                is_active=True,
-                workload__user=self.request.user
-            ).distinct().order_by('-created_at')[:5]
+        try:
+            total_projects = Project.objects.count()
+            active_projects = Project.objects.filter(is_active=True).count()
+        except:
+            total_projects = 0
+            active_projects = 0
         
         context.update({
-            'stats': stats,
-            'recent_projects': recent_projects,
-            'current_month': current_month,
-            'current_year': current_year,
+            'title': '管理ダッシュボード',
+            'total_users': total_users,
+            'active_users': active_users,
+            'staff_users': staff_users,
+            'total_projects': total_projects,
+            'active_projects': active_projects,
+            'pending_reports': 0,  # TODO: 実装予定
+            'system_alerts': [],   # TODO: 実装予定
         })
-        
         return context
 
-# 関数ベースのビューの場合
-@login_required
-def home_view(request):
-    """ホームページビュー"""
-    current_date = timezone.now()
-    current_year = current_date.year
-    current_month = current_date.month
-    year_month = f"{current_year}-{current_month:02d}"
+class StaffDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    """スタッフ専用ダッシュボード"""
+    template_name = 'dashboard/staff_dashboard.html'
     
-    # 基本統計
-    stats = {
-        'total_departments': Department.objects.count(),
-        'total_projects': Project.objects.filter(is_active=True).count(),
-    }
+    def test_func(self):
+        return self.request.user.is_staff
     
-    # 今月の工数合計を計算
-    if request.user.is_staff or request.user.is_superuser:
-        # 管理者は全ユーザーの工数を表示
-        current_month_workloads = Workload.objects.filter(year_month=year_month)
-    else:
-        # 一般ユーザーは自分の工数のみ
-        current_month_workloads = Workload.objects.filter(
-            year_month=year_month,
-            user=request.user
-        )
+    def handle_no_permission(self):
+        messages.error(self.request, 'アクセス権限がありません。')
+        return redirect('core:user_dashboard')
     
-    # 今月の合計工数時間を計算
-    total_hours_this_month = sum(w.total_hours for w in current_month_workloads)
-    stats['current_month_hours'] = total_hours_this_month
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        
+        # スタッフが管理する情報
+        context.update({
+            'title': 'スタッフダッシュボード',
+            'managed_users': CustomUser.objects.filter(department=user.department, is_active=True).exclude(id=user.id),
+            'my_projects': user.project_set.filter(is_active=True) if hasattr(user, 'project_set') else [],
+        })
+        return context
+
+class UserDashboardView(LoginRequiredMixin, TemplateView):
+    """一般ユーザー専用ダッシュボード"""
+    template_name = 'dashboard/user_dashboard.html'
     
-    # 今月の総チケット数を計算（工数入力で使用されているチケット）
-    if request.user.is_staff or request.user.is_superuser:
-        # 管理者は全チケットを対象
-        current_month_tickets = Workload.objects.filter(
-            year_month=year_month,
-            ticket__isnull=False  # チケットが設定されている工数のみ
-        ).values('ticket').distinct().count()
-    else:
-        # 一般ユーザーは自分の工数のチケットのみ
-        current_month_tickets = Workload.objects.filter(
-            year_month=year_month,
-            user=request.user,
-            ticket__isnull=False
-        ).values('ticket').distinct().count()
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        
+        # 今日の日付
+        today = date.today()
+        this_month_start = today.replace(day=1)
+        
+        # ユーザーの基本情報
+        context.update({
+            'title': 'ダッシュボード',
+            'user': user,
+            'today': today,
+            'today_workload_exists': False,  # TODO: 工数アプリ実装後に修正
+            'my_projects': [],  # TODO: プロジェクト参加情報
+            'recent_workloads': [],  # TODO: 最近の工数履歴
+            'this_month_hours': 0,   # TODO: 今月の合計工数
+            'this_week_hours': 0,    # TODO: 今週の合計工数
+            'pending_tasks': [],     # TODO: 未完了タスク
+        })
+        return context
+
+# 既存のHomeViewをそのまま保持
+class HomeView(LoginRequiredMixin, TemplateView):
+    """ホーム画面（リダイレクト用）"""
+    template_name = 'dashboard/home.html'
     
-    stats['current_month_tickets'] = current_month_tickets
+    def dispatch(self, request, *args, **kwargs):
+        """ログイン後は適切なダッシュボードにリダイレクト"""
+        if request.user.is_authenticated:
+            if request.user.is_superuser:
+                return redirect('core:admin_dashboard')
+            elif request.user.is_staff:
+                return redirect('core:staff_dashboard')
+            else:
+                return redirect('core:user_dashboard')
+        return super().dispatch(request, *args, **kwargs)
     
-    # 最近のプロジェクト
-    if request.user.is_staff or request.user.is_superuser:
-        recent_projects = Project.objects.filter(is_active=True).order_by('-created_at')[:5]
-    else:
-        # 一般ユーザーは関連するプロジェクトのみ
-        recent_projects = Project.objects.filter(
-            is_active=True,
-            workload__user=request.user
-        ).distinct().order_by('-created_at')[:5]
-    
-    context = {
-        'stats': stats,
-        'recent_projects': recent_projects,
-        'current_month': current_month,
-        'current_year': current_year,
-    }
-    
-    return render(request, 'core/home.html', context)
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['title'] = 'ホーム'
+        return context

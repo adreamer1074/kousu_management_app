@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} - 工数管理システム{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-primary">
+                <h4><i class="bi bi-shield-check"></i> スタッフダッシュボード</h4>
+                <p class="mb-0">チーム管理機能と個人の工数管理機能をご利用いただけます。</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-people"></i> チーム管理</h5>
+                </div>
+                <div class="card-body">
+                    <p>チームメンバーの工数状況を確認できます（実装予定）</p>
+                    <a href="#" class="btn btn-primary">チーム工数を見る</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-person"></i> 個人工数</h5>
+                </div>
+                <div class="card-body">
+                    <p>あなた自身の工数入力と履歴を管理できます</p>
+                    <a href="{% url 'workloads:workload_calendar' %}" class="btn btn-success">工数を入力</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
