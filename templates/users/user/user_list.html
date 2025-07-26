@@ -93,7 +93,9 @@
                                     <td>
                                         <div class="d-flex align-items-center">
                                             <i class="bi bi-person-circle me-2 text-muted"></i>
-                                            <strong>{{ user.username }}</strong>
+                                            <a href="{% url 'users:user_detail' pk=user.pk %}">
+                                                <strong>{{ user.username }}</strong>
+                                            </a>
                                             {% if user.is_superuser %}
                                                 <span class="badge bg-danger ms-2">管理者</span>
                                             {% elif user.is_staff %}

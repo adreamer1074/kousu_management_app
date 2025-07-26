@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}マイダッシュボード | 工数管理システム{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dashboard-card {
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s ease-in-out;
+    }
+    .dashboard-card:hover {
+        transform: translateY(-5px);
+    }
+    .card-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+    .welcome-section {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- ウェルカムセクション -->
+    <div class="welcome-section">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1 class="h2 mb-3">
+                    おかえりなさい、{{ user.get_full_name|default:user.username }}さん
+                </h1>
+                <p class="lead mb-0">
+                    今日の工数入力はお済みですか？
+                </p>
+            </div>
+            <div class="col-md-4 text-end">
+                <i class="bi bi-person-workspace" style="font-size: 5rem; opacity: 0.3;"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- 個人用クイックアクセス -->
+    <div class="row g-4 mb-4">
+        <div class="col-lg-4 col-md-6">
+            <div class="card dashboard-card text-center h-100">
+                <div class="card-body">
+                    <i class="bi bi-calendar-event text-primary card-icon"></i>
+                    <h5 class="card-title">工数入力</h5>
+                    <p class="card-text">工数カレンダーで入力</p>
+                    <a href="{% url 'workloads:workload_calendar' %}" class="btn btn-primary btn-lg">
+                        工数を入力
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4 col-md-6">
+            <div class="card dashboard-card text-center h-100">
+                <div class="card-body">
+                    <i class="bi bi-clock-history text-success card-icon"></i>
+                    <h5 class="card-title">工数集計</h5>
+                    <p class="card-text">工数データの確認</p>
+                    <a href="{% url 'reports:workload_aggregation' %}" class="btn btn-success">
+                        集計を見る
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4 col-md-6">
+            <div class="card dashboard-card text-center h-100">
+                <div class="card-body">
+                    <i class="bi bi-person-circle text-info card-icon"></i>
+                    <h5 class="card-title">マイプロフィール</h5>
+                    <p class="card-text">プロフィール管理</p>
+                    <a href="{% url 'users:profile' %}" class="btn btn-info">
+                        プロフィール
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 個人統計情報 -->
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card dashboard-card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-graph-up"></i> 今月の活動状況
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <h3 class="text-primary mb-1">{{ this_month_hours|default:"0.0" }}</h3>
+                            <small class="text-muted">今月の工数（時間）</small>
+                        </div>
+                        <div class="col-md-3">
+                            <h3 class="text-success mb-1">{{ this_week_hours|default:"0.0" }}</h3>
+                            <small class="text-muted">今週の工数（時間）</small>
+                        </div>
+                        <div class="col-md-3">
+                            <h3 class="text-info mb-1">{{ my_projects.count|default:"0" }}</h3>
+                            <small class="text-muted">参加プロジェクト</small>
+                        </div>
+                        <div class="col-md-3">
+                            <h3 class="text-warning mb-1">{{ pending_tasks.count|default:"0" }}</h3>
+                            <small class="text-muted">未完了タスク</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card dashboard-card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-clock"></i> 最近の工数入力
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_workloads %}
+                        {% for workload in recent_workloads %}
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <strong>{{ workload.project.name|truncatechars:20 }}</strong><br>
+                                <small class="text-muted">{{ workload.year_month }}</small>
+                            </div>
+                            <span class="badge bg-primary">{{ workload.total_hours }}h</span>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center text-muted py-3">
+                            <i class="bi bi-clock" style="font-size: 2rem;"></i>
+                            <p class="mb-0 mt-2">工数入力履歴がありません</p>
+                            <small>工数を入力して開始しましょう</small>
+                        </div>
+                    {% endif %}
+                    
+                    <div class="d-grid mt-3">
+                        <a href="{% url 'workloads:workload_calendar' %}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-plus-circle"></i> 工数を入力
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('ユーザーダッシュボード読み込み完了');
+});
+</script>
+{% endblock %}

@@ -5,11 +5,12 @@ app_name = 'users'
 
 urlpatterns = [
     # 認証関連
-    path('register/', views.register, name='register'),  # 追加
+    path('register/', views.register, name='register'),
     
     # ユーザー管理
     path('list/', views.UserListView.as_view(), name='user_list'),
     path('<int:pk>/', views.UserDetailView.as_view(), name='user_detail'),
+    path('<int:pk>/debug/', views.user_detail_debug, name='user_detail_debug'),  # デバッグ用追加
     path('<int:pk>/edit/', views.UserEditView.as_view(), name='user_edit'),
     path('profile/', views.ProfileView.as_view(), name='profile'),
     path('profile/edit/', views.ProfileEditView.as_view(), name='profile_edit'),

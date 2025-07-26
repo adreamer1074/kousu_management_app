@@ -69,22 +69,6 @@
                         </li>
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                                <i class="bi bi-people"></i> ユーザー管理
-                            </a>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="{% url 'users:user_list' %}">
-                                    <i class="bi bi-people"></i> ユーザー一覧
-                                </a></li>
-                                <li><a class="dropdown-item" href="{% url 'users:department_list' %}">
-                                    <i class="bi bi-building"></i> 部署管理
-                                </a></li>
-                                <li><a class="dropdown-item" href="{% url 'users:section_list' %}">
-                                    <i class="bi bi-diagram-3"></i> 課管理
-                                </a></li>
-                            </ul>
-                        </li>
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                                 <i class="bi bi-folder"></i> プロジェクト
                             </a>
                             <ul class="dropdown-menu">
@@ -98,11 +82,11 @@
                         </li>
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                                <i class="bi bi-calculator"></i> コスト管理
+                                <i class="bi bi-calculator"></i> 外注費管理
                             </a>
                             <ul class="dropdown-menu">
                                 <li><a class="dropdown-item" href="{% url 'cost_master:dashboard' %}">
-                                    <i class="bi bi-list-ul"></i> 外注費
+                                    <i class="bi bi-list-ul"></i> ダッシュボード
                                 </a></li>
                                 <li><a class="dropdown-item" href="{% url 'cost_master:outsourcing_cost_create' %}">
                                     <i class="bi bi-plus-circle"></i> 新規作成
@@ -119,11 +103,6 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'workloads:workload_calendar' %}">
                             <i class="bi bi-calendar-event"></i> 工数管理
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'reports:report_list' %}">
-                            <i class="bi bi-bar-chart"></i> レポート
                         </a>
                     </li>
                 </div>
@@ -174,18 +153,8 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'projects:project_list' %}">
-                                <i class="bi bi-folder"></i> プロジェクト管理
-                            </a>
-                        </li>
-                        <li class="nav-item">
                             <a class="nav-link" href="{% url 'workloads:workload_calendar' %}">
                                 <i class="bi bi-calendar-event"></i> 工数入力
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'reports:report_list' %}">
-                                <i class="bi bi-bar-chart"></i> レポート
                             </a>
                         </li>
                         {% if user.is_staff or user.is_superuser %}
@@ -194,6 +163,16 @@
                             <span>管理機能</span>
                         </h6>
                         <li class="nav-item">
+                            <a class="nav-link" href="{% url 'reports:report_list' %}">
+                                <i class="bi bi-bar-chart"></i> レポート
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'projects:project_list' %}">
+                                <i class="bi bi-folder"></i> プロジェクト管理
+                            </a>
+                        </li>
+                        <!-- <li class="nav-item">
                             <a class="nav-link" href="{% url 'users:user_list' %}">
                                 <i class="bi bi-people"></i> ユーザー管理
                             </a>
@@ -207,7 +186,25 @@
                             <a class="nav-link" href="{% url 'users:section_list' %}">
                                 <i class="bi bi-diagram-3"></i> 課管理
                             </a>
+                        </li> -->
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-people"></i> 所属管理
+                            </a>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="{% url 'users:user_list' %}">
+                                    <i class="bi bi-people"></i> ユーザー一覧
+                                </a></li>
+                                <li><a class="dropdown-item" href="{% url 'users:department_list' %}">
+                                    <i class="bi bi-building"></i> 部署管理
+                                </a></li>
+                                <li><a class="dropdown-item" href="{% url 'users:section_list' %}">
+                                    <i class="bi bi-diagram-3"></i> 課管理
+                                </a></li>
+                            </ul>
                         </li>
+                        {% endif %}
+                        {% if user.is_superuser %}
                         <li class="nav-item">
                             <a class="nav-link" href="/admin/">
                                 <i class="bi bi-gear"></i> システム管理

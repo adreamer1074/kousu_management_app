@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} - 工数管理システム{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- 統計カード -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4>{{ total_users }}</h4>
+                            <p class="mb-0">総ユーザー数</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-people" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <a href="{% url 'users:user_list' %}" class="text-white text-decoration-none">
+                        <small>詳細を見る <i class="bi bi-arrow-right"></i></small>
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card text-white bg-success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4>{{ active_users }}</h4>
+                            <p class="mb-0">アクティブユーザー</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-person-check" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <small class="text-white">有効なユーザー数</small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card text-white bg-info">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4>{{ active_projects }}</h4>
+                            <p class="mb-0">進行中プロジェクト</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-folder-plus" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <a href="{% url 'projects:project_list' %}" class="text-white text-decoration-none">
+                        <small>詳細を見る <i class="bi bi-arrow-right"></i></small>
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card text-white bg-warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4>{{ staff_users }}</h4>
+                            <p class="mb-0">スタッフユーザー</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-shield-check" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <small class="text-white">管理権限を持つユーザー</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- クイックアクション -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-lightning"></i> クイックアクション</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-2">
+                            <a href="{% url 'users:register' %}" class="btn btn-primary w-100">
+                                <i class="bi bi-person-plus"></i> 新規ユーザー作成
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{% url 'projects:project_create' %}" class="btn btn-success w-100">
+                                <i class="bi bi-folder-plus"></i> 新規プロジェクト
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{% url 'users:department_list' %}" class="btn btn-info w-100">
+                                <i class="bi bi-building"></i> 部署管理
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{% url 'reports:report_list' %}" class="btn btn-secondary w-100">
+                                <i class="bi bi-graph-up"></i> レポート確認
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 最近のアクティビティ -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-clock-history"></i> 最近のユーザー登録</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">最近の登録ユーザー情報を表示（実装予定）</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-exclamation-triangle"></i> システムアラート</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">システムアラート情報を表示（実装予定）</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

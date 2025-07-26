@@ -16,7 +16,7 @@ from decimal import Decimal
 
 from .models import Workload
 from apps.projects.models import Project, ProjectTicket
-from apps.users.models import Department
+from apps.users.models import Department, Section
 
 User = get_user_model()
 
@@ -109,7 +109,6 @@ class WorkloadCalendarView(LoginRequiredMixin, TemplateView):
 
         # 課一覧（フィルター用）
         if user.is_staff or user.is_superuser:
-            from apps.users.models import Section
             sections = Section.objects.filter(is_active=True).select_related('department').order_by('department__name', 'name')
         else:
             user_section = getattr(user, 'section', None)

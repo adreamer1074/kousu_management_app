@@ -56,6 +56,19 @@
         <div class="col-lg-3 col-md-6">
             <div class="card dashboard-card text-center h-100">
                 <div class="card-body">
+                    <i class="bi bi-calendar-event text-primary card-icon"></i>
+                    <h5 class="card-title">工数管理</h5>
+                    <p class="card-text">工数カレンダー・入力</p>
+                    <a href="{% url 'workloads:workload_calendar' %}" class="btn btn-primary">
+                        開く
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6">
+            <div class="card dashboard-card text-center h-100">
+                <div class="card-body">
                     <i class="bi bi-clock-history text-primary card-icon"></i>
                     <h5 class="card-title">工数集計</h5>
                     <p class="card-text">工数データの登録・管理</p>
@@ -72,68 +85,66 @@
                     <i class="bi bi-folder text-success card-icon"></i>
                     <h5 class="card-title">プロジェクト</h5>
                     <p class="card-text">プロジェクト管理</p>
-                    <a href="/projects/" class="btn btn-success">
+                    <a href="{% url 'projects:project_list' %}" class="btn btn-success">
                         開く
                     </a>
                 </div>
             </div>
         </div>
         
+        {% if user.is_staff or user.is_superuser %}
         <div class="col-lg-3 col-md-6">
             <div class="card dashboard-card text-center h-100">
                 <div class="card-body">
                     <i class="bi bi-people text-info card-icon"></i>
                     <h5 class="card-title">ユーザー管理</h5>
                     <p class="card-text">ユーザー・部署管理</p>
-                    <a href="/users/" class="btn btn-info">
+                    <a href="{% url 'users:user_list' %}" class="btn btn-info">
                         開く
                     </a>
                 </div>
             </div>
         </div>
+        {% endif %}
         
+        {% if user.is_staff or user.is_superuser %}
         <div class="col-lg-3 col-md-6">
             <div class="card dashboard-card text-center h-100">
                 <div class="card-body">
                     <i class="bi bi-currency-yen text-warning card-icon"></i>
-                    <h5 class="card-title">コストマスター</h5>
-                    <p class="card-text">単価・請求管理</p>
-                    <a href="/cost-master/" class="btn btn-warning">
+                    <h5 class="card-title">外注費</h5>
+                    <p class="card-text">外注費管理</p>
+                    <a href="{% url 'cost_master:outsourcing_dashboard' %}" class="btn btn-warning">
                         開く
                     </a>
                 </div>
             </div>
         </div>
+        {% endif %}
     </div>
 
-    <!-- 統計情報 -->
+    <!-- 統計情報カード -->
     <div class="row g-4">
         <div class="col-lg-8">
             <div class="card dashboard-card">
                 <div class="card-header">
                     <h5 class="card-title mb-0">
-                        <i class="bi bi-graph-up"></i> 最近の活動
+                        <i class="bi bi-graph-up"></i> システム概要
                     </h5>
                 </div>
                 <div class="card-body">
                     <div class="row text-center">
                         <div class="col-md-3">
-                            <div class="border-end">
-                                <h3 class="text-primary mb-1">--</h3>
-                                <small class="text-muted">今月の工数</small>
-                            </div>
+                            <h3 class="text-primary mb-1">--</h3>
+                            <small class="text-muted">今月の工数</small>
                         </div>
                         <div class="col-md-3">
-                            <div class="border-end">
-                                <h3 class="text-success mb-1">--</h3>
-                                <small class="text-muted">アクティブプロジェクト</small>
-                            </div>
+                            <h3 class="text-success mb-1">--</h3>
+                            <small class="text-muted">アクティブプロジェクト</small>
                         </div>
                         <div class="col-md-3">
-                            <div class="border-end">
-                                <h3 class="text-info mb-1">--</h3>
-                                <small class="text-muted">登録ユーザー</small>
-                            </div>
+                            <h3 class="text-info mb-1">--</h3>
+                            <small class="text-muted">登録ユーザー</small>
                         </div>
                         <div class="col-md-3">
                             <h3 class="text-warning mb-1">--</h3>
@@ -153,15 +164,17 @@
                 </div>
                 <div class="card-body">
                     <div class="d-grid gap-2">
-                        <a href="{% url 'reports:workload_aggregation_create' %}" class="btn btn-outline-primary">
-                            <i class="bi bi-plus-circle"></i> 工数登録
+                        <a href="{% url 'workloads:workload_calendar' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-plus-circle"></i> 工数入力
                         </a>
-                        <a href="/projects/create/" class="btn btn-outline-success">
+                        {% if user.is_staff or user.is_superuser %}
+                        <a href="{% url 'projects:project_create' %}" class="btn btn-outline-success">
                             <i class="bi bi-folder-plus"></i> プロジェクト作成
                         </a>
-                        <a href="/cost-master/create/" class="btn btn-outline-warning">
-                            <i class="bi bi-currency-exchange"></i> 単価設定
+                        <a href="{% url 'cost_master:outsourcing_dashboard' %}" class="btn btn-outline-warning">
+                            <i class="bi bi-currency-exchange"></i> 外注費管理
                         </a>
+                        {% endif %}
                         <a href="{% url 'reports:report_export_list' %}" class="btn btn-outline-info">
                             <i class="bi bi-download"></i> レポート出力
                         </a>

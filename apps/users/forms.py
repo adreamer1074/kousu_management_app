@@ -1,53 +1,85 @@
 from django import forms
-from django.contrib.auth.forms import UserCreationForm, UserChangeForm
+from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth import authenticate, login
 from .models import CustomUser, Department, Section
 
-class CustomUserCreationForm(UserCreationForm):
-    """管理者用カスタムユーザー作成フォーム"""
-    email = forms.EmailField(required=False)
-    first_name = forms.CharField(max_length=30, required=False)
-    last_name = forms.CharField(max_length=30, required=False)
-    department = forms.ModelChoiceField(
-        queryset=Department.objects.filter(is_active=True), 
-        required=False,
-        empty_label="選択してください"
+class CustomUserCreationForm(forms.ModelForm):
+    """管理者用カスタムユーザー作成フォーム（完全自動ログイン防止版）"""
+    password1 = forms.CharField(
+        label='パスワード',
+        widget=forms.PasswordInput(attrs={'class': 'form-control'}),
+        help_text='8文字以上で入力してください。'
     )
-    section = forms.ModelChoiceField(
-        queryset=Section.objects.filter(is_active=True), 
-        required=False,
-        empty_label="選択してください"
+    password2 = forms.CharField(
+        label='パスワード（確認）',
+        widget=forms.PasswordInput(attrs={'class': 'form-control'}),
+        help_text='確認のため、同じパスワードを入力してください。'
     )
-    is_staff = forms.BooleanField(required=False, label="スタッフ権限")
-    is_active = forms.BooleanField(initial=True, required=False, label="アクティブ")
 
     class Meta:
         model = CustomUser
         fields = ('username', 'email', 'first_name', 'last_name', 'department', 'section', 'employee_level',
-                 'is_staff', 'is_active', 'password1', 'password2')
+                 'is_staff', 'is_active')
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'first_name': forms.TextInput(attrs={'class': 'form-control'}),
             'last_name': forms.TextInput(attrs={'class': 'form-control'}),
-            'department': forms.Select(attrs={'class': 'form-select'}),
-            'section': forms.Select(attrs={'class': 'form-select'}),
+            'department': forms.Select(attrs={'class': 'form-select', 'onchange': 'loadSections(this.value)'}),
+            'section': forms.Select(attrs={'class': 'form-select', 'id': 'id_section'}),
+            'employee_level': forms.Select(attrs={'class': 'form-select'}),
             'is_staff': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'employee_level': forms.Select(attrs={'class': 'form-select'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # パスワードフィールドにBootstrapクラスを追加
-        self.fields['password1'].widget.attrs.update({'class': 'form-control'})
-        self.fields['password2'].widget.attrs.update({'class': 'form-control'})
+        self.fields['department'].queryset = Department.objects.filter(is_active=True)
+        self.fields['section'].queryset = Section.objects.filter(is_active=True)
+        self.fields['department'].empty_label = "選択してください"
+        self.fields['section'].empty_label = "選択してください"
+        self.fields['employee_level'].empty_label = "選択してください"
+
+    def clean_password2(self):
+        password1 = self.cleaned_data.get("password1")
+        password2 = self.cleaned_data.get("password2")
+        if password1 and password2 and password1 != password2:
+            raise forms.ValidationError("パスワードが一致しません。")
+        return password2
+
+    def clean_username(self):
+        username = self.cleaned_data.get('username')
+        if CustomUser.objects.filter(username=username).exists():
+            raise forms.ValidationError("このユーザー名は既に使用されています。")
+        return username
+
+    def save(self, commit=True):
+        """
+        完全自動ログイン防止版save
+        UserCreationFormを一切使わない独自実装
+        """
+        # 新しいユーザーインスタンスを作成
+        user = CustomUser(
+            username=self.cleaned_data['username'],
+            email=self.cleaned_data.get('email', ''),
+            first_name=self.cleaned_data.get('first_name', ''),
+            last_name=self.cleaned_data.get('last_name', ''),
+            department=self.cleaned_data.get('department'),
+            section=self.cleaned_data.get('section'),
+            employee_level=self.cleaned_data.get('employee_level'),
+            is_staff=self.cleaned_data.get('is_staff', False),
+            is_active=self.cleaned_data.get('is_active', True),
+            is_superuser=False,  # 明示的にFalse
+        )
         
-        # 課の選択肢を動的に変更するためのJavaScript用属性
-        self.fields['section'].widget.attrs.update({'id': 'id_section'})
-        self.fields['department'].widget.attrs.update({
-            'id': 'id_department',
-            'onchange': 'loadSections(this.value)'
-        })
+        # パスワードを設定
+        user.set_password(self.cleaned_data['password1'])
+        
+        if commit:
+            user.save()
+        
+        # 重要: authenticate()やlogin()を一切呼ばない
+        return user
 
 class CustomUserForm(forms.ModelForm):
     class Meta:
@@ -63,7 +95,7 @@ class CustomUserForm(forms.ModelForm):
             'employee_level': forms.Select(attrs={'class': 'form-select'}),
         }
 
-class SuperUserEditForm(UserChangeForm):
+class SuperUserEditForm(forms.ModelForm):
     """スーパーユーザー用完全編集フォーム"""
     password = None  # パスワードフィールドを除外
 
@@ -92,7 +124,7 @@ class SuperUserEditForm(UserChangeForm):
         self.fields['section'].empty_label = "選択してください"
         self.fields['employee_level'].empty_label = "選択してください"
 
-class UserEditForm(UserChangeForm):
+class UserEditForm(forms.ModelForm):
     """一般管理者用ユーザー編集フォーム"""
     password = None  # パスワードフィールドを除外
 
@@ -166,3 +198,47 @@ class SectionForm(forms.ModelForm):
         self.fields['manager'].queryset = CustomUser.objects.filter(is_active=True)
         self.fields['department'].empty_label = "選択してください"
         self.fields['manager'].empty_label = "選択してください"
+
+class AdminUserCreationForm(forms.ModelForm):
+    """管理者専用ユーザー作成フォーム（自動ログイン完全防止）"""
+    password1 = forms.CharField(
+        label='パスワード',
+        widget=forms.PasswordInput(attrs={'class': 'form-control'}),
+        help_text='8文字以上で入力してください。'
+    )
+    password2 = forms.CharField(
+        label='パスワード（確認）',
+        widget=forms.PasswordInput(attrs={'class': 'form-control'}),
+        help_text='確認のため、同じパスワードを入力してください。'
+    )
+
+    class Meta:
+        model = CustomUser
+        fields = ('username', 'email', 'first_name', 'last_name', 'department', 'section', 'employee_level',
+                 'is_staff', 'is_active')
+        widgets = {
+            'username': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'first_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'last_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'department': forms.Select(attrs={'class': 'form-select'}),
+            'section': forms.Select(attrs={'class': 'form-select'}),
+            'employee_level': forms.Select(attrs={'class': 'form-select'}),
+            'is_staff': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+    def clean_password2(self):
+        password1 = self.cleaned_data.get("password1")
+        password2 = self.cleaned_data.get("password2")
+        if password1 and password2 and password1 != password2:
+            raise forms.ValidationError("パスワードが一致しません。")
+        return password2
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.set_password(self.cleaned_data["password1"])
+        if commit:
+            user.save()
+            self.save_m2m()
+        return user
