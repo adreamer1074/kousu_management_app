@@ -25,6 +25,22 @@
         padding: 2rem;
         margin-bottom: 2rem;
     }
+    .stat-card {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 1rem;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+    }
+    .progress-custom {
+        height: 8px;
+        border-radius: 4px;
+    }
 </style>
 {% endblock %}
 
@@ -38,7 +54,11 @@
                     おかえりなさい、{{ user.get_full_name|default:user.username }}さん
                 </h1>
                 <p class="lead mb-0">
-                    今日の工数入力はお済みですか？
+                    {% if today_workload_exists %}
+                        今日の工数入力済み ✅ お疲れ様でした！
+                    {% else %}
+                        今日の工数入力をお忘れなく 📝
+                    {% endif %}
                 </p>
             </div>
             <div class="col-md-4 text-end">
@@ -46,6 +66,29 @@
             </div>
         </div>
     </div>
+
+    <!-- 今日のアクション -->
+    {% if not today_workload_exists %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-exclamation-triangle me-3" style="font-size: 1.5rem;"></i>
+                    <div class="flex-grow-1">
+                        <strong>今日の工数がまだ入力されていません</strong>
+                        <p class="mb-0 small">{{ today|date:"Y年m月d日" }}の作業内容を記録しましょう</p>
+                    </div>
+                    <div>
+                        <a href="{% url 'workloads:workload_calendar' %}" class="btn btn-warning">
+                            <i class="bi bi-plus-circle"></i> 今すぐ入力
+                        </a>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- 個人用クイックアクセス -->
     <div class="row g-4 mb-4">
@@ -101,20 +144,50 @@
                 <div class="card-body">
                     <div class="row text-center">
                         <div class="col-md-3">
-                            <h3 class="text-primary mb-1">{{ this_month_hours|default:"0.0" }}</h3>
-                            <small class="text-muted">今月の工数（時間）</small>
+                            <div class="stat-card">
+                                <div class="stat-number text-primary">{{ this_month_hours }}</div>
+                                <small class="text-muted">今月の工数（時間）</small>
+                                <div class="progress progress-custom mt-2">
+                                    <div class="progress-bar bg-primary" style="width: {% widthratio this_month_hours 160 100 %}%"></div>
+                                </div>
+                                <small class="text-muted">目標: 160h</small>
+                            </div>
                         </div>
                         <div class="col-md-3">
-                            <h3 class="text-success mb-1">{{ this_week_hours|default:"0.0" }}</h3>
-                            <small class="text-muted">今週の工数（時間）</small>
+                            <div class="stat-card">
+                                <div class="stat-number text-success">{{ this_week_hours }}</div>
+                                <small class="text-muted">今週の工数（時間）</small>
+                                <div class="progress progress-custom mt-2">
+                                    <div class="progress-bar bg-success" style="width: {% widthratio this_week_hours 40 100 %}%"></div>
+                                </div>
+                                <small class="text-muted">目標: 40h</small>
+                            </div>
                         </div>
                         <div class="col-md-3">
-                            <h3 class="text-info mb-1">{{ my_projects.count|default:"0" }}</h3>
-                            <small class="text-muted">参加プロジェクト</small>
+                            <div class="stat-card">
+                                <div class="stat-number text-info">{{ my_projects.count }}</div>
+                                <small class="text-muted">参加プロジェクト</small>
+                                <div class="mt-2">
+                                    {% if my_projects.count > 0 %}
+                                        <i class="bi bi-check-circle text-success"></i>
+                                    {% else %}
+                                        <i class="bi bi-dash-circle text-muted"></i>
+                                    {% endif %}
+                                </div>
+                            </div>
                         </div>
                         <div class="col-md-3">
-                            <h3 class="text-warning mb-1">{{ pending_tasks.count|default:"0" }}</h3>
-                            <small class="text-muted">未完了タスク</small>
+                            <div class="stat-card">
+                                <div class="stat-number text-warning">{{ pending_tasks.count }}</div>
+                                <small class="text-muted">未入力日数</small>
+                                <div class="mt-2">
+                                    {% if pending_tasks.count == 0 %}
+                                        <i class="bi bi-check-circle text-success"></i>
+                                    {% else %}
+                                        <i class="bi bi-exclamation-circle text-warning"></i>
+                                    {% endif %}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -131,12 +204,15 @@
                 <div class="card-body">
                     {% if recent_workloads %}
                         {% for workload in recent_workloads %}
-                        <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
                             <div>
                                 <strong>{{ workload.project.name|truncatechars:20 }}</strong><br>
-                                <small class="text-muted">{{ workload.year_month }}</small>
+                                <small class="text-muted">{{ workload.year_month|date:"Y年m月" }}</small>
                             </div>
-                            <span class="badge bg-primary">{{ workload.total_hours }}h</span>
+                            <div class="text-end">
+                                <span class="badge bg-primary">{{ workload.total_hours|default:"0" }}h</span><br>
+                                <small class="text-muted">{{ workload.updated_at|date:"m/d" }}</small>
+                            </div>
                         </div>
                         {% endfor %}
                     {% else %}
@@ -156,6 +232,41 @@
             </div>
         </div>
     </div>
+
+    <!-- 参加プロジェクト一覧 -->
+    {% if my_projects %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card dashboard-card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-folder"></i> 参加中のプロジェクト
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for project in my_projects %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="border rounded p-3 h-100">
+                                <h6 class="mb-2">{{ project.name }}</h6>
+                                <p class="small text-muted mb-2">{{ project.description|truncatechars:80 }}</p>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <small class="text-muted">
+                                        開始: {{ project.start_date|date:"Y/m/d" }}
+                                    </small>
+                                    <span class="badge bg-{{ project.is_active|yesno:'success,secondary' }}">
+                                        {{ project.is_active|yesno:'進行中,完了' }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
@@ -163,6 +274,13 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     console.log('ユーザーダッシュボード読み込み完了');
+    
+    // 統計情報の更新（必要に応じて）
+    const thisMonthHours = {{ this_month_hours|default:0 }};
+    const thisWeekHours = {{ this_week_hours|default:0 }};
+    
+    console.log('今月の工数:', thisMonthHours + 'h');
+    console.log('今週の工数:', thisWeekHours + 'h');
 });
 </script>
 {% endblock %}

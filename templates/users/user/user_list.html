@@ -1,244 +1,558 @@
 {% extends 'base.html' %}
 
-{% block title %}ユーザー一覧 - 工数管理システム{% endblock %}
-
+{% block title %}ユーザー管理 - 工数管理システム{% endblock %}
 {% block page_title %}ユーザー管理{% endblock %}
 
 {% block page_actions %}
 <div class="btn-toolbar mb-2 mb-md-0">
     <div class="btn-group me-2">
-        {% if request.user.is_staff or request.user.is_superuser %}
-            <a href="{% url 'users:register' %}" class="btn btn-sm btn-primary">
-                <i class="bi bi-person-plus"></i> 新規ユーザー作成
-            </a>
-        {% endif %}
+        <a href="{% url 'users:register' %}" class="btn btn-sm btn-primary">
+            <i class="bi bi-person-plus"></i> 新規ユーザー作成
+        </a>
+    </div>
+    <div class="btn-group">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleInactiveUsers()">
+            <i class="bi bi-eye"></i> <span id="toggleText">無効ユーザーを表示</span>
+        </button>
     </div>
 </div>
 {% endblock %}
 
 {% block content %}
-<!-- 検索・フィルター -->
-<div class="row mb-3">
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-body">
-                <form method="get" class="row g-3">
-                    <div class="col-md-4">
-                        <label for="search" class="form-label">検索</label>
-                        <input type="text" class="form-control" id="search" name="search" 
-                               placeholder="ユーザー名、メール、氏名で検索" 
-                               value="{{ request.GET.search }}">
-                    </div>
-                    <div class="col-md-3">
-                        <label for="department" class="form-label">部署</label>
-                        <select class="form-select" id="department" name="department">
-                            <option value="">全ての部署</option>
-                            <!-- 動的に部署を表示 -->
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label for="is_active" class="form-label">ステータス</label>
-                        <select class="form-select" id="is_active" name="is_active">
-                            <option value="">全て</option>
-                            <option value="true" {% if request.GET.is_active == 'true' %}selected{% endif %}>アクティブ</option>
-                            <option value="false" {% if request.GET.is_active == 'false' %}selected{% endif %}>非アクティブ</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-search"></i> 検索
-                        </button>
-                    </div>
-                </form>
-            </div>
+<div class="card">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">ユーザー一覧</h5>
+            <span class="badge bg-primary">{{ users.count }} 名</span>
         </div>
     </div>
-</div>
-
-<!-- ユーザー一覧テーブル -->
-<div class="row">
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-people"></i> ユーザー一覧 
-                    <span class="badge bg-secondary">{{ users|length }} 件</span>
-                </h5>
+    <div class="card-body">
+        <!-- フィルター -->
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <input type="text" id="searchInput" class="form-control" placeholder="ユーザー名、氏名で検索...">
             </div>
-            <div class="card-body p-0">
-                {% if users %}
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th scope="col">
-                                        <input type="checkbox" class="form-check-input" id="selectAll">
-                                    </th>
-                                    <th scope="col">ユーザー名</th>
-                                    <th scope="col">氏名</th>
-                                    <th scope="col">メールアドレス</th>
-                                    <th scope="col">部署</th>
-                                    <th scope="col">ステータス</th>
-                                    <th scope="col">最終ログイン</th>
-                                    <th scope="col">登録日</th>
-                                    <th scope="col">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for user in users %}
-                                <tr>
-                                    <td>
-                                        <input type="checkbox" class="form-check-input" name="selected_users" value="{{ user.id }}">
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <i class="bi bi-person-circle me-2 text-muted"></i>
-                                            <a href="{% url 'users:user_detail' pk=user.pk %}">
-                                                <strong>{{ user.username }}</strong>
-                                            </a>
-                                            {% if user.is_superuser %}
-                                                <span class="badge bg-danger ms-2">管理者</span>
-                                            {% elif user.is_staff %}
-                                                <span class="badge bg-warning ms-2">スタッフ</span>
-                                            {% endif %}
-                                        </div>
-                                    </td>
-                                    <td>{{ user.get_full_name|default:"-" }}</td>
-                                    <td>
-                                        {% if user.email %}
-                                            <a href="mailto:{{ user.email }}" class="text-decoration-none">
-                                                {{ user.email }}
-                                            </a>
-                                        {% else %}
-                                            <span class="text-muted">未設定</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if user.department %}
-                                            <span class="badge bg-info">{{ user.department.name }}</span>
-                                        {% else %}
-                                            <span class="text-muted">未設定</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if user.is_active %}
-                                            <span class="badge bg-success">
-                                                <i class="bi bi-check-circle"></i> アクティブ
-                                            </span>
-                                        {% else %}
-                                            <span class="badge bg-secondary">
-                                                <i class="bi bi-x-circle"></i> 非アクティブ
-                                            </span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if user.last_login %}
-                                            <small class="text-muted">
-                                                {{ user.last_login|date:"Y/m/d H:i" }}
-                                            </small>
-                                        {% else %}
-                                            <span class="text-muted">未ログイン</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <small class="text-muted">
-                                            {{ user.date_joined|date:"Y/m/d" }}
-                                        </small>
-                                    </td>
-                                    <td>
-                                        <div class="btn-group btn-group-sm" role="group">
-                                            <a href="{% url 'users:user_detail' user.pk %}" 
-                                               class="btn btn-outline-info" 
-                                               title="詳細">
-                                                <i class="bi bi-eye"></i>
-                                            </a>
-                                            <a href="{% url 'users:user_edit' user.pk %}" 
-                                               class="btn btn-outline-primary" 
-                                               title="編集">
-                                                <i class="bi bi-pencil"></i>
-                                            </a>
-                                            {% if not user.is_superuser %}
-                                                <button type="button" 
-                                                        class="btn btn-outline-danger" 
-                                                        title="削除"
-                                                        onclick="confirmDelete('{{ user.username }}', {{ user.pk }})">
-                                                    <i class="bi bi-trash"></i>
+            <div class="col-md-3">
+                <select id="departmentFilter" class="form-select">
+                    <option value="">全部署</option>
+                    {% for dept in departments %}
+                    <option value="{{ dept.name }}">{{ dept.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select id="statusFilter" class="form-select">
+                    <option value="">全てのステータス</option>
+                    <option value="active">アクティブ</option>
+                    <option value="inactive">非アクティブ</option>
+                    <option value="staff">スタッフ</option>
+                    <option value="superuser">スーパーユーザー</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-outline-secondary w-100" onclick="clearFilters()">
+                    <i class="bi bi-x-circle"></i> クリア
+                </button>
+            </div>
+        </div>
+
+        <!-- ユーザーテーブル -->
+        <div class="table-responsive">
+            <table class="table table-hover" id="usersTable">
+                <thead class="table-light">
+                    <tr>
+                        <th>ユーザー名</th>
+                        <th>氏名</th>
+                        <th>メール</th>
+                        <th>部署</th>
+                        <th>権限</th>
+                        <th>ステータス</th>
+                        <th>最終ログイン</th>
+                        <th class="text-end">アクション</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr class="user-row" data-status="{{ user.is_active|yesno:'active,inactive' }}" data-department="{{ user.department.name|default:'' }}">
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-person-circle me-2 text-muted"></i>
+                                <strong>{{ user.username }}</strong>
+                            </div>
+                        </td>
+                        <td>{{ user.get_full_name|default:"-" }}</td>
+                        <td>{{ user.email|default:"-" }}</td>
+                        <td>
+                            {% if user.department %}
+                                <span class="badge bg-info">{{ user.department.name }}</span>
+                            {% else %}
+                                <span class="text-muted">未設定</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.is_superuser %}
+                                <span class="badge bg-danger">スーパーユーザー</span>
+                            {% elif user.is_staff %}
+                                <span class="badge bg-warning">スタッフ</span>
+                            {% else %}
+                                <span class="badge bg-secondary">一般ユーザー</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.is_active %}
+                                <span class="badge bg-success">
+                                    <i class="bi bi-check-circle"></i> アクティブ
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary">
+                                    <i class="bi bi-x-circle"></i> 非アクティブ
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.last_login %}
+                                <small class="text-muted">{{ user.last_login|date:"Y/m/d H:i" }}</small>
+                            {% else %}
+                                <small class="text-muted">未ログイン</small>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'users:user_detail' user.pk %}" 
+                                   class="btn btn-outline-primary" title="詳細">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{% url 'users:user_edit' user.pk %}" 
+                                   class="btn btn-outline-success" title="編集">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                
+                                {% if user.is_active %}
+                                    <!-- アクティブユーザー：無効化ボタン -->
+                                    {% if not user.is_superuser and user != request.user %}
+                                    <button type="button" 
+                                            class="btn btn-outline-warning" 
+                                            title="無効化"
+                                            onclick="confirmDelete({{ user.pk }}, '{{ user.username }}')">
+                                        <i class="bi bi-person-x"></i>
+                                    </button>
+                                    {% endif %}
+                                {% else %}
+                                    <!-- 非アクティブユーザー：復元・完全削除ボタン -->
+                                    <button type="button" 
+                                            class="btn btn-outline-success" 
+                                            title="復元"
+                                            onclick="confirmRestore({{ user.pk }}, '{{ user.username }}')">
+                                        <i class="bi bi-person-check"></i>
+                                    </button>
+                                    
+                                    {% if not user.is_superuser and user != request.user %}
+                                    <div class="btn-group">
+                                        <button type="button" 
+                                                class="btn btn-outline-danger dropdown-toggle" 
+                                                data-bs-toggle="dropdown" 
+                                                title="削除オプション">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                            <li>
+                                                <a class="dropdown-item text-danger" 
+                                                   href="{% url 'users:user_permanent_delete' user.pk %}">
+                                                    <i class="bi bi-trash3"></i> 完全削除
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <button class="dropdown-item" 
+                                                        onclick="confirmPermanentDelete({{ user.pk }}, '{{ user.username }}')">
+                                                    <i class="bi bi-lightning"></i> 即座に完全削除
                                                 </button>
-                                            {% endif %}
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <div class="text-center py-5">
-                        <i class="bi bi-people text-muted" style="font-size: 3rem;"></i>
-                        <h5 class="text-muted mt-3">ユーザーが見つかりません</h5>
-                        <p class="text-muted">検索条件を変更するか、新しいユーザーを登録してください。</p>
-                        <a href="{% url 'register' %}" class="btn btn-primary">
-                            <i class="bi bi-person-plus"></i> 新規ユーザー登録
-                        </a>
-                    </div>
-                {% endif %}
-            </div>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            <i class="bi bi-people" style="font-size: 2rem;"></i>
+                            <p class="mt-2 mb-0">ユーザーが見つかりません</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
-
-<!-- ページネーション -->
-{% if is_paginated %}
-<div class="row mt-3">
-    <div class="col-md-12">
-        <nav aria-label="ページネーション">
-            <ul class="pagination justify-content-center">
-                {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page=1">最初</a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">前へ</a>
-                    </li>
-                {% endif %}
-
-                <li class="page-item active">
-                    <span class="page-link">
-                        {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
-                    </span>
-                </li>
-
-                {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">次へ</a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">最後</a>
-                    </li>
-                {% endif %}
-            </ul>
-        </nav>
-    </div>
-</div>
-{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// 全選択機能
-document.getElementById('selectAll').addEventListener('change', function() {
-    const checkboxes = document.querySelectorAll('input[name="selected_users"]');
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = this.checked;
-    });
-});
+// グローバル変数
+let showInactiveUsers = false;
 
-// 削除確認
-function confirmDelete(username, userId) {
-    if (confirm(`ユーザー「${username}」を削除しますか？\nこの操作は取り消せません。`)) {
-        // TODO: 削除APIまたはフォーム送信を実装
-        console.log(`Delete user ${userId}`);
+// ユーザー削除確認
+function confirmDelete(userId, username) {
+    if (confirm(`ユーザー「${username}」を無効化しますか？\nこの操作により、ユーザーはログインできなくなります。`)) {
+        deleteUser(userId);
     }
 }
+
+// ユーザー復元確認
+function confirmRestore(userId, username) {
+    if (confirm(`ユーザー「${username}」を復元しますか？\nユーザーは再びログインできるようになります。`)) {
+        restoreUser(userId);
+    }
+}
+
+// AJAX ユーザー削除
+function deleteUser(userId) {
+    // ローディング表示
+    const deleteButton = document.querySelector(`button[onclick*="confirmDelete(${userId}"]`);
+    if (deleteButton) {
+        const originalHTML = deleteButton.innerHTML;
+        deleteButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+        deleteButton.disabled = true;
+    }
+    
+    fetch('{% url "users:user_delete_ajax" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            user_id: userId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', data.message);
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        } else {
+            showAlert('danger', 'エラー: ' + data.error);
+            if (deleteButton) {
+                deleteButton.innerHTML = originalHTML;
+                deleteButton.disabled = false;
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('danger', '削除処理でエラーが発生しました。');
+        if (deleteButton) {
+            deleteButton.innerHTML = originalHTML;
+            deleteButton.disabled = false;
+        }
+    });
+}
+
+// AJAX ユーザー復元
+function restoreUser(userId) {
+    // ローディング表示
+    const restoreButton = document.querySelector(`button[onclick*="confirmRestore(${userId}"]`);
+    if (restoreButton) {
+        const originalHTML = restoreButton.innerHTML;
+        restoreButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+        restoreButton.disabled = true;
+    }
+    
+    fetch('{% url "users:user_restore_ajax" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            user_id: userId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', data.message);
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        } else {
+            showAlert('danger', 'エラー: ' + data.error);
+            if (restoreButton) {
+                restoreButton.innerHTML = originalHTML;
+                restoreButton.disabled = false;
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('danger', '復元処理でエラーが発生しました。');
+        if (restoreButton) {
+            restoreButton.innerHTML = originalHTML;
+            restoreButton.disabled = false;
+        }
+    });
+}
+
+// 完全削除確認（即座実行）
+function confirmPermanentDelete(userId, username) {
+    const confirmText = prompt(
+        `ユーザー「${username}」を完全削除します。\n\n` +
+        `⚠️ この操作は取り消せません ⚠️\n` +
+        `関連する全てのデータが削除されます。\n\n` +
+        `確認のため「DELETE」と入力してください:`
+    );
+    
+    if (confirmText && confirmText.toUpperCase() === 'DELETE') {
+        permanentDeleteUser(userId, confirmText);
+    } else if (confirmText !== null) {
+        alert('確認テキストが正しくありません。');
+    }
+}
+
+// AJAX 完全削除
+function permanentDeleteUser(userId, confirmText) {
+    const button = document.querySelector(`button[onclick*="confirmPermanentDelete(${userId}"]`);
+    let originalHTML = '';
+    
+    if (button) {
+        originalHTML = button.innerHTML;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+        button.disabled = true;
+    }
+    
+    fetch('{% url "users:user_permanent_delete_ajax" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            user_id: userId,
+            confirm_text: confirmText
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', data.message);
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            showAlert('danger', 'エラー: ' + data.error);
+            if (button) {
+                button.innerHTML = originalHTML;
+                button.disabled = false;
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('danger', '完全削除処理でエラーが発生しました。');
+        if (button) {
+            button.innerHTML = originalHTML;
+            button.disabled = false;
+        }
+    });
+}
+
+// 一括クリーンアップ
+function confirmBulkCleanup() {
+    const days = prompt(
+        '非アクティブユーザーの一括削除\n\n' +
+        '何日以上ログインしていないユーザーを削除しますか？\n' +
+        '（デフォルト: 365日）',
+        '365'
+    );
+    
+    if (days === null) return;
+    
+    const confirmText = prompt(
+        `${days}日以上ログインしていない非アクティブユーザーを完全削除します。\n\n` +
+        `⚠️ この操作は取り消せません ⚠️\n\n` +
+        `確認のため「CLEANUP」と入力してください:`
+    );
+    
+    if (confirmText && confirmText.toUpperCase() === 'CLEANUP') {
+        bulkCleanupUsers(parseInt(days), confirmText);
+    } else if (confirmText !== null) {
+        alert('確認テキストが正しくありません。');
+    }
+}
+
+function bulkCleanupUsers(days, confirmText) {
+    fetch('{% url "users:cleanup_inactive_users" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            days_threshold: days,
+            confirm_text: confirmText
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            let message = data.message;
+            if (data.deleted_users && data.deleted_users.length > 0) {
+                message += '\n\n削除されたユーザー:\n';
+                data.deleted_users.forEach(user => {
+                    message += `- ${user.username} (工数: ${user.workload_count}件)\n`;
+                });
+            }
+            alert(message);
+            location.reload();
+        } else {
+            alert('エラー: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('一括削除処理でエラーが発生しました。');
+    });
+}
+
+// CSRFトークン取得
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// 非アクティブユーザーの表示切り替え（修正版）
+function toggleInactiveUsers() {
+    const inactiveRows = document.querySelectorAll('.user-row[data-status="inactive"]');
+    const toggleBtn = document.getElementById('toggleText');
+    const toggleIcon = toggleBtn.parentElement.querySelector('i');
+    
+    showInactiveUsers = !showInactiveUsers;
+    
+    if (showInactiveUsers) {
+        // 非アクティブユーザーを表示
+        inactiveRows.forEach(row => {
+            row.style.display = '';
+            row.classList.add('show-inactive');
+        });
+        toggleBtn.textContent = '無効ユーザーを隠す';
+        toggleIcon.className = 'bi bi-eye-slash';
+    } else {
+        // 非アクティブユーザーを隠す
+        inactiveRows.forEach(row => {
+            row.style.display = 'none';
+            row.classList.remove('show-inactive');
+        });
+        toggleBtn.textContent = '無効ユーザーを表示';
+        toggleIcon.className = 'bi bi-eye';
+    }
+    
+    // フィルターを再適用
+    filterUsers();
+}
+
+// 検索・フィルター機能（修正版）
+function filterUsers() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const departmentFilter = document.getElementById('departmentFilter').value;
+    const statusFilter = document.getElementById('statusFilter').value;
+    
+    const rows = document.querySelectorAll('.user-row');
+    
+    rows.forEach(row => {
+        const username = row.cells[0].textContent.toLowerCase();
+        const fullname = row.cells[1].textContent.toLowerCase();
+        const department = row.getAttribute('data-department');
+        const status = row.getAttribute('data-status');
+        const isStaff = row.querySelector('.badge').textContent.includes('スタッフ');
+        const isSuperuser = row.querySelector('.badge').textContent.includes('スーパーユーザー');
+        
+        let showRow = true;
+        
+        // 検索フィルター
+        if (searchTerm && !username.includes(searchTerm) && !fullname.includes(searchTerm)) {
+            showRow = false;
+        }
+        
+        // 部署フィルター
+        if (departmentFilter && department !== departmentFilter) {
+            showRow = false;
+        }
+        
+        // ステータスフィルター
+        if (statusFilter) {
+            if (statusFilter === 'active' && status !== 'active') showRow = false;
+            if (statusFilter === 'inactive' && status !== 'inactive') showRow = false;
+            if (statusFilter === 'staff' && !isStaff) showRow = false;
+            if (statusFilter === 'superuser' && !isSuperuser) showRow = false;
+        }
+        
+        // 非アクティブユーザーの表示状態をチェック
+        if (status === 'inactive' && !showInactiveUsers) {
+            showRow = false;
+        }
+        
+        // 行の表示/非表示を設定
+        row.style.display = showRow ? '' : 'none';
+    });
+    
+    // 結果数を更新
+    updateResultCount();
+}
+
+// 結果数の更新
+function updateResultCount() {
+    const visibleRows = document.querySelectorAll('.user-row[style=""], .user-row:not([style])');
+    const countBadge = document.querySelector('.badge.bg-primary');
+    const actualVisibleCount = Array.from(visibleRows).filter(row => 
+        row.style.display !== 'none'
+    ).length;
+    
+    countBadge.textContent = `${actualVisibleCount} 名`;
+}
+
+// フィルタークリア
+function clearFilters() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('departmentFilter').value = '';
+    document.getElementById('statusFilter').value = '';
+    filterUsers();
+}
+
+// 初期化処理
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('ユーザー一覧ページ読み込み完了');
+    
+    // 初期状態では非アクティブユーザーを隠す
+    showInactiveUsers = false;
+    const inactiveRows = document.querySelectorAll('.user-row[data-status="inactive"]');
+    inactiveRows.forEach(row => {
+        row.style.display = 'none';
+    });
+    
+    // 初期結果数を設定
+    updateResultCount();
+    
+    // イベントリスナーを設定
+    document.getElementById('searchInput').addEventListener('input', filterUsers);
+    document.getElementById('departmentFilter').addEventListener('change', filterUsers);
+    document.getElementById('statusFilter').addEventListener('change', filterUsers);
+    
+    // デバッグ情報
+    console.log(`非アクティブユーザー数: ${inactiveRows.length}`);
+    console.log(`初期表示状態: ${showInactiveUsers ? '表示' : '非表示'}`);
+});
 </script>
 {% endblock %}
