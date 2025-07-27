@@ -4,10 +4,11 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import TemplateView
 from django.urls import reverse
 from django.contrib import messages
-from apps.users.models import CustomUser, Department
-from apps.projects.models import Project, ProjectTicket
+from django.db.models import Sum, Q
+from datetime import date, datetime, timedelta
+from apps.users.models import CustomUser
+from apps.projects.models import Project
 from apps.workloads.models import Workload
-from datetime import datetime, date
 
 class CustomLoginView(LoginView):
     """ユーザー権限別リダイレクト機能付きログインビュー"""
@@ -17,7 +18,7 @@ class CustomLoginView(LoginView):
         user = self.request.user
         
         # ログイン成功メッセージ
-        messages.success(self.request, f'ようこそ、{user.username}さん！')
+        messages.success(self.request, f'お帰りなさい、{user.username}さん！')
         
         if user.is_superuser:
             # スーパーユーザー → 管理ダッシュボード
@@ -98,21 +99,89 @@ class UserDashboardView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         
-        # 今日の日付
+        # 日付計算
         today = date.today()
         this_month_start = today.replace(day=1)
+        current_year_month = today.strftime('%Y-%m')
         
-        # ユーザーの基本情報
+        # 今週の開始日（月曜日）
+        today_weekday = today.weekday()  # 0=月曜日, 6=日曜日
+        this_week_start = today - timedelta(days=today_weekday)
+        
+        # 今月の工数を取得
+        this_month_workloads = Workload.objects.filter(
+            user=user,
+            year_month=current_year_month
+        )
+        
+        # 今月の合計工数を計算
+        this_month_hours = 0
+        for workload in this_month_workloads:
+            this_month_hours += workload.total_hours
+        
+        # 今週の合計工数を計算
+        this_week_hours = 0
+        for workload in this_month_workloads:
+            # 今週の日付範囲内の工数のみ合計
+            for day_num in range((today - this_week_start).days + 1):
+                target_date = this_week_start + timedelta(days=day_num)
+                if target_date.month == today.month and target_date.year == today.year:
+                    day_hours = workload.get_day_value(target_date.day)
+                    this_week_hours += day_hours
+        
+        # 参加中のプロジェクト（正しいフィールド名を使用）
+        my_projects = Project.objects.filter(
+            workloads__user=user,  # workload → workloads に修正
+            is_active=True
+        ).distinct()
+        
+        # 最近の工数履歴（直近5件）
+        recent_workloads = Workload.objects.filter(
+            user=user
+        ).select_related('project').order_by('-year_month', '-updated_at')[:5]
+        
+        # 今日の工数入力状況をチェック
+        today_workload_exists = False
+        today_workloads = Workload.objects.filter(
+            user=user,
+            year_month=current_year_month
+        )
+        
+        for workload in today_workloads:
+            day_hours = workload.get_day_value(today.day)
+            if day_hours > 0:
+                today_workload_exists = True
+                break
+        
+        # 未入力日数の計算（今月の平日で工数が0の日をカウント）
+        pending_tasks_count = 0
+        import calendar
+        
+        # 今月の日数を取得
+        _, last_day = calendar.monthrange(today.year, today.month)
+        
+        for day in range(1, min(today.day + 1, last_day + 1)):  # 今日まで
+            # 平日かどうかチェック
+            check_date = date(today.year, today.month, day)
+            if check_date.weekday() < 5:  # 月曜日(0)〜金曜日(4)
+                # その日の工数合計をチェック
+                day_total = 0
+                for workload in today_workloads:
+                    day_total += workload.get_day_value(day)
+                
+                if day_total == 0:
+                    pending_tasks_count += 1
+        
         context.update({
             'title': 'ダッシュボード',
             'user': user,
             'today': today,
-            'today_workload_exists': False,  # TODO: 工数アプリ実装後に修正
-            'my_projects': [],  # TODO: プロジェクト参加情報
-            'recent_workloads': [],  # TODO: 最近の工数履歴
-            'this_month_hours': 0,   # TODO: 今月の合計工数
-            'this_week_hours': 0,    # TODO: 今週の合計工数
-            'pending_tasks': [],     # TODO: 未完了タスク
+            'today_workload_exists': today_workload_exists,
+            'my_projects': my_projects,
+            'recent_workloads': recent_workloads,
+            'this_month_hours': round(this_month_hours, 1),
+            'this_week_hours': round(this_week_hours, 1),
+            'pending_tasks': {'count': pending_tasks_count},  # countアトリビュート用
         })
         return context
 
