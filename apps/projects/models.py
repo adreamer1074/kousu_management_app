@@ -317,27 +317,35 @@ class ProjectDetail(models.Model):
     def remaining_workdays(self):
         """残工数（人日）"""
         return self.estimated_workdays - self.used_workdays
-    
+
     @property
     def remaining_amount(self):
         """残金額（税抜）"""
-        # 単価マスターから取得して計算
-        try:
-            cost_master = self.get_cost_master()
-            used_cost = self.used_workdays * cost_master.monthly_cost / 20  # 月20日換算
-            return self.budget_amount - used_cost
-        except:
-            return self.budget_amount
+        # 使用可能金額から実際使用金額を差し引く
+        return max(self.budget_amount - self.billing_amount, 0)
     
     @property
     def profit_rate(self):
         """利益率"""
         if self.billing_amount > 0:
-            total_cost = self.get_total_cost()
-            profit = self.billing_amount - total_cost
-            return (profit / self.billing_amount) * 100
+            # 利益 = 請求金額 - 外注費 - 人件費
+            try:
+                cost_master = self.get_cost_master()
+                if cost_master:
+                    # 人件費計算（月20日換算）
+                    daily_rate = (cost_master.monthly_cost / 20) * 10000  # 万円単位に変換
+                    personnel_cost = self.used_workdays * daily_rate
+                else:
+                    personnel_cost = 0
+                
+                # 利益 = 請求金額 - 外注費 - 人件費
+                profit = self.billing_amount - self.outsourcing_cost - personnel_cost
+                return (profit / self.billing_amount) * 100
+            except:
+                # コストマスターがない場合は外注費のみ考慮
+                profit = self.billing_amount - self.outsourcing_cost
+                return (profit / self.billing_amount) * 100
         return 0
-    
     @property
     def wip_amount(self):
         """仕掛中金額（人日×単価）"""
@@ -384,3 +392,40 @@ class ProjectDetail(models.Model):
         self.save()
         
         return total_days
+    
+    def get_outsourcing_cost_from_cost_master(self, year_month=None):
+        """コストマスターの外注費を取得"""
+        from apps.cost_master.models import OutsourcingCost
+        
+        # 関連するチケット（案件）の外注費を集計
+        if not hasattr(self, 'ticket_id') or not self.ticket_id:
+            return Decimal('0')
+        
+        try:
+            # 指定年月または全期間の外注費を集計
+            outsourcing_costs = OutsourcingCost.objects.filter(
+                ticket_id=self.ticket_id,
+                status='in_progress'  # 着手案件のみ
+            )
+            
+            if year_month:
+                outsourcing_costs = outsourcing_costs.filter(year_month=year_month)
+            
+            total_cost = sum(cost.total_cost for cost in outsourcing_costs)
+            return total_cost
+            
+        except Exception as e:
+            print(f"外注費取得エラー: {e}")
+            return Decimal('0')
+    
+    @property
+    def calculated_outsourcing_cost(self):
+        """計算された外注費（現在月）"""
+        from datetime import datetime
+        current_month = datetime.now().strftime('%Y-%m')
+        return self.get_outsourcing_cost_from_cost_master(current_month)
+    
+    @property
+    def total_outsourcing_cost(self):
+        """総外注費（全期間）"""
+        return self.get_outsourcing_cost_from_cost_master()

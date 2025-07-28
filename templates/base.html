@@ -61,7 +61,7 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <div class="navbar-nav">
                     {% if user.is_staff or user.is_superuser %}
-                        <!-- 管理者・スタッフ用メニュー -->
+                        <!-- 管理者・リーダー用メニュー -->
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'core:home' %}">
                                 <i class="bi bi-house"></i> ダッシュボード

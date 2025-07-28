@@ -24,7 +24,7 @@ class CustomLoginView(LoginView):
             # スーパーユーザー → 管理ダッシュボード
             return reverse('core:admin_dashboard')
         elif user.is_staff:
-            # スタッフ → スタッフダッシュボード
+            # リーダー → リーダーダッシュボード
             return reverse('core:staff_dashboard')
         else:
             # 一般ユーザー → 個人ダッシュボード
@@ -69,7 +69,7 @@ class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
         return context
 
 class StaffDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
-    """スタッフ専用ダッシュボード"""
+    """リーダー専用ダッシュボード"""
     template_name = 'dashboard/staff_dashboard.html'
     
     def test_func(self):
@@ -83,9 +83,9 @@ class StaffDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         
-        # スタッフが管理する情報
+        # リーダーが管理する情報
         context.update({
-            'title': 'スタッフダッシュボード',
+            'title': 'リーダーダッシュボード',
             'managed_users': CustomUser.objects.filter(department=user.department, is_active=True).exclude(id=user.id),
             'my_projects': user.project_set.filter(is_active=True) if hasattr(user, 'project_set') else [],
         })

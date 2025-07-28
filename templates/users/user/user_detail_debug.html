@@ -30,7 +30,7 @@
                     <p><strong>部署:</strong> {{ user_obj.department|default:"未設定" }}</p>
                     <p><strong>課:</strong> {{ user_obj.section|default:"未設定" }}</p>
                     <p><strong>権限レベル:</strong> {{ user_obj.get_employee_level_display|default:"未設定" }}</p>
-                    <p><strong>スタッフ権限:</strong> {{ user_obj.is_staff|yesno:"あり,なし" }}</p>
+                    <p><strong>リーダー権限:</strong> {{ user_obj.is_staff|yesno:"あり,なし" }}</p>
                     <p><strong>アクティブ:</strong> {{ user_obj.is_active|yesno:"有効,無効" }}</p>
                     <p><strong>作成日:</strong> {{ user_obj.date_joined|date:"Y-m-d H:i" }}</p>
                 </div>

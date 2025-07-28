@@ -27,7 +27,7 @@
                     {% if is_editing_superuser %}
                         <span class="badge bg-danger">スーパーユーザー</span>
                     {% elif user_obj.is_staff %}
-                        <span class="badge bg-warning">スタッフ</span>
+                        <span class="badge bg-warning">リーダー</span>
                     {% endif %}
                 </h5>
             </div>
@@ -182,7 +182,7 @@
                                     <div class="form-check">
                                         {{ form.is_staff }}
                                         <label class="form-check-label" for="{{ form.is_staff.id_for_label }}">
-                                            スタッフ権限
+                                            リーダー権限
                                         </label>
                                     </div>
                                     <div class="form-text">管理画面アクセスとユーザー管理</div>

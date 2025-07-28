@@ -45,7 +45,7 @@
                     <option value="">全てのステータス</option>
                     <option value="active">アクティブ</option>
                     <option value="inactive">非アクティブ</option>
-                    <option value="staff">スタッフ</option>
+                    <option value="staff">リーダー</option>
                     <option value="superuser">スーパーユーザー</option>
                 </select>
             </div>
@@ -93,7 +93,7 @@
                             {% if user.is_superuser %}
                                 <span class="badge bg-danger">スーパーユーザー</span>
                             {% elif user.is_staff %}
-                                <span class="badge bg-warning">スタッフ</span>
+                                <span class="badge bg-warning">リーダー</span>
                             {% else %}
                                 <span class="badge bg-secondary">一般ユーザー</span>
                             {% endif %}
@@ -476,7 +476,7 @@ function filterUsers() {
         const fullname = row.cells[1].textContent.toLowerCase();
         const department = row.getAttribute('data-department');
         const status = row.getAttribute('data-status');
-        const isStaff = row.querySelector('.badge').textContent.includes('スタッフ');
+        const isStaff = row.querySelector('.badge').textContent.includes('リーダー');
         const isSuperuser = row.querySelector('.badge').textContent.includes('スーパーユーザー');
         
         let showRow = true;

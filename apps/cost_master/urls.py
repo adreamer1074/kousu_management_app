@@ -23,4 +23,7 @@ urlpatterns = [
     path('api/tickets/', views.get_project_tickets_api, name='get_project_tickets_api'),
     path('api/bp-rate/', views.get_bp_hourly_rate_api, name='get_bp_hourly_rate_api'),
     path('api/bp-projects/', views.get_bp_projects_api, name='get_bp_projects_api'),
+    path('api/bp-hourly-rate/', views.get_bp_hourly_rate_api, name='get_bp_hourly_rate_api'),
+    path('api/project-tickets/', views.get_project_tickets_api, name='get_project_tickets_api'),
+    path('api/ticket-outsourcing-cost/', views.get_ticket_outsourcing_cost_api, name='get_ticket_outsourcing_cost_api'),
 ]

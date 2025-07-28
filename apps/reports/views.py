@@ -96,6 +96,15 @@ class WorkloadAggregationCreateView(LoginRequiredMixin, CreateView):
     template_name = 'reports/workload_aggregation_form.html'
     success_url = reverse_lazy('reports:workload_aggregation')
     
+    def get_initial(self):
+        """フォームの初期値を設定"""
+        initial = super().get_initial()
+        initial.update({
+            'unit_cost_per_month': 75.0,      # 単価のデフォルト値
+            'billing_unit_cost_per_month': 90.0,  # 請求単価のデフォルト値
+        })
+        return initial
+    
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
@@ -108,7 +117,7 @@ class WorkloadAggregationCreateView(LoginRequiredMixin, CreateView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['title'] = '工数集計 - 新規登録'
+        context['title'] = '工数集計登録'
         return context
 
 class WorkloadAggregationDetailView(LoginRequiredMixin, DetailView):
@@ -124,18 +133,9 @@ class WorkloadAggregationUpdateView(LoginRequiredMixin, UpdateView):
     template_name = 'reports/workload_aggregation_form.html'
     success_url = reverse_lazy('reports:workload_aggregation')
     
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
-        return kwargs
-    
-    def form_valid(self, form):
-        messages.success(self.request, '工数集計データが正常に更新されました。')
-        return super().form_valid(form)
-    
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['title'] = '工数集計 - 編集'
+        context['title'] = '工数集計編集'
         return context
 
 class WorkloadAggregationDeleteView(LoginRequiredMixin, DeleteView):
