@@ -187,9 +187,33 @@ class WorkloadAggregationForm(forms.ModelForm):
         self.fields['newbie_workdays'].help_text = 'ユーザーレベルがjuniorの工数を自動計算'
         self.fields['auto_calculate_workdays'].help_text = 'チェックすると保存時に工数を自動計算します'
 
+        # チケット選択時の外注費自動設定用のJavaScriptを追加
+        self.fields['case_name'].widget.attrs.update({
+            'data-auto-fetch-outsourcing': 'true'
+        })
+    
     def clean(self):
         """フォーム全体のバリデーション"""
         cleaned_data = super().clean()
+        
+        # チケット選択時に外注費を自動設定
+        case_name = cleaned_data.get('case_name')
+        if case_name and hasattr(case_name, 'id'):
+            # 外注費を自動計算
+            from apps.cost_master.models import OutsourcingCost
+            from datetime import datetime
+            
+            current_month = datetime.now().strftime('%Y-%m')
+            outsourcing_costs = OutsourcingCost.objects.filter(
+                ticket_id=case_name.id,
+                status='in_progress',
+                year_month=current_month
+            )
+            
+            total_outsourcing_cost = sum(cost.total_cost for cost in outsourcing_costs)
+            
+            # フォームデータに外注費を設定（JavaScript側で処理するため、ここでは参考値として計算）
+            cleaned_data['calculated_outsourcing_cost'] = total_outsourcing_cost
         
         # プロジェクトとチケットの整合性チェック
         project_name = cleaned_data.get('project_name')

@@ -4,7 +4,7 @@ from django.contrib.auth import authenticate, login
 from .models import CustomUser, Department, Section
 
 class CustomUserCreationForm(forms.ModelForm):
-    """管理者用カスタムユーザー作成フォーム（完全自動ログイン防止版）"""
+    """管理者用カスタムユーザー作成フォーム"""
     password1 = forms.CharField(
         label='パスワード',
         widget=forms.PasswordInput(attrs={'class': 'form-control'}),
@@ -242,3 +242,37 @@ class AdminUserCreationForm(forms.ModelForm):
             user.save()
             self.save_m2m()
         return user
+
+class WorkloadAggregationForm(forms.ModelForm):
+    """業務量集計フォーム"""
+    # ...既存のフィールド...
+
+    unit_cost_per_month = forms.DecimalField(
+        label='単価（万円/月）',
+        max_digits=8,
+        decimal_places=1,
+        required=False,
+        initial=75.0,  # デフォルト値を75に設定
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'step': '0.1',
+            'min': '0',
+            'placeholder': '75.0'
+        })
+    )
+    
+    billing_unit_cost_per_month = forms.DecimalField(
+        label='請求単価（万円/月）',
+        max_digits=8,
+        decimal_places=1,
+        required=False,
+        initial=90.0,  # デフォルト値を90に設定
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'step': '0.1',
+            'min': '0',
+            'placeholder': '90.0'
+        })
+    )
+    
+    # ...既存のコード...

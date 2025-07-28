@@ -250,6 +250,7 @@
                         {{ form.available_amount }}
                         <span class="input-group-text">円</span>
                     </div>
+                    <div class="help-text">請求金額 - 外注費（自動計算、手動修正可能）</div>
                     {% if form.available_amount.errors %}
                         <div class="invalid-feedback d-block">
                             {{ form.available_amount.errors.0 }}
@@ -274,12 +275,14 @@
                 <div class="col-md-4">
                     <label for="{{ form.outsourcing_cost_excluding_tax.id_for_label }}" class="form-label">
                         {{ form.outsourcing_cost_excluding_tax.label }}
+                        <i class="bi bi-info-circle" title="チケット選択時に自動取得されます"></i>
                     </label>
                     <div class="input-group">
                         <span class="input-group-text">¥</span>
                         {{ form.outsourcing_cost_excluding_tax }}
                         <span class="input-group-text">円</span>
                     </div>
+                    <div class="help-text">チケット選択時に外注費管理から自動取得（手動修正可能）</div>
                     {% if form.outsourcing_cost_excluding_tax.errors %}
                         <div class="invalid-feedback d-block">
                             {{ form.outsourcing_cost_excluding_tax.errors.0 }}
@@ -291,14 +294,14 @@
                     <div class="calculated-field" id="remainingAmount">
                         自動計算されます
                     </div>
-                    <div class="help-text">残工数 × 請求単価</div>
+                    <div class="help-text">残工数 × (請求単価/20*10000)</div>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">利益率</label>
                     <div class="calculated-field" id="profitRate">
                         自動計算されます
                     </div>
-                    <div class="help-text">（請求金額 / 残金額（税抜）</div>
+                    <div class="help-text">残金額 ÷ 請求金額 × 100</div>
                 </div>
             </div>
         </div>
@@ -336,6 +339,7 @@
                         {{ form.estimated_workdays }}
                         <span class="input-group-text">人日</span>
                     </div>
+                    <div class="help-text">使用可能金額 ÷ (請求単価/20*10000)（自動計算、手動修正可能）</div>
                     {% if form.estimated_workdays.errors %}
                         <div class="invalid-feedback d-block">
                             {{ form.estimated_workdays.errors.0 }}
@@ -396,8 +400,7 @@
                     <div class="calculated-field" id="wipAmount">
                         自動計算されます
                     </div>
-                    <div class="help-text">使用工数合計 × 請求単価 + 外注費</div>
-                    <div class="help-text">進行中の保守案件のみ自動計算されます</div>
+                    <div class="help-text">使用工数合計 × (請求単価/20*10000) + 外注費（開発案件のみ）</div>
                 </div>
             </div>
         </div>
@@ -549,6 +552,300 @@ document.addEventListener('DOMContentLoaded', function() {
     const calculateButton = document.getElementById('calculateWorkdays');
     const form = document.getElementById('workloadForm');
     
+    // 計算対象フィールド
+    const billingAmountField = document.getElementById('{{ form.billing_amount_excluding_tax.id_for_label }}');
+    const outsourcingCostField = document.getElementById('{{ form.outsourcing_cost_excluding_tax.id_for_label }}');
+    const estimatedWorkdaysField = document.getElementById('{{ form.estimated_workdays.id_for_label }}');
+    const availableAmountField = document.getElementById('{{ form.available_amount.id_for_label }}');
+    const billingUnitCostField = document.getElementById('{{ form.billing_unit_cost_per_month.id_for_label }}');
+    const unitCostField = document.getElementById('{{ form.unit_cost_per_month.id_for_label }}');
+    
+    // 計算処理中フラグ（無限ループ防止）
+    let isCalculating = false;
+    
+    // 自動計算機能（修正版）
+    function calculateValues() {
+        if (isCalculating) {
+            console.log('計算処理中のため、スキップします');
+            return;
+        }
+        
+        isCalculating = true;
+        console.log('=== 自動計算開始 ===');
+        
+        try {
+            // 値の取得
+            const billingAmount = parseFloat(billingAmountField?.value) || 0;
+            const outsourcingCost = parseFloat(outsourcingCostField?.value) || 0;
+            const estimatedWorkdays = parseFloat(estimatedWorkdaysField?.value) || 0;
+            const usedWorkdays = parseFloat(usedWorkdaysField?.value) || 0;
+            const newbieWorkdays = parseFloat(newbieWorkdaysField?.value) || 0;
+            const unitCost = parseFloat(unitCostField?.value) || 0;
+            const billingUnitCost = parseFloat(billingUnitCostField?.value) || 0;
+            
+            console.log('取得した値:', {
+                billingAmount, outsourcingCost, estimatedWorkdays, 
+                usedWorkdays, newbieWorkdays, unitCost, billingUnitCost
+            });
+            
+            // 1. 使用可能金額(税別) = 請求金額(税別) - 外注費（税別）
+            const actualAvailableAmount = Math.max(billingAmount - outsourcingCost, 0);
+            console.log('使用可能金額計算:', billingAmount, '-', outsourcingCost, '=', actualAvailableAmount);
+            
+            // 使用可能金額の自動設定
+            if (availableAmountField && availableAmountField.dataset.userModified !== 'true') {
+                if (billingAmount > 0 || outsourcingCost > 0) {
+                    console.log('使用可能金額を自動設定:', actualAvailableAmount);
+                    setFieldValue(availableAmountField, Math.round(actualAvailableAmount));
+                    setAutoCalculatedStyle(availableAmountField);
+                }
+            }
+            
+            // 2. 見積工数（人日）のデフォルト = 使用可能金額(税別) / (請求単価/20*10000)
+            if (estimatedWorkdaysField && estimatedWorkdaysField.dataset.userModified !== 'true') {
+                console.log('見積工数の自動計算チェック:');
+                console.log('- billingUnitCost:', billingUnitCost);
+                console.log('- actualAvailableAmount:', actualAvailableAmount);
+                console.log('- userModified:', estimatedWorkdaysField.dataset.userModified);
+                
+                if (billingUnitCost > 0 && actualAvailableAmount > 0) {
+                    const dailyRate = (billingUnitCost / 20) * 10000; // 万円→円変換
+                    const defaultEstimatedWorkdays = actualAvailableAmount / dailyRate;
+                    
+                    console.log('見積工数詳細計算:');
+                    console.log('- billingUnitCost:', billingUnitCost, '万円/月');
+                    console.log('- dailyRate:', dailyRate, '円/日');
+                    console.log('- actualAvailableAmount:', actualAvailableAmount, '円');
+                    console.log('- defaultEstimatedWorkdays:', defaultEstimatedWorkdays, '人日');
+                    
+                    if (defaultEstimatedWorkdays > 0 && isFinite(defaultEstimatedWorkdays)) {
+                        console.log('✓ 見積工数を自動設定:', defaultEstimatedWorkdays.toFixed(1), '人日');
+                        setFieldValue(estimatedWorkdaysField, defaultEstimatedWorkdays.toFixed(1));
+                        setAutoCalculatedStyle(estimatedWorkdaysField);
+                    } else {
+                        console.log('✗ 見積工数の計算結果が無効:', defaultEstimatedWorkdays);
+                    }
+                } else {
+                    console.log('✗ 見積工数計算の前提条件が不足');
+                    console.log('  - 請求単価 > 0:', billingUnitCost > 0);
+                    console.log('  - 使用可能金額 > 0:', actualAvailableAmount > 0);
+                }
+            } else {
+                console.log('✗ 見積工数の自動計算をスキップ（手動編集済み）');
+            }
+            
+            // 3. 使用工数合計計算
+            const totalUsedWorkdays = usedWorkdays + newbieWorkdays;
+            const totalUsedWorkdaysElement = document.getElementById('totalUsedWorkdays');
+            if (totalUsedWorkdaysElement) {
+                totalUsedWorkdaysElement.textContent = `${totalUsedWorkdays.toFixed(1)}人日`;
+            }
+            
+            // 4. 残工数計算（更新された見積工数を使用）
+            const currentEstimatedWorkdays = parseFloat(estimatedWorkdaysField?.value) || 0;
+            const remainingWorkdays = Math.max(currentEstimatedWorkdays - totalUsedWorkdays, 0);
+            const remainingWorkdaysElement = document.getElementById('remainingWorkdays');
+            if (remainingWorkdaysElement) {
+                remainingWorkdaysElement.textContent = `${remainingWorkdays.toFixed(1)}人日`;
+            }
+            
+            // 5. 残金額（税抜）= 残工数（人日）* (請求単価/20*10000)
+            let remainingAmount = 0;
+            if (billingUnitCost > 0) {
+                const dailyBillingRate = (billingUnitCost / 20) * 10000; // 万円→円変換
+                remainingAmount = remainingWorkdays * dailyBillingRate;
+            }
+            
+            const remainingAmountElement = document.getElementById('remainingAmount');
+            if (remainingAmountElement) {
+                remainingAmountElement.textContent = `¥${remainingAmount.toLocaleString()}`;
+            }
+            
+            // 6. 利益率 = 残金額（税抜）/ 請求金額(税別) * 100
+            let profitRate = 0;
+            if (billingAmount > 0) {
+                profitRate = (remainingAmount / billingAmount) * 100;
+            }
+            
+            const profitRateElement = document.getElementById('profitRate');
+            if (profitRateElement) {
+                const profitClass = profitRate >= 0 ? 'text-success' : 'text-danger';
+                profitRateElement.innerHTML = `<span class="${profitClass}">${profitRate.toFixed(1)}%</span>`;
+            }
+            
+            // 7. 仕掛中金額計算（開発案件のみ）
+            const wipAmountElement = document.getElementById('wipAmount');
+            if (wipAmountElement && classificationSelect) {
+                if (classificationSelect.value === 'development' && billingUnitCost > 0) {
+                    // 開発案件：使用工数合計 × (請求単価/20*10000) + 外注費
+                    const dailyBillingRate = (billingUnitCost / 20) * 10000;
+                    const wipAmount = (totalUsedWorkdays * dailyBillingRate) + outsourcingCost;
+                    wipAmountElement.textContent = `¥${wipAmount.toLocaleString()}`;
+                } else {
+                    wipAmountElement.textContent = '¥0';
+                }
+            }
+            
+            console.log('=== 自動計算完了 ===');
+            
+        } catch (error) {
+            console.error('計算エラー:', error);
+        } finally {
+            isCalculating = false;
+        }
+    }
+    
+    // フィールドに値を安全に設定する関数
+    function setFieldValue(field, value) {
+        if (field && field.value !== String(value)) {
+            field.value = value;
+            console.log(`フィールド値設定: ${field.id} = ${value}`);
+        }
+    }
+    
+    // 自動計算フィールドのスタイルを設定
+    function setAutoCalculatedStyle(field) {
+        if (field) {
+            field.style.backgroundColor = '#e6f3ff';
+            field.style.borderColor = '#007bff';
+        }
+    }
+    
+    // 手動編集フィールドのスタイルを設定
+    function setManualEditStyle(field) {
+        if (field) {
+            field.style.backgroundColor = '#fff';
+            field.style.borderColor = '#ced4da';
+        }
+    }
+    
+    // ユーザーが手動で入力した場合のフラグ設定
+    function setupUserModificationTracking() {
+        // 見積工数フィールドの手動編集検出
+        if (estimatedWorkdaysField) {
+            // 初期状態を設定
+            estimatedWorkdaysField.dataset.userModified = 'false';
+            
+            // フォーカス時（手動編集開始）
+            estimatedWorkdaysField.addEventListener('focus', function() {
+                console.log('見積工数フィールドにフォーカス - 手動編集モード開始');
+                this.dataset.userModified = 'true';
+                setManualEditStyle(this);
+            });
+            
+            // 直接入力時
+            estimatedWorkdaysField.addEventListener('input', function() {
+                console.log('見積工数が手動で入力されました:', this.value);
+                this.dataset.userModified = 'true';
+                setManualEditStyle(this);
+                // 他の計算は継続
+                setTimeout(() => {
+                    if (!isCalculating) calculateValues();
+                }, 100);
+            });
+        }
+        
+        // 使用可能金額フィールドの手動編集検出
+        if (availableAmountField) {
+            // 初期状態を設定
+            availableAmountField.dataset.userModified = 'false';
+            
+            // フォーカス時（手動編集開始）
+            availableAmountField.addEventListener('focus', function() {
+                console.log('使用可能金額フィールドにフォーカス - 手動編集モード開始');
+                this.dataset.userModified = 'true';
+                setManualEditStyle(this);
+            });
+            
+            // 直接入力時
+            availableAmountField.addEventListener('input', function() {
+                console.log('使用可能金額が手動で入力されました:', this.value);
+                this.dataset.userModified = 'true';
+                setManualEditStyle(this);
+                // 他の計算は継続
+                setTimeout(() => {
+                    if (!isCalculating) calculateValues();
+                }, 100);
+            });
+        }
+    }
+    
+    // 計算トリガーフィールドのイベントリスナー設定
+    function setupCalculationTriggers() {
+        const triggerFields = [
+            { field: billingAmountField, name: '請求金額' },
+            { field: outsourcingCostField, name: '外注費' },
+            { field: usedWorkdaysField, name: '使用工数' },
+            { field: newbieWorkdaysField, name: '新入社員工数' },
+            { field: unitCostField, name: '原価単価' },
+            { field: billingUnitCostField, name: '請求単価' }
+        ];
+        
+        triggerFields.forEach(({ field, name }) => {
+            if (field) {
+                field.addEventListener('input', function() {
+                    console.log(`${name}が変更されました: ${this.value}`);
+                    setTimeout(() => {
+                        if (!isCalculating) calculateValues();
+                    }, 100);
+                });
+                
+                field.addEventListener('change', function() {
+                    console.log(`${name}が確定されました: ${this.value}`);
+                    setTimeout(() => {
+                        if (!isCalculating) calculateValues();
+                    }, 100);
+                });
+            }
+        });
+        
+        // 案件分類の変更時も再計算
+        if (classificationSelect) {
+            classificationSelect.addEventListener('change', function() {
+                console.log('案件分類変更:', this.value);
+                setTimeout(() => {
+                    if (!isCalculating) calculateValues();
+                }, 100);
+            });
+        }
+    }
+    
+    // 自動計算リセット機能（デバッグ用）
+    function resetAutoCalculation() {
+        console.log('自動計算をリセットします');
+        
+        if (estimatedWorkdaysField) {
+            estimatedWorkdaysField.dataset.userModified = 'false';
+            setAutoCalculatedStyle(estimatedWorkdaysField);
+        }
+        
+        if (availableAmountField) {
+            availableAmountField.dataset.userModified = 'false';
+            setAutoCalculatedStyle(availableAmountField);
+        }
+        
+        setTimeout(() => {
+            if (!isCalculating) calculateValues();
+        }, 100);
+    }
+    
+    // デバッグ用コンソールコマンド
+    window.debugCalculation = {
+        reset: resetAutoCalculation,
+        calculate: calculateValues,
+        showStatus: function() {
+            console.log('=== 自動計算状態 ===');
+            console.log('見積工数 userModified:', estimatedWorkdaysField?.dataset.userModified);
+            console.log('使用可能金額 userModified:', availableAmountField?.dataset.userModified);
+            console.log('現在の値:');
+            console.log('- 請求金額:', billingAmountField?.value);
+            console.log('- 外注費:', outsourcingCostField?.value);
+            console.log('- 請求単価:', billingUnitCostField?.value);
+            console.log('- 見積工数:', estimatedWorkdaysField?.value);
+            console.log('- 使用可能金額:', availableAmountField?.value);
+        }
+    };
+    
     // プロジェクト選択時にチケット一覧を更新
     if (projectSelect && caseNameSelect) {
         projectSelect.addEventListener('change', function() {
@@ -579,45 +876,105 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // チケット選択時に工数をリアルタイム計算
+    // チケット選択時に外注費を自動取得
     if (caseNameSelect) {
         caseNameSelect.addEventListener('change', function() {
             const ticketId = this.value;
             const selectedOption = this.options[this.selectedIndex];
             
-            if (ticketId && autoCalculateCheckbox && autoCalculateCheckbox.checked) {
-                // 案件分類を自動設定
-                const classification = selectedOption.getAttribute('data-classification');
-                if (classification && classificationSelect) {
-                    classificationSelect.value = classification;
-                }
+            if (ticketId) {
+                // 外注費を取得
+                fetchOutsourcingCost(ticketId);
                 
-                // 工数をリアルタイム計算
-                calculateWorkdays(ticketId, classification);
+                if (autoCalculateCheckbox && autoCalculateCheckbox.checked) {
+                    // 案件分類を自動設定
+                    const classification = selectedOption.getAttribute('data-classification');
+                    if (classification && classificationSelect) {
+                        classificationSelect.value = classification;
+                    }
+                    
+                    // 工数をリアルタイム計算
+                    calculateWorkdays(ticketId, classification);
+                } else if (ticketId) {
+                    // 工数を取得
+                    fetchWorkHours(ticketId);
+                }
             } else {
-                // 工数をリセット
-                fetchWorkHours(ticketId);
+                // チケット未選択時は外注費をリセット
+                if (outsourcingCostField) {
+                    outsourcingCostField.value = '0';
+                    calculateValues();
+                }
             }
         });
+    }
+
+    // 外注費取得関数
+    function fetchOutsourcingCost(ticketId) {
+        if (!ticketId || !outsourcingCostField) return;
         
-        // 初期値がある場合
-        if (caseNameSelect.value) {
-            fetchWorkHours(caseNameSelect.value);
-        }
+        // 現在の年月を取得（必要に応じて変更可能）
+        const currentDate = new Date();
+        const yearMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+        
+        console.log(`外注費を取得中: ticket_id=${ticketId}, year_month=${yearMonth}`);
+        
+        // ローディング表示
+        outsourcingCostField.style.backgroundColor = '#fff3cd';
+        outsourcingCostField.value = '取得中...';
+        
+        // 外注費取得API呼び出し
+        fetch(`/cost-master/api/ticket-outsourcing-cost/?ticket_id=${ticketId}&year_month=${yearMonth}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('外注費取得成功:', data);
+                    
+                    // 外注費フィールドに値を設定
+                    setFieldValue(outsourcingCostField, Math.round(data.total_cost));
+                    setAutoCalculatedStyle(outsourcingCostField);
+                    
+                    // 詳細情報をコンソールに表示（デバッグ用）
+                    if (data.cost_details && data.cost_details.length > 0) {
+                        console.log('外注費詳細:', data.cost_details);
+                        console.log(`総件数: ${data.count}件, 総外注費: ¥${data.total_cost.toLocaleString()}`);
+                    } else {
+                        console.log('このチケットには外注費の登録がありません');
+                    }
+                    
+                    // 他の計算をトリガー
+                    setTimeout(() => {
+                        if (!isCalculating) calculateValues();
+                    }, 100);
+                    
+                } else {
+                    console.warn('外注費取得失敗:', data.error || '不明なエラー');
+                    setFieldValue(outsourcingCostField, '0');
+                    setManualEditStyle(outsourcingCostField);
+                }
+            })
+            .catch(error => {
+                console.error('外注費取得エラー:', error);
+                setFieldValue(outsourcingCostField, '0');
+                setManualEditStyle(outsourcingCostField);
+            })
+            .finally(() => {
+                // ローディング解除
+                outsourcingCostField.style.backgroundColor = '';
+            });
     }
-    
-    // 案件分類変更時にも工数を再計算
-    if (classificationSelect) {
-        classificationSelect.addEventListener('change', function() {
-            const ticketId = caseNameSelect ? caseNameSelect.value : null;
-            const classification = this.value;
-            
-            if (ticketId && autoCalculateCheckbox && autoCalculateCheckbox.checked) {
-                calculateWorkdays(ticketId, classification);
+
+    // 年月変更時にも外注費を再取得
+    const yearMonthField = document.getElementById('{{ form.year_month.id_for_label }}');
+    if (yearMonthField && caseNameSelect) {
+        yearMonthField.addEventListener('change', function() {
+            const ticketId = caseNameSelect.value;
+            if (ticketId) {
+                fetchOutsourcingCost(ticketId);
             }
         });
     }
-    
+
     // 工数計算関数（リアルタイム用）
     function calculateWorkdays(ticketId, classification) {
         if (!ticketId) return;
@@ -654,14 +1011,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     newbieWorkdaysField.style.backgroundColor = '#d1edff';
                 }
                 
-                // デバッグ情報をコンソールに出力
-                console.log('工数計算結果:', data.debug_info);
-                
-                // 分類説明を表示
-                showClassificationInfo(classification, data.debug_info);
-                
                 // 自動計算を実行
-                calculateValues();
+                setTimeout(() => {
+                    if (!isCalculating) calculateValues();
+                }, 200);
             } else {
                 console.error('工数計算エラー:', data.error);
                 if (usedWorkdaysField) {
@@ -676,14 +1029,6 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .catch(error => {
             console.error('AJAX エラー:', error);
-            if (usedWorkdaysField) {
-                usedWorkdaysField.value = 'エラー';
-                usedWorkdaysField.style.backgroundColor = '#f8d7da';
-            }
-            if (newbieWorkdaysField) {
-                newbieWorkdaysField.value = 'エラー';
-                newbieWorkdaysField.style.backgroundColor = '#f8d7da';
-            }
         });
     }
     
@@ -692,13 +1037,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!caseId) {
             if (usedWorkdaysField) usedWorkdaysField.value = '0.0';
             if (newbieWorkdaysField) newbieWorkdaysField.value = '0.0';
-            calculateValues();
+            setTimeout(() => {
+                if (!isCalculating) calculateValues();
+            }, 100);
             return;
         }
         
         try {
-            console.log('工数計算API呼び出し開始:', caseId);
-            
             const response = await fetch('/reports/api/calculate-workdays/', {
                 method: 'POST',
                 headers: {
@@ -712,101 +1057,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
             });
             
-            console.log('APIレスポンス状態:', response.status);
-            
             if (response.ok) {
                 const data = await response.json();
-                console.log('APIレスポンスデータ:', data);
                 
                 if (data.success) {
                     if (usedWorkdaysField) usedWorkdaysField.value = data.used_workdays.toFixed(1);
                     if (newbieWorkdaysField) newbieWorkdaysField.value = data.newbie_workdays.toFixed(1);
-                    calculateValues();
                     
-                    // 成功メッセージ表示
-                    console.log(`工数計算完了: 一般工数${data.used_workdays.toFixed(1)}人日, 新入社員工数${data.newbie_workdays.toFixed(1)}人日`);
-                    
-                    // デバッグ情報の表示（開発時のみ）
-                    if (data.debug_info) {
-                        console.log('工数計算詳細:', data.debug_info);
-                        
-                        // 対象月数の表示
-                        if (data.debug_info.target_months && data.debug_info.target_months.length > 0) {
-                            console.log('対象月:', data.debug_info.target_months.join(', '));
-                        }
-                    }
+                    // 工数取得後に自動計算を実行
+                    setTimeout(() => {
+                        if (!isCalculating) calculateValues();
+                    }, 100);
                 } else {
                     console.error('工数取得エラー:', data.error);
-                    showErrorMessage('工数の取得に失敗しました: ' + data.error);
                 }
-            } else {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
         } catch (error) {
             console.error('工数取得エラー:', error);
-            showErrorMessage('工数の取得中にエラーが発生しました。ネットワーク接続を確認してください。');
-        }
-    }
-    
-    // 分類情報表示
-    function showClassificationInfo(classification, debugInfo) {
-        // 既存の情報を削除
-        const existingInfo = document.querySelector('.workdays-calculation-info');
-        if (existingInfo) existingInfo.remove();
-        
-        // 新しい情報を作成
-        const infoDiv = document.createElement('div');
-        infoDiv.className = 'alert alert-info workdays-calculation-info mt-2';
-        
-        let infoText = '';
-        if (classification === 'development') {
-            infoText = `<i class="bi bi-info-circle"></i> <strong>開発案件</strong>: 全期間の工数が計算されました<br>`;
-            if (debugInfo && debugInfo.対象工数レコード数 !== undefined) {
-                infoText += `対象レコード数: ${debugInfo.対象工数レコード数}`;
-                if (debugInfo.全工数レコード数 !== undefined) {
-                    infoText += ` / ${debugInfo.全工数レコード数}`;
-                }
-                infoText += `<br>`;
-            }
-            if (debugInfo && debugInfo.適用期間) {
-                infoText += `適用期間: ${debugInfo.適用期間}`;
-            }
-        } else {
-            infoText = `<i class="bi bi-calendar"></i> <strong>保守・その他</strong>: 受注日〜終了日の期間で計算されました<br>`;
-            if (debugInfo && debugInfo.対象工数レコード数 !== undefined) {
-                infoText += `対象レコード数: ${debugInfo.対象工数レコード数}`;
-                if (debugInfo.全工数レコード数 !== undefined) {
-                    infoText += ` / ${debugInfo.全工数レコード数}`;
-                }
-                infoText += `<br>`;
-            }
-            if (debugInfo && debugInfo.適用期間) {
-                infoText += `適用期間: ${debugInfo.適用期間}`;
-            }
-        }
-        
-        infoDiv.innerHTML = infoText;
-        
-        // 工数フィールドの後に挿入
-        if (newbieWorkdaysField && newbieWorkdaysField.parentNode) {
-            newbieWorkdaysField.parentNode.parentNode.appendChild(infoDiv);
-        }
-    }
-    
-    // エラーメッセージ表示
-    function showErrorMessage(message) {
-        // 既存のエラーメッセージを削除
-        const existingError = document.querySelector('.workdays-error-message');
-        if (existingError) existingError.remove();
-        
-        // 新しいエラーメッセージを作成
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'alert alert-danger workdays-error-message mt-2';
-        errorDiv.innerHTML = `<i class="bi bi-exclamation-triangle"></i> ${message}`;
-        
-        // 工数フィールドの後に挿入
-        if (newbieWorkdaysField && newbieWorkdaysField.parentNode) {
-            newbieWorkdaysField.parentNode.parentNode.appendChild(errorDiv);
         }
     }
     
@@ -830,129 +1097,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // 自動計算機能
-    function calculateValues() {
-        // 金額計算
-        const availableAmount = parseFloat(document.getElementById('{{ form.available_amount.id_for_label }}').value) || 0;
-        const billingAmount = parseFloat(document.getElementById('{{ form.billing_amount_excluding_tax.id_for_label }}').value) || 0;
-        const outsourcingCost = parseFloat(document.getElementById('{{ form.outsourcing_cost_excluding_tax.id_for_label }}').value) || 0;
-        
-        // 工数計算
-        const estimatedWorkdays = parseFloat(document.getElementById('{{ form.estimated_workdays.id_for_label }}').value) || 0;
-        const usedWorkdays = parseFloat(document.getElementById('{{ form.used_workdays.id_for_label }}').value) || 0;
-        const newbieWorkdays = parseFloat(document.getElementById('{{ form.newbie_workdays.id_for_label }}').value) || 0;
-        const unitCost = parseFloat(document.getElementById('{{ form.unit_cost_per_month.id_for_label }}').value) || 0;
-        const billingUnitCost = parseFloat(document.getElementById('{{ form.billing_unit_cost_per_month.id_for_label }}').value) || 0;
-        
-        // 使用工数合計計算
-        const totalUsedWorkdays = usedWorkdays + newbieWorkdays;
-        const totalUsedWorkdaysElement = document.getElementById('totalUsedWorkdays');
-        if (totalUsedWorkdaysElement) {
-            totalUsedWorkdaysElement.textContent = `${totalUsedWorkdays.toFixed(1)}人日`;
-        }
-        
-        // 残工数計算
-        const remainingWorkdays = Math.max(estimatedWorkdays - totalUsedWorkdays, 0);
-        const remainingWorkdaysElement = document.getElementById('remainingWorkdays');
-        if (remainingWorkdaysElement) {
-            remainingWorkdaysElement.textContent = `${remainingWorkdays.toFixed(1)}人日`;
-        }
-        
-        // 残金額計算
-        const remainingAmount = remainingWorkdays * (billingUnitCost * 20 / 10000);
-        const remainingAmountElement = document.getElementById('remainingAmount');
-        if (remainingAmountElement) {
-            remainingAmountElement.textContent = `¥${remainingAmount.toLocaleString()}`;
-        }
-        
-        // 利益率計算
-        const profitRate = billingAmount > 0 ? ((remainingAmount - billingAmount) / billingAmount * 100) : 0;
-        const profitRateElement = document.getElementById('profitRate');
-        if (profitRateElement) {
-            profitRateElement.textContent = `${profitRate.toFixed(1)}%`;
-        }
-        
-        // 仕掛中金額計算（月20日として計算）
-        const wipAmountElement = document.getElementById('wipAmount');
-        if (classificationSelect && classificationSelect.value === 'development') {
-            // 開発案件の場合のみ自動計算（月20日で計算）
-            const wipAmount = (totalUsedWorkdays * (billingUnitCost / 20)) + outsourcingCost;
-            if (wipAmountElement) {
-                wipAmountElement.textContent = `¥${(wipAmount * 10000).toLocaleString()}`;
-            }
-        } else {
-            // それ以外は空表示
-            if (wipAmountElement) {
-                wipAmountElement.textContent = '0.0';
-            }
-        }
-    }
+    // 初期化
+    setupUserModificationTracking();
+    setupCalculationTriggers();
     
-    // 計算対象フィールドのイベントリスナー設定
-    const calculationFields = [
-        '{{ form.available_amount.id_for_label }}',
-        '{{ form.billing_amount_excluding_tax.id_for_label }}',
-        '{{ form.outsourcing_cost_excluding_tax.id_for_label }}',
-        '{{ form.estimated_workdays.id_for_label }}',
-        '{{ form.used_workdays.id_for_label }}',
-        '{{ form.newbie_workdays.id_for_label }}',
-        '{{ form.unit_cost_per_month.id_for_label }}',
-        '{{ form.billing_unit_cost_per_month.id_for_label }}'
-    ];
+    // 初期計算（遅延実行）
+    setTimeout(() => {
+        console.log('初期自動計算を実行');
+        console.log('デバッグ用コマンド: window.debugCalculation.showStatus() で状態確認可能');
+        calculateValues();
+    }, 1000);
     
-    calculationFields.forEach(fieldId => {
-        const field = document.getElementById(fieldId);
-        if (field) {
-            field.addEventListener('input', calculateValues);
-            field.addEventListener('change', calculateValues);
-        }
-    });
-    
-    // 案件分類の変更時も再計算
-    if (classificationSelect) {
-        classificationSelect.addEventListener('change', calculateValues);
-    }
-    
-    // フォームバリデーション
-    if (form) {
-        form.addEventListener('submit', function(e) {
-            let isValid = true;
-            
-            // 必須フィールドのチェック
-            const requiredFields = [
-                '{{ form.project_name.id_for_label }}',
-                '{{ form.case_name.id_for_label }}',
-                '{{ form.section.id_for_label }}',
-                '{{ form.status.id_for_label }}',
-                '{{ form.case_classification.id_for_label }}'
-            ];
-            
-            requiredFields.forEach(fieldId => {
-                const field = document.getElementById(fieldId);
-                if (field && !field.value.trim()) {
-                    isValid = false;
-                    field.classList.add('is-invalid');
-                } else if (field) {
-                    field.classList.remove('is-invalid');
-                }
-            });
-            
-            if (!isValid) {
-                e.preventDefault();
-                alert('必須項目を入力してください。');
-                // 最初のエラーフィールドにフォーカス
-                const firstError = document.querySelector('.is-invalid');
-                if (firstError) {
-                    firstError.focus();
-                }
-            }
-        });
-    }
-    
-    // 初期計算
-    calculateValues();
-    
-    console.log('工数集計フォーム（統合版）読み込み完了');
+    console.log('工数集計フォーム（完全修正版）読み込み完了');
 });
 </script>
 {% endblock %}

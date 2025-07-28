@@ -2,21 +2,25 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views.decorators.http import require_POST
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import TemplateView, ListView, DetailView, UpdateView, CreateView, DeleteView
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.http import JsonResponse, Http404
 from django.db.models import Count, Q
-from django.db import models
+from django.db import models, transaction
+from django.core.exceptions import PermissionDenied
 from .models import CustomUser, Department, Section
 from .forms import CustomUserCreationForm, UserEditForm, ProfileEditForm, DepartmentForm, SectionForm, SuperUserEditForm
 import logging
+import json
+
 
 logger = logging.getLogger(__name__)
 
 def is_staff_or_superuser(user):
-    """スタッフまたはスーパーユーザーかどうかを判定"""
+    """リーダーまたはスーパーユーザーかどうかを判定"""
     return user.is_staff or user.is_superuser
 
 @login_required
@@ -82,18 +86,63 @@ def register(request):
     
     return render(request, 'users/user/user_register.html', {'form': form})
 
-class UserListView(LoginRequiredMixin, ListView):
+class UserListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    """ユーザー一覧ビュー"""
     model = CustomUser
     template_name = 'users/user/user_list.html'
     context_object_name = 'users'
-    paginate_by = 20
-
+    paginate_by = 50
+    
+    def test_func(self):
+        return self.request.user.is_staff or self.request.user.is_superuser
+    
     def get_queryset(self):
-        return CustomUser.objects.select_related('department', 'section').filter(is_active=True)
-
+        # すべてのユーザー（アクティブ・非アクティブ両方）を取得
+        queryset = CustomUser.objects.select_related('department', 'section').order_by('-is_active', 'username')
+        
+        # 検索パラメータがある場合
+        search = self.request.GET.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(username__icontains=search) | 
+                Q(first_name__icontains=search) | 
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search)
+            )
+        
+        # 部署フィルター
+        department = self.request.GET.get('department')
+        if department:
+            queryset = queryset.filter(department__name=department)
+            
+        # ステータスフィルター
+        status = self.request.GET.get('status')
+        if status == 'active':
+            queryset = queryset.filter(is_active=True)
+        elif status == 'inactive':
+            queryset = queryset.filter(is_active=False)
+        elif status == 'staff':
+            queryset = queryset.filter(is_staff=True)
+        elif status == 'superuser':
+            queryset = queryset.filter(is_superuser=True)
+        
+        return queryset
+    
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['total_users'] = CustomUser.objects.filter(is_active=True).count()
+        context['departments'] = Department.objects.filter(is_active=True).order_by('name')
+        
+        # デバッグ情報を追加
+        all_users = CustomUser.objects.all()
+        active_users = all_users.filter(is_active=True)
+        inactive_users = all_users.filter(is_active=False)
+        
+        context['debug_info'] = {
+            'total_users': all_users.count(),
+            'active_users': active_users.count(),
+            'inactive_users': inactive_users.count(),
+        }
+        
         return context
 
 class UserDetailView(LoginRequiredMixin, DetailView):
@@ -191,7 +240,7 @@ class UserEditView(LoginRequiredMixin, UpdateView):
         # スーパーユーザーが編集する場合は完全版フォーム
         if self.request.user.is_superuser:
             return SuperUserEditForm
-        # スタッフが一般ユーザーを編集する場合
+        # リーダーが一般ユーザーを編集する場合
         elif self.request.user.is_staff and not user_obj.is_superuser:
             return UserEditForm
         else:
@@ -395,3 +444,283 @@ def user_detail_debug(request, pk):
     }
     
     return render(request, 'users/user/user_detail_debug.html', context)
+
+class UserDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+    """ユーザー削除ビュー"""
+    model = CustomUser
+    template_name = 'users/user/user_delete.html'
+    success_url = reverse_lazy('users:user_list')
+    
+    def test_func(self):
+        # スーパーユーザーのみ削除可能
+        return self.request.user.is_superuser
+    
+    def get_object(self, queryset=None):
+        user = get_object_or_404(CustomUser, pk=self.kwargs['pk'])
+        
+        # 自分自身の削除を防止
+        if user == self.request.user:
+            messages.error(self.request, '自分自身を削除することはできません。')
+            return redirect('users:user_list')
+        
+        # スーパーユーザーの削除を防止（他のスーパーユーザーでも）
+        if user.is_superuser:
+            messages.error(self.request, 'スーパーユーザーを削除することはできません。')
+            return redirect('users:user_list')
+        
+        return user
+    
+    def delete(self, request, *args, **kwargs):
+        user = self.get_object()
+        username = user.username
+        
+        try:
+            # ソフト削除（is_activeをFalseにする）
+            user.is_active = False
+            user.save()
+            
+            messages.success(request, f'ユーザー「{username}」を無効化しました。')
+        except Exception as e:
+            messages.error(request, f'ユーザーの削除に失敗しました: {str(e)}')
+        
+        return redirect(self.success_url)
+
+@login_required
+@require_POST
+def user_delete_ajax(request):
+    """AJAX ユーザー削除"""
+    if not request.user.is_superuser:
+        return JsonResponse({'success': False, 'error': '権限がありません。'})
+    
+    try:
+        data = json.loads(request.body)
+        user_id = data.get('user_id')
+        
+        if not user_id:
+            return JsonResponse({'success': False, 'error': 'ユーザーIDが指定されていません。'})
+        
+        user = get_object_or_404(CustomUser, pk=user_id)
+        
+        # 自分自身の削除を防止
+        if user == request.user:
+            return JsonResponse({'success': False, 'error': '自分自身を削除することはできません。'})
+        
+        # スーパーユーザーの削除を防止
+        if user.is_superuser:
+            return JsonResponse({'success': False, 'error': 'スーパーユーザーを削除することはできません。'})
+        
+        username = user.username
+        
+        # ソフト削除
+        user.is_active = False
+        user.save()
+        
+        return JsonResponse({
+            'success': True, 
+            'message': f'ユーザー「{username}」を無効化しました。'
+        })
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'削除に失敗しました: {str(e)}'})
+
+@login_required
+@require_POST 
+def user_restore_ajax(request):
+    """AJAX ユーザー復元"""
+    if not request.user.is_superuser:
+        return JsonResponse({'success': False, 'error': '権限がありません。'})
+    
+    try:
+        data = json.loads(request.body)
+        user_id = data.get('user_id')
+        
+        user = get_object_or_404(CustomUser, pk=user_id)
+        username = user.username
+        
+        # ユーザーを復元
+        user.is_active = True
+        user.save()
+        
+        return JsonResponse({
+            'success': True, 
+            'message': f'ユーザー「{username}」を復元しました。'
+        })
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'復元に失敗しました: {str(e)}'})
+
+class UserPermanentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+    """ユーザー完全削除ビュー（物理削除）"""
+    model = CustomUser
+    template_name = 'users/user/user_permanent_delete.html'
+    success_url = reverse_lazy('users:user_list')
+    
+    def test_func(self):
+        # スーパーユーザーのみ完全削除可能
+        return self.request.user.is_superuser
+    
+    def get_object(self, queryset=None):
+        user = get_object_or_404(CustomUser, pk=self.kwargs['pk'])
+        
+        # 自分自身の削除を防止
+        if user == self.request.user:
+            messages.error(self.request, '自分自身を完全削除することはできません。')
+            raise PermissionDenied('自分自身を削除することはできません。')
+        
+        # アクティブなスーパーユーザーの削除を防止
+        if user.is_superuser and user.is_active:
+            messages.error(self.request, 'アクティブなスーパーユーザーを完全削除することはできません。先に無効化してください。')
+            raise PermissionDenied('アクティブなスーパーユーザーは削除できません。')
+        
+        return user
+    
+    def delete(self, request, *args, **kwargs):
+        user = self.get_object()
+        username = user.username
+        user_id = user.id
+        
+        try:
+            with transaction.atomic():
+                # 関連データの確認とクリーンアップ
+                workload_count = user.workload_set.count() if hasattr(user, 'workload_set') else 0
+                project_count = user.assigned_projects.count() if hasattr(user, 'assigned_projects') else 0
+                
+                # 関連データがある場合は警告
+                if workload_count > 0 or project_count > 0:
+                    logger.warning(f"Deleting user {username} with related data: "
+                                 f"{workload_count} workloads, {project_count} projects")
+                
+                # 物理削除実行
+                user.delete()
+                
+                logger.info(f"User permanently deleted: {username} (ID: {user_id}) by {request.user.username}")
+                messages.success(request, 
+                    f'ユーザー「{username}」を完全削除しました。'
+                    f'（関連する工数データ: {workload_count}件、プロジェクト: {project_count}件も削除されました）')
+                
+        except Exception as e:
+            logger.error(f"Failed to permanently delete user {username}: {str(e)}")
+            messages.error(request, f'ユーザーの完全削除に失敗しました: {str(e)}')
+        
+        return redirect(self.success_url)
+
+@login_required
+@require_POST
+def user_permanent_delete_ajax(request):
+    """AJAX ユーザー完全削除"""
+    if not request.user.is_superuser:
+        return JsonResponse({'success': False, 'error': '権限がありません。'})
+    
+    try:
+        data = json.loads(request.body)
+        user_id = data.get('user_id')
+        confirm_text = data.get('confirm_text', '')
+        
+        if not user_id:
+            return JsonResponse({'success': False, 'error': 'ユーザーIDが指定されていません。'})
+        
+        user = get_object_or_404(CustomUser, pk=user_id)
+        username = user.username
+        
+        # 確認テキストの検証
+        if confirm_text.upper() != 'DELETE':
+            return JsonResponse({'success': False, 'error': '確認テキストが正しくありません。「DELETE」と入力してください。'})
+        
+        # 自分自身の削除を防止
+        if user == request.user:
+            return JsonResponse({'success': False, 'error': '自分自身を完全削除することはできません。'})
+        
+        # アクティブなスーパーユーザーの削除を防止
+        if user.is_superuser and user.is_active:
+            return JsonResponse({'success': False, 'error': 'アクティブなスーパーユーザーを完全削除することはできません。先に無効化してください。'})
+        
+        try:
+            with transaction.atomic():
+                # 関連データ数を取得
+                workload_count = user.workload_set.count() if hasattr(user, 'workload_set') else 0
+                project_count = user.assigned_projects.count() if hasattr(user, 'assigned_projects') else 0
+                
+                # 物理削除実行
+                user.delete()
+                
+                logger.info(f"User permanently deleted via AJAX: {username} (ID: {user_id}) by {request.user.username}")
+                
+                return JsonResponse({
+                    'success': True, 
+                    'message': f'ユーザー「{username}」を完全削除しました。'
+                              f'（工数データ: {workload_count}件、プロジェクト: {project_count}件も削除）'
+                })
+                
+        except Exception as e:
+            logger.error(f"Failed to permanently delete user {username} via AJAX: {str(e)}")
+            return JsonResponse({'success': False, 'error': f'完全削除に失敗しました: {str(e)}'})
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSONデータの解析に失敗しました。'})
+    except Exception as e:
+        logger.error(f"Permanent delete AJAX error: {str(e)}")
+        return JsonResponse({'success': False, 'error': f'完全削除処理でエラーが発生しました: {str(e)}'})
+
+@login_required
+@require_POST
+def cleanup_inactive_users(request):
+    """非アクティブユーザーの一括完全削除"""
+    if not request.user.is_superuser:
+        return JsonResponse({'success': False, 'error': '権限がありません。'})
+    
+    try:
+        data = json.loads(request.body)
+        days_threshold = data.get('days_threshold', 365)  # デフォルト1年
+        confirm_text = data.get('confirm_text', '')
+        
+        if confirm_text.upper() != 'CLEANUP':
+            return JsonResponse({'success': False, 'error': '確認テキストが正しくありません。「CLEANUP」と入力してください。'})
+        
+        from datetime import datetime, timedelta
+        threshold_date = datetime.now() - timedelta(days=days_threshold)
+        
+        # 削除対象ユーザーを取得
+        target_users = CustomUser.objects.filter(
+            is_active=False,
+            is_superuser=False,
+            last_login__lt=threshold_date
+        ).exclude(
+            id=request.user.id  # 自分自身は除外
+        )
+        
+        deleted_count = 0
+        deleted_users = []
+        
+        try:
+            with transaction.atomic():
+                for user in target_users:
+                    username = user.username
+                    workload_count = user.workload_set.count() if hasattr(user, 'workload_set') else 0
+                    
+                    deleted_users.append({
+                        'username': username,
+                        'workload_count': workload_count,
+                        'last_login': user.last_login.strftime('%Y-%m-%d') if user.last_login else 'なし'
+                    })
+                    
+                    user.delete()
+                    deleted_count += 1
+                
+                logger.info(f"Bulk cleanup: {deleted_count} inactive users deleted by {request.user.username}")
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': f'{deleted_count}名の非アクティブユーザーを完全削除しました。',
+                    'deleted_users': deleted_users,
+                    'deleted_count': deleted_count
+                })
+                
+        except Exception as e:
+            logger.error(f"Bulk cleanup failed: {str(e)}")
+            return JsonResponse({'success': False, 'error': f'一括削除に失敗しました: {str(e)}'})
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSONデータの解析に失敗しました。'})
+    except Exception as e:
+        logger.error(f"Cleanup error: {str(e)}")
+        return JsonResponse({'success': False, 'error': f'クリーンアップ処理でエラーが発生しました: {str(e)}'})

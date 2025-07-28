@@ -48,7 +48,7 @@
                                         {% if user_obj.is_superuser %}
                                             <span class="badge bg-danger ms-2">管理者</span>
                                         {% elif user_obj.is_staff %}
-                                            <span class="badge bg-warning ms-2">スタッフ</span>
+                                            <span class="badge bg-warning ms-2">リーダー</span>
                                         {% endif %}
                                     </dd>
                                     
@@ -123,7 +123,7 @@
                                                 <span class="badge bg-danger">スーパーユーザー</span>
                                             {% endif %}
                                             {% if user_obj.is_staff %}
-                                                <span class="badge bg-warning">スタッフ</span>
+                                                <span class="badge bg-warning">リーダ</span>
                                             {% endif %}
                                             {% if not user_obj.is_superuser and not user_obj.is_staff %}
                                                 <span class="badge bg-light text-dark">一般ユーザー</span>

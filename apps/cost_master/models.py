@@ -3,7 +3,7 @@ from django.core.validators import MinValueValidator
 from django.utils import timezone
 from datetime import date
 from decimal import Decimal
-from apps.users.models import CustomUser
+from apps.users.models import CustomUser, Department
 from apps.projects.models import Project, ProjectTicket
 
 class BusinessPartner(models.Model):
@@ -266,3 +266,56 @@ class OutsourcingCostSummary(models.Model):
         
         summary.save()
         return summary
+
+
+class CostMaster(models.Model):
+    """コストマスター"""
+    
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.CASCADE,
+        verbose_name='部署',
+        related_name='cost_masters'
+    )
+    
+    # 月額コスト（円）
+    monthly_cost = models.DecimalField(
+        '月額コスト（円）',
+        max_digits=10,
+        decimal_places=0,
+        default=750000,  # 75万円
+        help_text='1か月あたりの人件費（円）'
+    )
+    
+    # 日単価（円）
+    daily_rate = models.DecimalField(
+        '日単価（円）',
+        max_digits=8,
+        decimal_places=0,
+        default=50000,  # 5万円
+        help_text='1日あたりの単価（円）'
+    )
+    
+    # 有効期間
+    valid_from = models.DateField('有効開始日')
+    valid_to = models.DateField('有効終了日', null=True, blank=True)
+    
+    # フラグ
+    is_active = models.BooleanField('有効', default=True)
+    
+    # メタデータ
+    created_at = models.DateTimeField('作成日時', auto_now_add=True)
+    updated_at = models.DateTimeField('更新日時', auto_now=True)
+    
+    class Meta:
+        verbose_name = 'コストマスター'
+        verbose_name_plural = 'コストマスター'
+        ordering = ['-valid_from']
+    
+    def __str__(self):
+        return f"{self.department.name} - {self.daily_rate:,}円/日"
+    
+    @property
+    def daily_rate_from_monthly(self):
+        """月額から日単価を計算"""
+        return self.monthly_cost / 20  # 月20日稼働として計算

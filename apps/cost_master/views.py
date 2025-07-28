@@ -319,3 +319,51 @@ def get_bp_projects_api(request):
             'error': 'ビジネスパートナーが見つかりません',
             'projects': []
         })
+
+
+@login_required
+def get_ticket_outsourcing_cost_api(request):
+    """チケットの外注費取得API"""
+    ticket_id = request.GET.get('ticket_id')
+    year_month = request.GET.get('year_month')
+    
+    if not ticket_id:
+        return JsonResponse({'success': False, 'total_cost': 0})
+    
+    try:
+        # 指定チケットの外注費を集計
+        outsourcing_costs = OutsourcingCost.objects.filter(
+            ticket_id=ticket_id,
+            status='in_progress'  # 着手案件のみ
+        )
+        
+        if year_month:
+            outsourcing_costs = outsourcing_costs.filter(year_month=year_month)
+        
+        # 総外注費を計算
+        total_cost = sum(cost.total_cost for cost in outsourcing_costs)
+        
+        # 詳細情報も含める
+        cost_details = []
+        for cost in outsourcing_costs:
+            cost_details.append({
+                'year_month': cost.year_month,
+                'business_partner': cost.business_partner.name,
+                'work_hours': float(cost.work_hours),
+                'hourly_rate': float(cost.hourly_rate),
+                'total_cost': float(cost.total_cost)
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'total_cost': float(total_cost),
+            'cost_details': cost_details,
+            'count': len(cost_details)
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'total_cost': 0
+        })
