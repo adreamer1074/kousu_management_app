@@ -143,3 +143,9 @@ LOGGING = {
         },
     },
 }
+
+# フォントファイルのパス設定
+FONT_DIR = os.path.join(BASE_DIR, 'static', 'fonts')
+
+# カスタムフォント
+JAPANESE_FONT_PATH = os.path.join(FONT_DIR, 'NotoSansCJK-Regular.ttc')
