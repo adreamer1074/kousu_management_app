@@ -105,9 +105,9 @@
                     </li>
                     <li><hr class="dropdown-divider"></li>
                     <li>
-                        <a class="dropdown-item" href="#" onclick="exportData('pdf')" disabled>
+                        <!-- PDFボタン-->
+                        <a class="dropdown-item" href="#" onclick="exportData('pdf')">
                             <i class="bi bi-file-earmark-pdf text-danger"></i> PDF (.pdf)
-                            <small class="text-muted">(近日対応)</small>
                         </a>
                     </li>
                 </ul>
@@ -361,23 +361,17 @@
 <script>
 // エクスポート機能
 function exportData(format) {
-    // 現在のフィルター条件を取得
-    const params = new URLSearchParams(window.location.search);
-    params.set('format', format);
+    // デバッグ用コンソール出力
+    console.log('Export function called with format:', format);
     
-    // ローディング表示
     showExportLoading(format);
     
-    // エクスポート実行
-    const exportUrl = '{% url "reports:workload_export_current" %}?' + params.toString();
-    
-    // 隠しフォームを作成してPOSTリクエスト
+    // フォームを作成
     const form = document.createElement('form');
     form.method = 'POST';
-    form.action = exportUrl;
-    form.style.display = 'none';
+    form.action = '{% url "reports:workload_export_current" %}';
     
-    // CSRFトークンを追加
+    // CSRFトークン
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
     const csrfInput = document.createElement('input');
     csrfInput.type = 'hidden';
@@ -385,13 +379,37 @@ function exportData(format) {
     csrfInput.value = csrfToken;
     form.appendChild(csrfInput);
     
-    // 現在のフィルター条件を隠しフィールドとして追加
-    params.forEach((value, key) => {
-        if (key !== 'format') {
+    // フォーマット指定
+    const formatInput = document.createElement('input');
+    formatInput.type = 'hidden';
+    formatInput.name = 'format';
+    formatInput.value = format;
+    form.appendChild(formatInput);
+    
+    // デバッグ用: フォームの内容を出力
+    console.log('Form data:', {
+        action: form.action,
+        method: form.method,
+        format: format,
+        csrfToken: csrfToken
+    });
+    
+    // 現在のフィルター値も追加
+    const currentFilters = {
+        project_name: '{{ current_filters.project_name }}',
+        case_name: '{{ current_filters.case_name_id }}',
+        status: '{{ current_filters.status }}',
+        case_classification: '{{ current_filters.case_classification }}',
+        section: '{{ current_filters.section_id }}',
+        search: '{{ current_filters.search }}'
+    };
+    
+    Object.keys(currentFilters).forEach(key => {
+        if (currentFilters[key]) {
             const input = document.createElement('input');
             input.type = 'hidden';
             input.name = key;
-            input.value = value;
+            input.value = currentFilters[key];
             form.appendChild(input);
         }
     });
@@ -407,7 +425,17 @@ function exportData(format) {
 }
 
 function showExportLoading(format) {
-    // ローディングメッセージを表示
+    // ローディングメッセージを表示（PDFボタンの場合はExcel用メッセージ）
+    let formatText = format.toUpperCase();
+    let message = '';
+    
+    if (format === 'pdf') {
+        formatText = 'EXCEL';
+        message = `${formatText}ファイル（PDF版）をエクスポート中...`;
+    } else {
+        message = `${formatText}ファイルをエクスポート中...`;
+    }
+    
     const toast = document.createElement('div');
     toast.className = 'toast align-items-center text-white bg-info border-0';
     toast.id = 'exportToast';
@@ -415,7 +443,7 @@ function showExportLoading(format) {
     toast.innerHTML = `
         <div class="d-flex">
             <div class="toast-body">
-                <i class="bi bi-hourglass-split"></i> ${format.toUpperCase()}ファイルをエクスポート中...
+                <i class="bi bi-hourglass-split"></i> ${message}
             </div>
             <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
         </div>
@@ -443,7 +471,7 @@ function hideExportLoading() {
     }
 }
 
-// CSRFトークンをページに追加（既存のフォームがない場合）
+// CSRFトークンをページに追加
 if (!document.querySelector('[name=csrfmiddlewaretoken]')) {
     const csrfInput = document.createElement('input');
     csrfInput.type = 'hidden';
