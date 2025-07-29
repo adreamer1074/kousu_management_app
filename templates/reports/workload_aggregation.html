@@ -48,6 +48,25 @@
     .wide-table {
         min-width: 2500px;
     }
+
+    /* エクスポートボタンのスタイリング */
+    .btn-group .dropdown-menu {
+        min-width: 200px;
+    }
+
+    .dropdown-item i {
+        width: 20px;
+        text-align: center;
+    }
+
+    .dropdown-item:disabled {
+        opacity: 0.5;
+    }
+
+    /* トーストのスタイリング */
+    .toast-container {
+        z-index: 9999;
+    }
 </style>
 {% endblock %}
 
@@ -57,7 +76,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h1 class="h3 mb-0">
-                <i class="bi bi-bar-chart-line"></i> 工数集計
+                <i class="bi bi-table"></i> 工数集計一覧
             </h1>
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
@@ -68,11 +87,34 @@
             </nav>
         </div>
         <div>
+            <!-- エクスポートボタングループ -->
+            <div class="btn-group me-2" role="group">
+                <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-download"></i> エクスポート
+                </button>
+                <ul class="dropdown-menu">
+                    <li>
+                        <a class="dropdown-item" href="#" onclick="exportData('excel')">
+                            <i class="bi bi-file-earmark-excel text-success"></i> Excel (.xlsx)
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="#" onclick="exportData('csv')">
+                            <i class="bi bi-file-earmark-text text-info"></i> CSV (.csv)
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item" href="#" onclick="exportData('pdf')" disabled>
+                            <i class="bi bi-file-earmark-pdf text-danger"></i> PDF (.pdf)
+                            <small class="text-muted">(近日対応)</small>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            
             <a href="{% url 'reports:workload_aggregation_create' %}" class="btn btn-primary">
                 <i class="bi bi-plus-circle"></i> 新規登録
-            </a>
-            <a href="{% url 'reports:workload_export' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" class="btn btn-success">
-                <i class="bi bi-download"></i> エクスポート
             </a>
         </div>
     </div>
@@ -315,9 +357,99 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ block.super }}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('工数集計レポート画面読み込み完了');
-});
+// エクスポート機能
+function exportData(format) {
+    // 現在のフィルター条件を取得
+    const params = new URLSearchParams(window.location.search);
+    params.set('format', format);
+    
+    // ローディング表示
+    showExportLoading(format);
+    
+    // エクスポート実行
+    const exportUrl = '{% url "reports:workload_export_current" %}?' + params.toString();
+    
+    // 隠しフォームを作成してPOSTリクエスト
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = exportUrl;
+    form.style.display = 'none';
+    
+    // CSRFトークンを追加
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrfmiddlewaretoken';
+    csrfInput.value = csrfToken;
+    form.appendChild(csrfInput);
+    
+    // 現在のフィルター条件を隠しフィールドとして追加
+    params.forEach((value, key) => {
+        if (key !== 'format') {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = value;
+            form.appendChild(input);
+        }
+    });
+    
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+    
+    // 3秒後にローディングを解除
+    setTimeout(() => {
+        hideExportLoading();
+    }, 3000);
+}
+
+function showExportLoading(format) {
+    // ローディングメッセージを表示
+    const toast = document.createElement('div');
+    toast.className = 'toast align-items-center text-white bg-info border-0';
+    toast.id = 'exportToast';
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                <i class="bi bi-hourglass-split"></i> ${format.toUpperCase()}ファイルをエクスポート中...
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    
+    // トーストコンテナがなければ作成
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+        document.body.appendChild(toastContainer);
+    }
+    
+    toastContainer.appendChild(toast);
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+}
+
+function hideExportLoading() {
+    const toast = document.getElementById('exportToast');
+    if (toast) {
+        const bsToast = bootstrap.Toast.getInstance(toast);
+        if (bsToast) bsToast.hide();
+    }
+}
+
+// CSRFトークンをページに追加（既存のフォームがない場合）
+if (!document.querySelector('[name=csrfmiddlewaretoken]')) {
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrfmiddlewaretoken';
+    csrfInput.value = '{{ csrf_token }}';
+    document.body.appendChild(csrfInput);
+}
 </script>
 {% endblock %}
