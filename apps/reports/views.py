@@ -10,6 +10,7 @@ import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill
 from openpyxl.utils import get_column_letter
 from reportlab.lib import colors
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
@@ -925,80 +926,100 @@ def workload_export_current(request):
 
 def export_workload_pdf(queryset, filters=None):
     try:
-        
         # フォント登録
         pdfmetrics.registerFont(TTFont('IPAexGothic', FONT_PATH))
-        
-        # === PDF出力準備 ===
+        font_name = 'IPAexGothic'
+        font_size = 10
+
+        # PDF準備（横向きA4、余白1インチ=72pt程度）
         buffer = BytesIO()
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), title="工数集計レポート")
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            leftMargin=36,
+            rightMargin=36,
+            topMargin=36,
+            bottomMargin=36,
+            title="工数集計レポート"
+        )
 
-      
-        # === スタイル定義 ===
+        # スタイル設定
         styles = getSampleStyleSheet()
-        styles.add(ParagraphStyle(name='Japanese', fontName='IPAexGothic', fontSize=9, leading=11))
+        styles.add(ParagraphStyle(name='JapaneseTitle', fontName=font_name, fontSize=16, leading=22, alignment=1))
+        styles.add(ParagraphStyle(name='JapaneseSmall', fontName=font_name, fontSize=9, leading=12))
+        styles.add(ParagraphStyle(name='Japanese', fontName=font_name, fontSize=font_size, leading=14))
 
         elements = []
 
-        # タイトル
-        styles.add(ParagraphStyle(name='JapaneseTitle', fontName='IPAexGothic', fontSize=14, leading=18, alignment=1))
-        styles.add(ParagraphStyle(name='JapaneseSmall', fontName='IPAexGothic', fontSize=8, leading=10))
+        # タイトルと生成日時
+        elements.append(Spacer(1, 12))
         elements.append(Paragraph("工数集計レポート", styles['JapaneseTitle']))
+        elements.append(Spacer(1, 8))
         elements.append(Paragraph(f"生成日時: {datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')}", styles['JapaneseSmall']))
-        # テーブルヘッダー
-        data = [
-            ["プロジェクト名", "チケット名", "部門", "ステータス", "分類", "見積日", "受注日", "予定終了", "実績終了", "検収日",
-             "請求金額", "外注費", "見積工数", "使用工数", "新人工数", "月額単価", "請求単価", "請求先", "担当者", "備考", "登録日時"]
-        ]
+        elements.append(Spacer(1, 18))
 
-        # データ行（制限数あり）
-        for idx, workload in enumerate(queryset[:50], start=1):
-            try:
-                data.append([
-                    idx,
-                    str(workload.project_name or ''),
-                    str(workload.case_name.title if workload.case_name else ''),
-                    str(workload.section.name if workload.section else ''),
-                    str(workload.get_status_display()),
-                    str(workload.get_case_classification_display()),
-                    workload.estimate_date.strftime('%Y-%m-%d') if workload.estimate_date else '',
-                    workload.order_date.strftime('%Y-%m-%d') if workload.order_date else '',
-                    workload.planned_end_date.strftime('%Y-%m-%d') if workload.planned_end_date else '',
-                    workload.actual_end_date.strftime('%Y-%m-%d') if workload.actual_end_date else '',
-                    workload.inspection_date.strftime('%Y-%m-%d') if workload.inspection_date else '',
-                    f"¥{float(workload.billing_amount_excluding_tax or 0):,.0f}",
-                    f"¥{float(workload.outsourcing_cost_excluding_tax or 0):,.0f}",
-                    f"{float(workload.estimated_workdays or 0):.1f}",
-                    f"{float(workload.used_workdays or 0):.1f}",
-                    f"{float(workload.newbie_workdays or 0):.1f}",
-                    f"¥{float(workload.unit_cost_per_month or 0):,.0f}",
-                    f"¥{float(workload.billing_unit_cost_per_month or 0):,.0f}",
-                    workload.billing_destination or '',
-                    workload.mub_manager.get_full_name() if workload.mub_manager else '',
-                    workload.remarks or '',
-                    workload.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-                ])
-            except Exception as e:
-                print(f"⚠️ データ処理エラー (No.{i+1}): {e}")
+        # ヘッダー
+        headers = ["プロジェクト名", "チケット名", "部門", "分類", "見積日", "受注日", "予定終了", "検収日",
+                   "請求金額", "外注費", "見積工数", "使用工数合計", "月額単価", "請求単価", "請求先", "担当者", "備考"]
 
+        data = [headers]
+
+        # データ行（最大50件）
+        for workload in queryset[:50]:
+            data.append([
+                str(workload.project_name or ''),
+                str(workload.case_name.title if workload.case_name else ''),
+                str(workload.section.name if workload.section else ''),
+                # str(workload.get_status_display()),
+                str(workload.get_case_classification_display()),
+                workload.estimate_date.strftime('%Y-%m-%d') if workload.estimate_date else '',
+                workload.order_date.strftime('%Y-%m-%d') if workload.order_date else '',
+                workload.planned_end_date.strftime('%Y-%m-%d') if workload.planned_end_date else '',
+                workload.inspection_date.strftime('%Y-%m-%d') if workload.inspection_date else '',
+                f"¥{float(workload.billing_amount_excluding_tax or 0):,.0f}",
+                f"¥{float(workload.outsourcing_cost_excluding_tax or 0):,.0f}",
+                f"{float(workload.estimated_workdays or 0):.1f}",
+                f"{float(workload.total_used_workdays or 0):.1f}",
+                f"¥{float(workload.unit_cost_per_month or 0):,.0f}",
+                f"¥{float(workload.billing_unit_cost_per_month or 0):,.0f}",
+                workload.billing_destination or '',
+                workload.mub_manager.get_full_name() if workload.mub_manager else '',
+                workload.remarks or '',
+            ])
+
+        # colWidthsをヘッダーとデータ両方の最大文字幅から計算
+        columns = list(zip(*data))
+        col_widths = []
+        for col in columns:
+            max_width = max(
+                pdfmetrics.stringWidth(str(cell), font_name, font_size) for cell in col
+            )
+            col_widths.append(max_width + 10)  # 少し余裕を持たせる
+
+        # テーブル作成
+        table = Table(data, repeatRows=1, colWidths=col_widths)
 
         # テーブルスタイル
-        print(f"▶︎ プロジェクト: {workload.project_name}, チケット: {getattr(workload.case_name, 'title', None)}")
-
-        table = Table(data, repeatRows=1, colWidths=[30, 60, 60, 40, 40, 40, 50, 50, 50, 50, 50,
-                                                    60, 60, 40, 40, 40, 50, 50, 60, 50, 80])
-        # テーブルデザイン
         table.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, -1), 'IPAexGothic'),
-            ('FONTSIZE', (0, 0), (-1, -1), 7.5),
-            ('LEADING', (0, 0), (-1, -1), 9),
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#DDEEFF")),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8F8F8")])
+            ('FONTNAME', (0, 0), (-1, 0), font_name),              # ヘッダー
+            ('FONTSIZE', (0, 0), (-1, 0), 10),                    # ヘッダー文字サイズ10pt
+            ('FONTNAME', (0, 1), (-1, -1), font_name),            # データ行
+            ('FONTSIZE', (0, 1), (-1, -1), 8),                    # データ文字サイズ8pt
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),         # ヘッダー文字色黒
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#DDEEFF")),  # ヘッダー背景色
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),                  # ヘッダー中央揃え
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),                   # 縦位置
+            ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),        # グリッド線
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8F8F8")]),
+            ('FONTNAME', (0, 0), (-1, 0), font_name),
+            ('FONTNAME', (0, 0), (-1, 0), font_name),
+            ('FONTNAME', (0, 0), (-1, 0), font_name),
+            ('FONTNAME', (0, 0), (-1, 0), font_name),
+            ('FONTNAME', (0, 0), (-1, 0), font_name),
+            ('FONTNAME', (0, 0), (-1, 0), font_name),
+            ('FONTNAME', (0, 0), (-1, 0), font_name),
+            ('FONTNAME', (0, 0), (-1, 0), font_name),
         ]))
 
         elements.append(table)
@@ -1007,13 +1028,13 @@ def export_workload_pdf(queryset, filters=None):
         doc.build(elements)
 
         buffer.seek(0)
-        response = HttpResponse(buffer, content_type='application/pdf')
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="workload_report_{timestamp}.pdf"'
         return response
 
     except Exception as e:
-        print(f"PDF生成エラー: {str(e)}")
         import traceback
+        print(f"PDF生成エラー: {str(e)}")
         print(traceback.format_exc())
         return HttpResponse("PDF生成に失敗しました", status=500)
 
