@@ -144,6 +144,10 @@ LOGGING = {
     },
 }
 
+# セキュリティ設定
+ALLOWED_HOSTS = ['<EC2のパブリックIP>', 'localhost']
+
+
 # フォントファイルのパス設定
 FONT_PATH = os.path.join(BASE_DIR, 'apps', 'reports', 'fonts', 'ipaexg.ttf')
 
