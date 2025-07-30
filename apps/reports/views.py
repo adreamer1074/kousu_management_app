@@ -5,7 +5,7 @@ import io
 import calendar
 from datetime import date, datetime, timedelta
 
-# サードパーティライブラリ
+# サードパーティライブラリ(レポートエクスポート用)
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill
 from openpyxl.utils import get_column_letter
@@ -14,6 +14,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 )
+from io import BytesIO
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm, inch
 from reportlab.pdfbase import pdfmetrics
@@ -36,6 +37,7 @@ from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 from django.contrib.auth import get_user_model
+from kousu_management_app.settings import FONT_PATH
 
 # ローカルアプリ
 from .models import ReportExport, WorkloadAggregation
@@ -187,7 +189,7 @@ def workload_export(request):
     
     writer = csv.writer(response)
     writer.writerow([
-        'プロジェクト名', '案件名', '部名', 'ステータス', '案件分類', '見積日', '受注日',
+        'プロジェクト名', 'チケット名', '部名', 'ステータス', '案件分類', '見積日', '受注日',
         '終了日（予定）', '終了日実績', '検収日', '使用可能金額（税別）', '請求金額（税別）',
         '外注費（税別）', '見積工数（人日）', '使用工数（人日）', '新入社員使用工数（人日）',
         '使用工数合計', '残工数', '残金額', '利益率', '仕掛中金額', '請求先', 'MUB担当者', '作成日時'
@@ -411,7 +413,7 @@ class ReportExportCreateView(LoginRequiredMixin, CreateView):
         
         # ヘッダー行
         headers = [
-            'プロジェクト名', '案件名', '部名', 'ステータス', '案件分類',
+            'プロジェクト名', 'チケット名', '部名', 'ステータス', '案件分類',
             '見積日', '受注日', '終了日（予定）', '終了日実績', '検収日',
             '使用可能金額（税別）', '請求金額（税別）', '外注費（税別）',
             '見積工数（人日）', '使用工数（人日）', '新入社員使用工数（人日）',
@@ -495,7 +497,7 @@ class ReportExportCreateView(LoginRequiredMixin, CreateView):
             
             # ヘッダー行
             writer.writerow([
-                'プロジェクト名', '案件名', '部名', 'ステータス', '案件分類',
+                'プロジェクト名', 'チケット名', '部名', 'ステータス', '案件分類',
                 '見積日', '受注日', '終了日（予定）', '終了日実績', '検収日',
                 '使用可能金額（税別）', '請求金額（税別）', '外注費（税別）',
                 '見積工数（人日）', '使用工数（人日）', '新入社員使用工数（人日）',
@@ -645,7 +647,7 @@ class ReportExportCreateView(LoginRequiredMixin, CreateView):
             print(f"PDF generation error: {str(e)}")
             print(f"Full traceback: {error_detail}")
             
-            # エラー情報をテキストファイルとして返す
+            # エラー情報をテキストファイルとして返す(デバック用)
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             response = HttpResponse(content_type='text/plain')
             response['Content-Disposition'] = f'attachment; filename="pdf_error_log_{timestamp}.txt"'
@@ -908,7 +910,7 @@ def workload_export_current(request):
         print("Processing PDF export...")
         # PDF専用のシンプルな処理
         try:
-            return export_workload_pdf_simple(queryset, filters)
+            return export_workload_pdf(queryset, filters)
         except Exception as e:
             print(f"PDF export failed: {str(e)}")
             # CSVで代替
@@ -920,183 +922,101 @@ def workload_export_current(request):
         messages.error(request, f'サポートされていない形式です: {export_format}')
         return redirect('reports:workload_aggregation')
 
-def export_workload_pdf_simple(queryset, filters=None):
-    """最もシンプルなPDF生成"""
-    try:
-        from reportlab.pdfgen import canvas
-        from io import BytesIO
-        
-        print("Starting simple PDF generation...")
-        
-        buffer = BytesIO()
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        
-        # canvasで直接PDF作成（最も基本的な方法）
-        p = canvas.Canvas(buffer, pagesize=A4)
-        width, height = A4
-        
-        print("Canvas created...")
-        
-        # タイトル
-        p.setFont("Helvetica-Bold", 16)
-        p.drawString(50, height - 50, "Workload Report")
-        
-        # 日付
-        p.setFont("Helvetica", 10)
-        p.drawString(50, height - 80, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        
-        # データを列挙（最大10件）
-        y_position = height - 120
-        p.setFont("Helvetica", 8)
-        
-        print(f"Processing {queryset.count()} records...")
-        
-        for i, workload in enumerate(queryset[:10]):
-            if y_position < 50:  # ページの下端に達したら停止
-                break
-            try:
-                project_name = str(workload.project_name)[:40] if workload.project_name else 'N/A'
-                case_title = str(workload.case_name.title)[:40] if workload.case_name else 'N/A'
-                line = f"{i+1}. {project_name} | {case_title}"
-                p.drawString(50, y_position, line)
-                y_position -= 15
-                print(f"Added line {i+1}: {project_name}")
-            except Exception as e:
-                print(f"Error processing record {i+1}: {str(e)}")
-                p.drawString(50, y_position, f"{i+1}. [Error processing record]")
-                y_position -= 15
-        
-        # 統計情報
-        p.setFont("Helvetica-Bold", 10)
-        p.drawString(50, y_position - 20, f"Total Records: {queryset.count()}")
-        
-        print("Saving PDF...")
-        p.showPage()
-        p.save()
-        
-        # レスポンス作成
-        buffer.seek(0)
-        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
-        filename = f"workload_simple_{timestamp}.pdf"
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
-        print(f"PDF created successfully: {filename}")
-        return response
-        
-    except Exception as e:
-        print(f"Simple PDF creation failed: {str(e)}")
-        import traceback
-        print(f"Traceback: {traceback.format_exc()}")
-        raise e
 
-def export_workload_pdf_enhanced(queryset, filters=None):
-    """拡張版PDF生成"""
+def export_workload_pdf(queryset, filters=None):
     try:
-        from reportlab.pdfgen import canvas
-        from reportlab.lib.pagesizes import A4, landscape
-        from io import BytesIO
         
-        print("Starting enhanced PDF generation...")
+        # フォント登録
+        pdfmetrics.registerFont(TTFont('IPAexGothic', FONT_PATH))
         
+        # === PDF出力準備 ===
         buffer = BytesIO()
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        
-        # 横向きA4でより多くの情報を表示
-        p = canvas.Canvas(buffer, pagesize=landscape(A4))
-        width, height = landscape(A4)
-        
+        doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), title="工数集計レポート")
+
+      
+        # === スタイル定義 ===
+        styles = getSampleStyleSheet()
+        styles.add(ParagraphStyle(name='Japanese', fontName='IPAexGothic', fontSize=9, leading=11))
+
+        elements = []
+
         # タイトル
-        p.setFont("Helvetica-Bold", 16)
-        p.drawString(50, height - 50, "工数集計レポート (Workload Aggregation Report)")
-        
-        # 日付とフィルター情報
-        p.setFont("Helvetica", 10)
-        p.drawString(50, height - 80, f"生成日時: {datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')}")
-        p.drawString(50, height - 100, f"総件数: {queryset.count()}件")
-        
-        # ヘッダー行
-        p.setFont("Helvetica-Bold", 8)
-        y_position = height - 130
-        headers = ["No", "プロジェクト名", "案件名", "ステータス", "請求金額", "使用工数"]
-        x_positions = [50, 100, 250, 400, 500, 600]
-        
-        for i, header in enumerate(headers):
-            p.drawString(x_positions[i], y_position, header)
-        
-        # 線を引く
-        p.line(50, y_position - 5, width - 50, y_position - 5)
-        
-        # データ行
-        p.setFont("Helvetica", 7)
-        y_position -= 20
-        
-        for i, workload in enumerate(queryset[:25]):  # 25件まで表示
-            if y_position < 50:  # ページ下端チェック
-                p.showPage()  # 新しいページ
-                y_position = height - 50
-                # ヘッダーを再描画
-                p.setFont("Helvetica-Bold", 8)
-                for j, header in enumerate(headers):
-                    p.drawString(x_positions[j], y_position, header)
-                p.line(50, y_position - 5, width - 50, y_position - 5)
-                p.setFont("Helvetica", 7)
-                y_position -= 20
-            
-            try:
-                # データを準備
-                project_name = str(workload.project_name)[:20] if workload.project_name else 'N/A'
-                case_title = str(workload.case_name.title)[:25] if workload.case_name else 'N/A'
-                status = str(workload.get_status_display())[:15] if hasattr(workload, 'get_status_display') else 'N/A'
-                billing = f"¥{int(workload.billing_amount_excluding_tax or 0):,}"
-                workdays = f"{float(workload.used_workdays or 0):.1f}日"
-                
-                # データを描画
-                data = [str(i+1), project_name, case_title, status, billing, workdays]
-                for j, value in enumerate(data):
-                    p.drawString(x_positions[j], y_position, value)
-                
-                y_position -= 15
-                
-            except Exception as e:
-                print(f"Error processing record {i+1}: {str(e)}")
-                p.drawString(50, y_position, f"{i+1}. [データ処理エラー]")
-                y_position -= 15
-        
-        # 統計情報
-        y_position -= 20
-        p.setFont("Helvetica-Bold", 10)
-        
-        # 統計計算
-        total_billing = sum(float(w.billing_amount_excluding_tax or 0) for w in queryset)
-        total_workdays = sum(float(w.used_workdays or 0) for w in queryset)
-        
-        stats_text = [
-            f"総請求金額: ¥{total_billing:,.0f}",
-            f"総使用工数: {total_workdays:.1f}人日",
-            f"平均単価: ¥{(total_billing/total_workdays):,.0f}/人日" if total_workdays > 0 else "平均単価: N/A"
+        styles.add(ParagraphStyle(name='JapaneseTitle', fontName='IPAexGothic', fontSize=14, leading=18, alignment=1))
+        styles.add(ParagraphStyle(name='JapaneseSmall', fontName='IPAexGothic', fontSize=8, leading=10))
+        elements.append(Paragraph("工数集計レポート", styles['JapaneseTitle']))
+        elements.append(Paragraph(f"生成日時: {datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')}", styles['JapaneseSmall']))
+        # テーブルヘッダー
+        data = [
+            ["プロジェクト名", "チケット名", "部門", "ステータス", "分類", "見積日", "受注日", "予定終了", "実績終了", "検収日",
+             "請求金額", "外注費", "見積工数", "使用工数", "新人工数", "月額単価", "請求単価", "請求先", "担当者", "備考", "登録日時"]
         ]
-        
-        for stat in stats_text:
-            p.drawString(50, y_position, stat)
-            y_position -= 20
-        
-        print("Saving enhanced PDF...")
-        p.showPage()
-        p.save()
-        
-        # レスポンス作成
+
+        # データ行（制限数あり）
+        for idx, workload in enumerate(queryset[:50], start=1):
+            try:
+                data.append([
+                    idx,
+                    str(workload.project_name or ''),
+                    str(workload.case_name.title if workload.case_name else ''),
+                    str(workload.section.name if workload.section else ''),
+                    str(workload.get_status_display()),
+                    str(workload.get_case_classification_display()),
+                    workload.estimate_date.strftime('%Y-%m-%d') if workload.estimate_date else '',
+                    workload.order_date.strftime('%Y-%m-%d') if workload.order_date else '',
+                    workload.planned_end_date.strftime('%Y-%m-%d') if workload.planned_end_date else '',
+                    workload.actual_end_date.strftime('%Y-%m-%d') if workload.actual_end_date else '',
+                    workload.inspection_date.strftime('%Y-%m-%d') if workload.inspection_date else '',
+                    f"¥{float(workload.billing_amount_excluding_tax or 0):,.0f}",
+                    f"¥{float(workload.outsourcing_cost_excluding_tax or 0):,.0f}",
+                    f"{float(workload.estimated_workdays or 0):.1f}",
+                    f"{float(workload.used_workdays or 0):.1f}",
+                    f"{float(workload.newbie_workdays or 0):.1f}",
+                    f"¥{float(workload.unit_cost_per_month or 0):,.0f}",
+                    f"¥{float(workload.billing_unit_cost_per_month or 0):,.0f}",
+                    workload.billing_destination or '',
+                    workload.mub_manager.get_full_name() if workload.mub_manager else '',
+                    workload.remarks or '',
+                    workload.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                ])
+            except Exception as e:
+                print(f"⚠️ データ処理エラー (No.{i+1}): {e}")
+
+
+        # テーブルスタイル
+        print(f"▶︎ プロジェクト: {workload.project_name}, チケット: {getattr(workload.case_name, 'title', None)}")
+
+        table = Table(data, repeatRows=1, colWidths=[30, 60, 60, 40, 40, 40, 50, 50, 50, 50, 50,
+                                                    60, 60, 40, 40, 40, 50, 50, 60, 50, 80])
+        # テーブルデザイン
+        table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'IPAexGothic'),
+            ('FONTSIZE', (0, 0), (-1, -1), 7.5),
+            ('LEADING', (0, 0), (-1, -1), 9),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#DDEEFF")),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8F8F8")])
+        ]))
+
+        elements.append(table)
+
+        # PDF生成
+        doc.build(elements)
+
         buffer.seek(0)
-        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
-        filename = f"workload_enhanced_{timestamp}.pdf"
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
-        print(f"Enhanced PDF created successfully: {filename}")
+        response = HttpResponse(buffer, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="workload_report_{timestamp}.pdf"'
         return response
-        
+
     except Exception as e:
-        print(f"Enhanced PDF creation failed: {str(e)}")
-        # シンプル版にフォールバック
-        return export_workload_pdf_simple(queryset, filters)
+        print(f"PDF生成エラー: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        return HttpResponse("PDF生成に失敗しました", status=500)
+
 
 def export_workload_text_fallback(queryset, filters=None):
     """最終手段：テキストファイル"""
@@ -1139,7 +1059,7 @@ def export_workload_excel(queryset, export_type='excel'):
     
     # ヘッダー行
     headers = [
-        'プロジェクト名', '案件名', '部名', 'ステータス', '案件分類',
+        'プロジェクト名', 'チケット名', '部名', 'ステータス', '案件分類',
         '見積日', '受注日', '終了日（予定）', '終了日実績', '検収日',
         '使用可能金額（税別）', '請求金額（税別）', '外注費（税別）',
         '見積工数（人日）', '使用工数（人日）', '新入社員使用工数（人日）',
@@ -1231,7 +1151,7 @@ def export_workload_csv(queryset):
     
     # ヘッダー行
     writer.writerow([
-        'プロジェクト名', '案件名', '部名', 'ステータス', '案件分類',
+        'プロジェクト名', 'チケット名', '部名', 'ステータス', '案件分類',
         '見積日', '受注日', '終了日（予定）', '終了日実績', '検収日',
         '使用可能金額（税別）', '請求金額（税別）', '外注費（税別）',
         '見積工数（人日）', '使用工数（人日）', '新入社員使用工数（人日）',
@@ -1279,243 +1199,3 @@ def export_workload_csv(queryset):
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     
     return response
-
-def export_workload_pdf(queryset, filters=None):
-    """PDF形式でエクスポート（デバッグ版）"""
-    try:
-        import traceback
-        print("PDF export started...")
-        
-        # PDFレスポンスを作成
-        response = HttpResponse(content_type='application/pdf')
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'workload_report_{timestamp}.pdf'
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
-        print("Response created...")
-        
-        # PDFドキュメントを作成（簡素化）
-        doc = SimpleDocTemplate(
-            response,
-            pagesize=A4,  # 横向きを縦向きに変更
-            rightMargin=20*mm,
-            leftMargin=20*mm,
-            topMargin=20*mm,
-            bottomMargin=20*mm
-        )
-        
-        print("Document template created...")
-        
-        # スタイルを作成（日本語フォント不使用）
-        styles = getSampleStyleSheet()
-        
-        print("Styles created...")
-        
-        # PDFコンテンツを構築
-        story = []
-        
-        # タイトル（英語で簡素化）
-        title = Paragraph('Workload Aggregation Report', styles['Title'])
-        story.append(title)
-        
-        # 出力日時（英語で簡素化）
-        export_info = f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        story.append(Paragraph(export_info, styles['Normal']))
-        story.append(Spacer(1, 10*mm))
-        
-        print("Title and info added...")
-        
-        # データが存在しない場合
-        if not queryset.exists():
-            no_data_text = Paragraph('No data available.', styles['Normal'])
-            story.append(no_data_text)
-            doc.build(story)
-            print("No data PDF created")
-            return response
-        
-        # 簡単なテーブルデータを準備
-        from reportlab.platypus import Table, TableStyle
-        from reportlab.lib import colors
-        
-        headers = ['Project', 'Case', 'Status', 'Amount']
-        
-        # データ行を作成（最初の5件のみ）
-        table_data = [headers]
-        
-        for i, workload in enumerate(queryset[:5]):
-            try:
-                project_name = str(workload.project_name)[:20] if workload.project_name else 'N/A'
-                case_name = str(workload.case_name.title)[:20] if workload.case_name else 'N/A'
-                status = str(workload.get_status_display())
-                amount = f'{int(workload.billing_amount_excluding_tax or 0):,}'
-                
-                row = [project_name, case_name, status, amount]
-                table_data.append(row)
-                print(f"Row {i+1} added: {project_name}")
-            except Exception as e:
-                print(f"Row {i+1} error: {str(e)}")
-                continue
-        
-        # テーブルを作成
-        table = Table(table_data, repeatRows=1)
-        
-        # シンプルなテーブルスタイル
-        table_style = TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
-        ])
-        
-        table.setStyle(table_style)
-        story.append(table)
-        
-        print(f"Table created with {len(table_data)} rows")
-        
-        # PDFを生成
-        print("Building PDF...")
-        doc.build(story)
-        print("PDF built successfully")
-        return response
-        
-    except Exception as e:
-        import traceback
-        error_detail = traceback.format_exc()
-        print(f"PDF generation error: {str(e)}")
-        print(f"Full traceback: {error_detail}")
-        
-        # エラー情報をテキストファイルとして返す
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        response = HttpResponse(content_type='text/plain')
-        response['Content-Disposition'] = f'attachment; filename="pdf_error_log_{timestamp}.txt"'
-        response.write(f'PDF Generation Error Log\n')
-        response.write(f'========================\n\n')
-        response.write(f'Error: {str(e)}\n\n')
-        response.write(f'Full Traceback:\n{error_detail}\n\n')
-        response.write(f'QuerySet count: {queryset.count()}\n')
-        response.write(f'First record: {queryset.first()}\n')
-        return response
-
-def export_workload_pdf_fallback(queryset, filters=None):
-    """PDF形式でエクスポート（フォールバック版）"""
-    try:
-        import traceback
-        print("Fallback PDF export started...")
-        
-        # PDFレスポンスを作成
-        response = HttpResponse(content_type='application/pdf')
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'workload_report_fallback_{timestamp}.pdf'
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
-        print("Response created...")
-        
-        # PDFドキュメントを作成（簡素化）
-        doc = SimpleDocTemplate(
-            response,
-            pagesize=A4,  # 横向きを縦向きに変更
-            rightMargin=20*mm,
-            leftMargin=20*mm,
-            topMargin=20*mm,
-            bottomMargin=20*mm
-        )
-        
-        print("Document template created...")
-        
-        # スタイルを作成（日本語フォント不使用）
-        styles = getSampleStyleSheet()
-        
-        print("Styles created...")
-        
-        # PDFコンテンツを構築
-        story = []
-        
-        # タイトル（英語で簡素化）
-        title = Paragraph('Workload Aggregation Report (Fallback)', styles['Title'])
-        story.append(title)
-        
-        # 出力日時（英語で簡素化）
-        export_info = f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        story.append(Paragraph(export_info, styles['Normal']))
-        story.append(Spacer(1, 10*mm))
-        
-        print("Title and info added...")
-        
-        # データが存在しない場合
-        if not queryset.exists():
-            no_data_text = Paragraph('No data available.', styles['Normal'])
-            story.append(no_data_text)
-            doc.build(story)
-            print("No data PDF created")
-            return response
-        
-        # 簡単なテーブルデータを準備
-        from reportlab.platypus import Table, TableStyle
-        from reportlab.lib import colors
-        
-        headers = ['Project', 'Case', 'Status', 'Amount']
-        
-        # データ行を作成（最初の5件のみ）
-        table_data = [headers]
-        
-        for i, workload in enumerate(queryset[:5]):
-            try:
-                project_name = str(workload.project_name)[:20] if workload.project_name else 'N/A'
-                case_name = str(workload.case_name.title)[:20] if workload.case_name else 'N/A'
-                status = str(workload.get_status_display())
-                amount = f'{int(workload.billing_amount_excluding_tax or 0):,}'
-                
-                row = [project_name, case_name, status, amount]
-                table_data.append(row)
-                print(f"Row {i+1} added: {project_name}")
-            except Exception as e:
-                print(f"Row {i+1} error: {str(e)}")
-                continue
-        
-        # テーブルを作成
-        table = Table(table_data, repeatRows=1)
-        
-        # シンプルなテーブルスタイル
-        table_style = TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
-        ])
-        
-        table.setStyle(table_style)
-        story.append(table)
-        
-        print(f"Table created with {len(table_data)} rows")
-        
-        # PDFを生成
-        print("Building PDF...")
-        doc.build(story)
-        print("PDF built successfully")
-        return response
-        
-    except Exception as e:
-        import traceback
-        error_detail = traceback.format_exc()
-        print(f"PDF generation error: {str(e)}")
-        print(f"Full traceback: {error_detail}")
-        
-        # エラー情報をテキストファイルとして返す
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        response = HttpResponse(content_type='text/plain')
-        response['Content-Disposition'] = f'attachment; filename="pdf_error_log_{timestamp}.txt"'
-        response.write(f'PDF Generation Error Log\n')
-        response.write(f'========================\n\n')
-        response.write(f'Error: {str(e)}\n\n')
-        response.write(f'Full Traceback:\n{error_detail}\n\n')
-        response.write(f'QuerySet count: {queryset.count()}\n')
-        response.write(f'First record: {queryset.first()}\n')
-        return response

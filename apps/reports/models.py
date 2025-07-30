@@ -35,7 +35,7 @@ class WorkloadAggregation(models.Model):
     case_name = models.ForeignKey(
         'projects.ProjectTicket',  # ProjectTicket
         on_delete=models.CASCADE,
-        verbose_name='案件名（チケット）',
+        verbose_name='チケット名',
         related_name='workload_aggregations'
     )
     section = models.ForeignKey(

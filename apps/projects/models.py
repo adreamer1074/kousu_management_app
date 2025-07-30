@@ -267,7 +267,7 @@ class ProjectDetail(models.Model):
     # 基本情報
     project = models.OneToOneField('Project', on_delete=models.CASCADE, related_name='detail')
     project_name = models.CharField('プロジェクト名', max_length=200)
-    case_name = models.CharField('案件名', max_length=200)
+    case_name = models.CharField('チケット名', max_length=200)
     department = models.ForeignKey(Department, on_delete=models.CASCADE, verbose_name='部署')
     status = models.CharField('ステータス', max_length=20, choices=STATUS_CHOICES, default='planning')
     case_classification = models.CharField('案件分類', max_length=20, choices=CASE_CLASSIFICATION_CHOICES, default='development')
