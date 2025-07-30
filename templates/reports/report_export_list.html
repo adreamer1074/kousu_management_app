@@ -1,0 +1,268 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}エクスポート履歴 | 工数管理システム{% endblock %}
+
+{% block extra_css %}
+<style>
+.status-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+.status-pending { background-color: #6c757d; }
+.status-processing { background-color: #ffc107; color: #212529; }
+.status-completed { background-color: #28a745; }
+.status-failed { background-color: #dc3545; }
+
+.file-size {
+    font-family: monospace;
+    font-size: 0.9rem;
+}
+
+.progress-indicator {
+    width: 20px;
+    height: 20px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- ページヘッダー -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="bi bi-download"></i> エクスポート履歴
+            </h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'core:home' %}">ホーム</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'reports:report_list' %}">レポート</a></li>
+                    <li class="breadcrumb-item active">エクスポート履歴</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <a href="{% url 'reports:report_export_create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> 新規エクスポート
+            </a>
+        </div>
+    </div>
+
+    <!-- エクスポート履歴一覧 -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-list"></i> エクスポート履歴
+            </h5>
+        </div>
+        <div class="card-body">
+            {% if reports %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ファイル名</th>
+                                <th>種類</th>
+                                <th>形式</th>
+                                <th>ステータス</th>
+                                <th>ファイルサイズ</th>
+                                <th>処理時間</th>
+                                <th>DL回数</th>
+                                <th>リクエスト日時</th>
+                                <th>有効期限</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for export in reports %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        {% if export.export_format == 'excel' %}
+                                            <i class="bi bi-file-earmark-excel text-success me-2"></i>
+                                        {% elif export.export_format == 'csv' %}
+                                            <i class="bi bi-file-earmark-text text-info me-2"></i>
+                                        {% elif export.export_format == 'pdf' %}
+                                            <i class="bi bi-file-earmark-pdf text-danger me-2"></i>
+                                        {% endif %}
+                                        <span>{{ export.file_name }}</span>
+                                    </div>
+                                </td>
+                                <td>{{ export.get_export_type_display }}</td>
+                                <td>
+                                    <span class="badge bg-secondary">
+                                        {{ export.get_export_format_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if export.status == 'pending' %}
+                                        <span class="badge status-badge status-pending">
+                                            <i class="bi bi-clock"></i> {{ export.get_status_display }}
+                                        </span>
+                                    {% elif export.status == 'processing' %}
+                                        <span class="badge status-badge status-processing">
+                                            <div class="spinner-border spinner-border-sm me-1" role="status">
+                                                <span class="visually-hidden">処理中...</span>
+                                            </div>
+                                            {{ export.get_status_display }}
+                                        </span>
+                                    {% elif export.status == 'completed' %}
+                                        <span class="badge status-badge status-completed">
+                                            <i class="bi bi-check-circle"></i> {{ export.get_status_display }}
+                                        </span>
+                                    {% elif export.status == 'failed' %}
+                                        <span class="badge status-badge status-failed">
+                                            <i class="bi bi-x-circle"></i> {{ export.get_status_display }}
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td class="file-size">
+                                    {% if export.file_size %}
+                                        {{ export.get_file_size_display }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if export.processing_time %}
+                                        {{ export.processing_time|floatformat:1 }}秒
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">{{ export.download_count }}</span>
+                                </td>
+                                <td>{{ export.requested_at|date:"Y-m-d H:i" }}</td>
+                                <td>
+                                    {% if export.is_expired %}
+                                        <span class="text-danger">
+                                            <i class="bi bi-exclamation-triangle"></i> 期限切れ
+                                        </span>
+                                    {% elif export.expires_at %}
+                                        <span class="text-success">{{ export.expires_at|date:"Y-m-d" }}</span>
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        {% if export.is_downloadable and not export.is_expired %}
+                                            <a href="{% url 'reports:download_export' export.pk %}" 
+                                               class="btn btn-sm btn-success" title="ダウンロード">
+                                                <i class="bi bi-download"></i>
+                                            </a>
+                                        {% else %}
+                                            <button class="btn btn-sm btn-outline-secondary" disabled title="ダウンロード不可">
+                                                <i class="bi bi-download"></i>
+                                            </button>
+                                        {% endif %}
+                                        
+                                        {% if export.error_message %}
+                                            <button type="button" class="btn btn-sm btn-outline-danger" 
+                                                    data-bs-toggle="modal" data-bs-target="#errorModal{{ export.pk }}" 
+                                                    title="エラー詳細">
+                                                <i class="bi bi-exclamation-circle"></i>
+                                            </button>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- ページネーション -->
+                {% if is_paginated %}
+                <nav aria-label="ページネーション" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1">最初</a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">前へ</a>
+                            </li>
+                        {% endif %}
+
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}">次へ</a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">最後</a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+            {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-inbox" style="font-size: 3rem; color: #6c757d;"></i>
+                    <h5 class="mt-3 text-muted">エクスポート履歴がありません</h5>
+                    <p class="text-muted">新規エクスポートを作成してください。</p>
+                    <a href="{% url 'reports:report_export_create' %}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> 新規エクスポート
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- エラー詳細モーダル -->
+{% for export in reports %}
+    {% if export.error_message %}
+    <div class="modal fade" id="errorModal{{ export.pk }}" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-exclamation-triangle text-danger"></i> エラー詳細
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong>ファイル名:</strong> {{ export.file_name }}</p>
+                    <p><strong>エラー内容:</strong></p>
+                    <pre class="bg-light p-3 rounded">{{ export.error_message }}</pre>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+{% endfor %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 5秒ごとに処理中のステータスを更新
+    setInterval(function() {
+        const processingRows = document.querySelectorAll('.status-processing');
+        if (processingRows.length > 0) {
+            location.reload();
+        }
+    }, 5000);
+    
+    console.log('エクスポート履歴画面読み込み完了');
+});
+</script>
+{% endblock %}
