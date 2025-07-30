@@ -144,7 +144,7 @@ class WorkloadAggregationForm(forms.ModelForm):
         ).order_by('name')
         self.fields['project_name'].empty_label = "プロジェクトを選択してください"
         
-        # 案件名（チケット）の選択肢を初期設定
+        # チケット名の選択肢を初期設定
         if self.instance.pk and self.instance.project_name:
             # 編集時：選択されたプロジェクトのチケットのみ表示
             self.fields['case_name'].queryset = ProjectTicket.objects.filter(
@@ -318,7 +318,7 @@ class WorkloadAggregationFilterForm(forms.Form):
         widget=forms.Select(attrs={'class': 'form-select'})
     )
     case_name = forms.ModelChoiceField(
-        label='案件名（チケット）',
+        label='チケット名',
         queryset=ProjectTicket.objects.select_related('project').filter(is_active=True).order_by('project__name', 'title'),
         required=False,
         empty_label="全てのチケット",

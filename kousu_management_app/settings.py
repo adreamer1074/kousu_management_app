@@ -145,10 +145,9 @@ LOGGING = {
 }
 
 # フォントファイルのパス設定
-FONT_DIR = os.path.join(BASE_DIR, 'static', 'fonts')
+FONT_PATH = os.path.join(BASE_DIR, 'apps', 'reports', 'fonts', 'ipaexg.ttf')
 
 # カスタムフォント
-JAPANESE_FONT_PATH = os.path.join(FONT_DIR, 'NotoSansCJK-Regular.ttc')
 
 # 静的ファイルの設定
 STATIC_URL = '/static/'
