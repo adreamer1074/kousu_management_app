@@ -1,0 +1,21 @@
+    .status-badge {
+        font-size: 0.75rem;
+    }
+    .status-in-progress {
+        background-color: #198754;
+    }
+    .status-not-started {
+        background-color: #6c757d;
+    }
+    .case-development {
+        background-color: #0dcaf0;
+    }
+    .case-maintenance {
+        background-color: #fd7e14;
+    }
+    .summary-card {
+        border-left: 4px solid #007bff;
+    }
+    .table-actions {
+        white-space: nowrap;
+    }
