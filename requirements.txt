@@ -1,11 +1,10 @@
 Django>=3.2,<4.0
-# Django>=4.2.0
 openpyxl>=3.1.2
-psycopg2-binary
+mysqlclient
 djangorestframework
 django-cors-headers
 django-filter
 pandas
-openpyxl
 pytest
 pytest-django
+reportlab
