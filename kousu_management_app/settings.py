@@ -55,7 +55,7 @@ ROOT_URLCONF = 'kousu_management_app.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],  # この行を追加/確認
+        'DIRS': [BASE_DIR / 'templates'],  
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -145,7 +145,7 @@ LOGGING = {
 }
 
 # セキュリティ設定
-ALLOWED_HOSTS = ['<EC2のパブリックIP>', 'localhost']
+ALLOWED_HOSTS = ['<EC2のパブリックIP>', '127.0.0.1']
 
 
 # フォントファイルのパス設定
