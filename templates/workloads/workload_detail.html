@@ -7,7 +7,7 @@
 {% block page_actions %}
 <div class="btn-toolbar mb-2 mb-md-0">
     <div class="btn-group me-2">
-        <a href="{% url 'workloads:workload_list' %}" class="btn btn-sm btn-secondary">
+        <a href="{% url 'workloads:workload_calendar' %}" class="btn btn-sm btn-secondary">
             <i class="bi bi-arrow-left"></i> 工数一覧に戻る
         </a>
         {% if workload.user == user or user.is_staff or user.is_superuser %}
