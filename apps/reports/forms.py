@@ -167,6 +167,11 @@ class WorkloadAggregationForm(forms.ModelForm):
         
         self.fields['case_name'].empty_label = "チケット（案件）を選択してください"
         
+        # チケット選択肢のwidgetにproject情報を追加
+        case_name_choices = []
+        for ticket in self.fields['case_name'].queryset:
+            case_name_choices.append((ticket.id, str(ticket)))
+        
         # 課名の選択肢を設定
         self.fields['section'].queryset = Section.objects.filter(
             is_active=True
