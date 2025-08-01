@@ -13,7 +13,6 @@ urlpatterns = [
     path('workload-aggregation/<int:pk>/', views.WorkloadAggregationDetailView.as_view(), name='workload_aggregation_detail'),
     path('workload-aggregation/<int:pk>/edit/', views.WorkloadAggregationUpdateView.as_view(), name='workload_aggregation_edit'),
     path('workload-aggregation/<int:pk>/delete/', views.WorkloadAggregationDeleteView.as_view(), name='workload_aggregation_delete'),
-    
     # エクスポート機能
     path('workload-export-current/', views.workload_export_current, name='workload_export_current'),  # 新規
 

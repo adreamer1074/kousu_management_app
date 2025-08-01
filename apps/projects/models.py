@@ -186,7 +186,10 @@ class ProjectTicket(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.project.name} - {self.title}"
+        """プロジェクト名付きでチケットを表示"""
+        if self.project:
+            return f"[{self.project.name}] {self.title}"
+        return self.title
     
     def get_priority_display_with_color(self):
         """優先度の色付き表示"""

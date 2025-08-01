@@ -45,7 +45,7 @@ from .models import ReportExport, WorkloadAggregation
 from .forms import WorkloadAggregationForm, WorkloadAggregationFilterForm
 from apps.users.models import Department, Section
 from apps.projects.models import ProjectTicket
-
+from .utils import upload_file_to_s3
 
 User = get_user_model()
 
@@ -273,20 +273,15 @@ class ReportExportListView(LoginRequiredMixin, ListView):
     template_name = 'reports/report_export_list.html'
     context_object_name = 'reports'
     paginate_by = 20
-    
+
     def get_queryset(self):
-        raise NotImplementedError("近日実装予定です")
-        """ユーザー別のエクスポート履歴を取得"""
         queryset = ReportExport.objects.select_related('requested_by').order_by('-requested_at')
-        
         # 一般ユーザーは自分のエクスポートのみ表示
         if not self.request.user.is_staff:
             queryset = queryset.filter(requested_by=self.request.user)
-        
         return queryset
-    
+
     def get_context_data(self, **kwargs):
-        raise NotImplementedError("近日実装予定です")
         context = super().get_context_data(**kwargs)
         context['title'] = 'エクスポート履歴'
         return context
@@ -453,18 +448,18 @@ def calculate_workdays_ajax(request):
 
 @login_required
 def workload_export_current(request):
-    """現在表示中の工数集計データをエクスポート"""
+    """現在表示中の工数集計データをエクスポート（即時ダウンロード＋S3アップロード＋履歴登録）"""
     if request.method != 'POST':
         return redirect('reports:workload_aggregation')
     
-    # フィルター条件を取得（フォームデータまたはGETパラメータから）
+    # フィルター条件を取得
     filters = {}
     for key in ['project_name', 'case_name', 'status', 'case_classification', 'section', 'mub_manager']:
         value = request.POST.get(key) or request.GET.get(key)
         if value:
             filters[key] = value
     
-    # データセットを取得（一覧画面と同じロジック）
+    # データセットを取得
     queryset = WorkloadAggregation.objects.select_related(
         'case_name', 'section', 'mub_manager'
     )
@@ -483,48 +478,138 @@ def workload_export_current(request):
     if filters.get('mub_manager'):
         queryset = queryset.filter(mub_manager_id=filters['mub_manager'])
     
-    # 並び順（一覧画面と同じ）
     queryset = queryset.order_by('-created_at')
     
     # エクスポート形式を取得
     export_format = request.POST.get('format', 'excel')
     
-    # エクスポート実行
-    if export_format == 'excel':
-        print("Processing EXCEL export...")
-        return export_workload_excel(queryset, export_type='excel')
-    elif export_format == 'csv':
-        print("Processing CSV export...")
-        return export_workload_csv(queryset)
-    elif export_format == 'pdf':
-        print("Processing PDF export...")
-        # PDF専用のシンプルな処理
+    print(f"=== EXPORT DEBUG ===")
+    print(f"Export format requested: {export_format}")
+    print(f"QuerySet count: {queryset.count()}")
+    print(f"==================")
+    
+    # データが0件の場合の処理
+    if queryset.count() == 0:
+        messages.warning(request, 'エクスポートするデータがありません。フィルター条件を確認してください。')
+        return redirect('reports:workload_aggregation')
+    
+    # Windows対応：一時ディレクトリとファイル名を修正
+    import tempfile
+    import os
+    
+    timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+    
+    # 正しいファイル拡張子を設定
+    extension_map = {
+        'excel': 'xlsx',
+        'csv': 'csv',
+        'pdf': 'pdf'
+    }
+    
+    file_extension = extension_map.get(export_format, 'xlsx')
+    file_name = f"workload_{timestamp}.{file_extension}"
+    
+    # Windows対応の一時ディレクトリ
+    temp_dir = tempfile.gettempdir()
+    local_path = os.path.join(temp_dir, file_name)
+    
+    print(f"Temp directory: {temp_dir}")
+    print(f"Local path: {local_path}")
+    
+    # 履歴モデル作成（S3アップロード用）
+    export_record = ReportExport.objects.create(
+        requested_by=request.user,
+        export_type=ReportExport.ExportTypeChoices.WORKLOAD_AGGREGATION,
+        export_format=export_format,
+        status=ReportExport.StatusChoices.PENDING,
+        file_name=file_name,
+        filter_conditions=filters,  # フィルター条件も保存
+        total_records=queryset.count()
+    )
+    
+    try:
+        # ファイル生成（S3アップロード用とダウンロード用の両方）
+        if export_format == 'excel':
+            print("Processing EXCEL export...")
+            # S3アップロード用ファイル生成
+            export_workload_excel(queryset, export_type='excel', save_to_file=local_path)
+            # ダウンロード用レスポンス生成
+            response = export_workload_excel(queryset, export_type='excel')
+        elif export_format == 'csv':
+            print("Processing CSV export...")
+            # S3アップロード用ファイル生成
+            export_workload_csv(queryset, save_to_file=local_path)
+            # ダウンロード用レスポンス生成
+            response = export_workload_csv(queryset)
+        elif export_format == 'pdf':
+            print("Processing PDF export...")
+            # S3アップロード用ファイル生成
+            export_workload_pdf(queryset, filters, save_to_file=local_path)
+            # ダウンロード用レスポンス生成
+            response = export_workload_pdf(queryset, filters)
+        else:
+            messages.error(request, f'サポートされていない形式です: {export_format}')
+            export_record.delete()  # 失敗時は履歴削除
+            return redirect('reports:workload_aggregation')
+        
+        # ファイルサイズを取得
+        if os.path.exists(local_path):
+            file_size = os.path.getsize(local_path)
+            export_record.file_size = file_size
+            export_record.save(update_fields=['file_size'])
+            print(f"File created successfully: {local_path} ({file_size} bytes)")
+        else:
+            print(f"WARNING: File not created: {local_path}")
+            raise Exception(f"ファイル生成に失敗しました: {local_path}")
+        
+        # S3アップロード＆履歴登録（バックグラウンドで実行）
+        print(f"Starting S3 upload for: {local_path}")
+        complete_export(export_record, local_path)
+        
+        print(f"Export completed successfully: {file_name}")
+        messages.success(request, f'エクスポートが完了しました。履歴からS3ダウンロードも可能です。')
+        
+        return response
+        
+    except Exception as e:
+        print(f"Export failed: {str(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        
+        # エラー時は履歴をFAILEDに更新
         try:
-            return export_workload_pdf(queryset, filters)
-        except Exception as e:
-            print(f"PDF export failed: {str(e)}")
-            # CSVで代替
-            print("Falling back to CSV...")
-            messages.warning(request, 'PDF生成に失敗したため、CSVファイルをダウンロードします。')
-            return export_workload_csv(queryset)
-    else:
-        print(f"Unknown format: {export_format}")
-        messages.error(request, f'サポートされていない形式です: {export_format}')
+            if hasattr(export_record, 'error_message'):
+                export_record.error_message = str(e)
+                update_fields = ['status', 'error_message']
+            else:
+                update_fields = ['status']
+            
+            export_record.status = ReportExport.StatusChoices.FAILED
+            export_record.save(update_fields=update_fields)
+        except Exception as save_error:
+            print(f"Failed to save error status: {save_error}")
+        
+        messages.error(request, f'エクスポートに失敗しました: {str(e)}')
         return redirect('reports:workload_aggregation')
 
-
-def export_workload_pdf(queryset, filters=None):
+def export_workload_pdf(queryset, filters=None, save_to_file=None):
+    """PDF形式でエクスポート（ファイル保存またはHttpResponse）"""
     try:
         # フォント登録
         pdfmetrics.registerFont(TTFont('IPAexGothic', FONT_PATH))
         font_name = 'IPAexGothic'
         font_size = 10
 
+        # ファイル保存版
+        if save_to_file:
+            output_stream = save_to_file
+        else:
+            output_stream = BytesIO()
+
         # PDF準備（横向きA4、余白1インチ=72pt程度）
-        buffer = BytesIO()
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         doc = SimpleDocTemplate(
-            buffer,
+            output_stream,
             pagesize=landscape(A4),
             leftMargin=36,
             rightMargin=36,
@@ -560,7 +645,6 @@ def export_workload_pdf(queryset, filters=None):
                 str(workload.project_name or ''),
                 str(workload.case_name.title if workload.case_name else ''),
                 str(workload.section.name if workload.section else ''),
-                # str(workload.get_status_display()),
                 str(workload.get_case_classification_display()),
                 workload.estimate_date.strftime('%Y-%m-%d') if workload.estimate_date else '',
                 workload.order_date.strftime('%Y-%m-%d') if workload.order_date else '',
@@ -577,38 +661,27 @@ def export_workload_pdf(queryset, filters=None):
                 workload.remarks or '',
             ])
 
-        # colWidthsをヘッダーとデータ両方の最大文字幅から計算
+        # テーブル作成（省略...既存のコード）
         columns = list(zip(*data))
         col_widths = []
         for col in columns:
             max_width = max(
                 pdfmetrics.stringWidth(str(cell), font_name, font_size) for cell in col
             )
-            col_widths.append(max_width + 10)  # 少し余裕を持たせる
+            col_widths.append(max_width + 10)
 
-        # テーブル作成
         table = Table(data, repeatRows=1, colWidths=col_widths)
-
-        # テーブルスタイル
         table.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, 0), font_name),              # ヘッダー
-            ('FONTSIZE', (0, 0), (-1, 0), 10),                    # ヘッダー文字サイズ10pt
-            ('FONTNAME', (0, 1), (-1, -1), font_name),            # データ行
-            ('FONTSIZE', (0, 1), (-1, -1), 8),                    # データ文字サイズ8pt
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),         # ヘッダー文字色黒
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#DDEEFF")),  # ヘッダー背景色
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),                  # ヘッダー中央揃え
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),                   # 縦位置
-            ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),        # グリッド線
+            ('FONTNAME', (0, 0), (-1, 0), font_name),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTNAME', (0, 1), (-1, -1), font_name),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#DDEEFF")),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8F8F8")]),
-            ('FONTNAME', (0, 0), (-1, 0), font_name),
-            ('FONTNAME', (0, 0), (-1, 0), font_name),
-            ('FONTNAME', (0, 0), (-1, 0), font_name),
-            ('FONTNAME', (0, 0), (-1, 0), font_name),
-            ('FONTNAME', (0, 0), (-1, 0), font_name),
-            ('FONTNAME', (0, 0), (-1, 0), font_name),
-            ('FONTNAME', (0, 0), (-1, 0), font_name),
-            ('FONTNAME', (0, 0), (-1, 0), font_name),
         ]))
 
         elements.append(table)
@@ -616,12 +689,25 @@ def export_workload_pdf(queryset, filters=None):
         # PDF生成
         doc.build(elements)
 
-        buffer.seek(0)
-        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        # ファイル保存版
+        if save_to_file:
+            print(f"PDF file saved to: {save_to_file}")
+            return save_to_file
+
+        # HTTPレスポンス版（既存の動作）
+        output_stream.seek(0)
+        response = HttpResponse(output_stream.getvalue(), content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="workload_report_{timestamp}.pdf"'
         return response
 
     except Exception as e:
+        import traceback
+        print(f"PDF生成エラー: {str(e)}")
+        print(traceback.format_exc())
+        return HttpResponse("PDF生成に失敗しました", status=500)
+        
+    except Exception as e:
+        print(f"Export failed: {str(e)}")
         import traceback
         print(f"PDF生成エラー: {str(e)}")
         print(traceback.format_exc())
@@ -654,10 +740,41 @@ def export_workload_text_fallback(queryset, filters=None):
     
     print(f"Text file created: {filename}")
     return response
+@login_required
+@require_http_methods(["POST"])
+def export_report_with_history(request):
+    """エクスポート履歴に登録しつつレポートをエクスポート（CSV例）"""
+    # フィルター条件取得
+    filters = {}
+    for key in ['project_name', 'case_name', 'status', 'case_classification', 'section', 'mub_manager']:
+        value = request.POST.get(key) or request.GET.get(key)
+        if value:
+            filters[key] = value
 
-def export_workload_excel(queryset, export_type='excel'):
-    """Excel形式でエクスポート"""
-    # Excelワークブック作成
+    queryset = WorkloadAggregation.objects.select_related(
+        'case_name', 'section', 'mub_manager'
+    )
+    # フィルター適用
+    if filters.get('project_name'):
+        queryset = queryset.filter(project_name__icontains=filters['project_name'])
+    if filters.get('case_name'):
+        queryset = queryset.filter(case_name_id=filters['case_name'])
+    if filters.get('status'):
+        queryset = queryset.filter(status=filters['status'])
+    if filters.get('case_classification'):
+        queryset = queryset.filter(case_classification=filters['case_classification'])
+    if filters.get('section'):
+        queryset = queryset.filter(section_id=filters['section'])
+    if filters.get('mub_manager'):
+        queryset = queryset.filter(mub_manager_id=filters['mub_manager'])
+    
+    queryset = queryset.order_by('-created_at')
+
+    export_format = request.POST.get('format', 'csv')  # 'csv', 'pdf', 'excel'
+    return export_and_upload(queryset, export_format, filters, request.user)
+
+def export_workload_excel(queryset, export_type='excel', save_to_file=None):
+    """Excel形式でエクスポート（ファイル保存またはHttpResponse）"""
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "工数集計レポート"
@@ -715,7 +832,6 @@ def export_workload_excel(queryset, export_type='excel'):
             for col_num, value in enumerate(data_row, 1):
                 ws.cell(row=row_num, column=col_num, value=value)
         except Exception as e:
-            # エラーが発生した行をスキップ
             print(f"Row {row_num} export error: {str(e)}")
             continue
     
@@ -732,14 +848,19 @@ def export_workload_excel(queryset, export_type='excel'):
         adjusted_width = min(max_length + 2, 50)
         ws.column_dimensions[column_letter].width = adjusted_width
     
-    # HTTPレスポンスとして返却
+    # ファイル保存版（S3アップロード用）
+    if save_to_file:
+        wb.save(save_to_file)
+        print(f"Excel file saved to: {save_to_file}")
+        return save_to_file
+    
+    # HTTPレスポンス版（既存の動作）
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
     
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     
-    # シンプルな英語ファイル名
     if export_type == 'pdf':
         filename = f'workload_extended_{timestamp}.xlsx'
     else:
@@ -753,9 +874,10 @@ def export_workload_excel(queryset, export_type='excel'):
     
     return response
 
-def export_workload_csv(queryset):
-    """CSV形式でエクスポート"""
+def export_workload_csv(queryset, save_to_file=None):
+    """CSV形式でエクスポート（ファイル保存またはHttpResponse）"""
     import csv
+    
     output = io.StringIO()
     writer = csv.writer(output)
     
@@ -797,11 +919,17 @@ def export_workload_csv(queryset):
                 workload.created_at.strftime('%Y-%m-%d %H:%M:%S'),
             ])
         except Exception as e:
-            # エラーが発生した行をスキップ
             print(f"CSV export error: {str(e)}")
             continue
     
-    # HTTPレスポンスとして返却（拡張子は.csv）
+    # ファイル保存版（S3アップロード用）
+    if save_to_file:
+        with open(save_to_file, 'w', encoding='utf-8-sig', newline='') as f:
+            f.write(output.getvalue())
+        print(f"CSV file saved to: {save_to_file}")
+        return save_to_file
+    
+    # HTTPレスポンス版（既存の動作）
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     filename = f'workload_csv_{timestamp}.csv'
     
@@ -809,3 +937,100 @@ def export_workload_csv(queryset):
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     
     return response
+
+def complete_export(report_export, local_path):
+    """
+    S3アップロード＆履歴登録を行う関数
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[S3連携] complete_export開始: local_path={local_path}, file_name={report_export.file_name}")
+
+    try:
+        import os
+        
+        # ファイル存在確認
+        if not os.path.exists(local_path):
+            raise FileNotFoundError(f"ローカルファイルが見つかりません: {local_path}")
+        
+        # ファイルサイズ取得
+        file_size = os.path.getsize(local_path)
+        logger.info(f"[S3連携] ファイルサイズ: {file_size} bytes")
+        
+        # S3アップロード
+        s3_key = f"exports/{report_export.file_name}"
+        logger.info(f"[S3連携] S3アップロード開始: s3_key={s3_key}")
+        
+        s3_url = upload_file_to_s3(local_path, s3_key)
+        logger.info(f"[S3連携] S3アップロード成功: s3_url={s3_url}")
+
+        # file_s3_urlフィールドが存在するかチェック
+        if hasattr(report_export, 'file_s3_url'):
+            report_export.file_s3_url = s3_url
+            report_export.file_size = file_size
+            update_fields = ['file_s3_url', 'file_size', 'status']
+        else:
+            logger.warning("[S3連携] file_s3_urlフィールドが存在しません。マイグレーション後に再試行してください。")
+            report_export.file_size = file_size
+            update_fields = ['file_size', 'status']
+        
+        report_export.status = ReportExport.StatusChoices.COMPLETED
+        report_export.save(update_fields=update_fields)
+        logger.info(f"[履歴登録] ReportExport更新完了: id={report_export.id}, status={report_export.status}")
+        
+        # ローカルファイルを削除（オプション）
+        try:
+            os.remove(local_path)
+            logger.info(f"[ファイル削除] ローカルファイルを削除: {local_path}")
+        except Exception as cleanup_error:
+            logger.warning(f"[ファイル削除] ローカルファイル削除に失敗: {cleanup_error}")
+
+    except Exception as e:
+        logger.error(f"[S3連携] S3アップロード失敗: {str(e)}")
+        import traceback
+        logger.error(f"[S3連携] エラー詳細: {traceback.format_exc()}")
+        
+        # エラー時は履歴をFAILEDに更新
+        try:
+            if hasattr(report_export, 'error_message'):
+                report_export.error_message = str(e)
+                update_fields = ['status', 'error_message']
+            else:
+                update_fields = ['status']
+            
+            report_export.status = ReportExport.StatusChoices.FAILED
+            report_export.save(update_fields=update_fields)
+            logger.error(f"[履歴登録] ReportExportステータスFAILEDに更新: id={report_export.id}")
+        except Exception as save_error:
+            logger.error(f"[履歴登録] エラー状態の保存に失敗: {save_error}")
+        
+        # エラーを再発生させる
+        raise e
+
+def upload_file_to_s3(local_path, s3_key):
+    """
+    ローカルファイルをS3にアップロードする関数
+    """
+    import boto3
+    from django.conf import settings
+    
+    try:
+        # S3クライアント作成
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.AWS_S3_REGION_NAME
+        )
+        
+        # S3にアップロード
+        bucket_name = settings.AWS_STORAGE_BUCKET_NAME
+        s3_client.upload_file(local_path, bucket_name, s3_key)
+        
+        # S3 URLを生成
+        s3_url = f"https://{bucket_name}.s3.{settings.AWS_S3_REGION_NAME}.amazonaws.com/{s3_key}"
+        
+        return s3_url
+        
+    except Exception as e:
+        raise Exception(f"S3アップロードエラー: {str(e)}")
