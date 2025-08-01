@@ -60,7 +60,7 @@
             
             <div class="collapse navbar-collapse" id="navbarNav">
                 <div class="navbar-nav">
-                    {% if user.is_staff or user.is_superuser %}
+                    {% if user.is_leader or user.is_superuser %}
                         <!-- 管理者・リーダー用メニュー -->
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'core:home' %}">
@@ -140,7 +140,7 @@
         </div>
     </nav>
 
-    <div class="container-fluid">
+    <main class="container-fluid">
         <div class="row">
             <!-- サイドバー -->
             {% if user.is_authenticated %}
@@ -157,7 +157,7 @@
                                 <i class="bi bi-calendar-event"></i> 工数入力
                             </a>
                         </li>
-                        {% if user.is_staff or user.is_superuser %}
+                        {% if user.is_leader or user.is_superuser %}
                         <hr>
                         <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
                             <span>管理機能</span>
@@ -234,7 +234,7 @@
             {% endif %}
 
             <!-- メインコンテンツ -->
-            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content">
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 {% if user.is_authenticated %}
                 <!-- ページヘッダー -->
                 <div class="page-header py-3">
@@ -246,30 +246,13 @@
                 {% endif %}
 
                 <!-- メッセージ表示 -->
-                {% if messages %}
-                    {% for message in messages %}
-                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                            {% if message.tags == 'success' %}
-                                <i class="bi bi-check-circle me-2"></i>
-                            {% elif message.tags == 'error' %}
-                                <i class="bi bi-exclamation-triangle me-2"></i>
-                            {% elif message.tags == 'warning' %}
-                                <i class="bi bi-exclamation-circle me-2"></i>
-                            {% else %}
-                                <i class="bi bi-info-circle me-2"></i>
-                            {% endif %}
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                        </div>
-                    {% endfor %}
-                {% endif %}
-
-                <!-- メインコンテンツ -->
-                {% block content %}
-                {% endblock %}
+                {% include 'includes/messages.html' %}
+                
+                <!-- コンテンツ -->
+                {% block content %}{% endblock %}
             </main>
         </div>
-    </div>
+    </main>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

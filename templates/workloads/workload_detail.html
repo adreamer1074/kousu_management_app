@@ -10,7 +10,7 @@
         <a href="{% url 'workloads:workload_calendar' %}" class="btn btn-sm btn-secondary">
             <i class="bi bi-arrow-left"></i> 工数一覧に戻る
         </a>
-        {% if workload.user == user or user.is_staff or user.is_superuser %}
+        {% if workload.user == user or user.is_leader or user.is_superuser %}
             <a href="{% url 'workloads:workload_edit' workload.pk %}" class="btn btn-sm btn-primary">
                 <i class="bi bi-pencil"></i> 編集
             </a>
@@ -33,7 +33,7 @@
                     <dt class="col-sm-3">日付:</dt>
                     <dd class="col-sm-9">{{ workload.date|date:"Y年m月d日" }}</dd>
                     
-                    {% if not user_view or user.is_staff or user.is_superuser %}
+                    {% if not user_view or user.is_leader or user.is_superuser %}
                         <dt class="col-sm-3">ユーザー:</dt>
                         <dd class="col-sm-9">{{ workload.user.get_full_name|default:workload.user.username }}</dd>
                     {% endif %}
@@ -59,7 +59,7 @@
                     {% endif %}
                 </dl>
                 
-                {% if workload.user == user or user.is_staff or user.is_superuser %}
+                {% if workload.user == user or user.is_leader or user.is_superuser %}
                     <div class="mt-4">
                         <a href="{% url 'workloads:workload_edit' workload.pk %}" class="btn btn-primary">
                             <i class="bi bi-pencil"></i> 編集

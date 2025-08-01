@@ -43,7 +43,7 @@ class WorkloadCalendarView(LoginRequiredMixin, TemplateView):
         
         # ユーザー権限に応じたクエリセット
         user = self.request.user
-        if user.is_staff or user.is_superuser:
+        if user.is_leader or user.is_superuser:
             # 管理者は全データを表示
             workloads = Workload.objects.filter(year_month=year_month)
             
@@ -98,7 +98,7 @@ class WorkloadCalendarView(LoginRequiredMixin, TemplateView):
         unique_users = workloads.values('user').distinct().count()
 
         # 部署一覧（フィルター用）
-        if user.is_staff or user.is_superuser:
+        if user.is_leader or user.is_superuser:
             departments = Department.objects.filter(is_active=True).order_by('name')
         else:
             user_department = getattr(user, 'department', None)
@@ -108,7 +108,7 @@ class WorkloadCalendarView(LoginRequiredMixin, TemplateView):
                 departments = Department.objects.none()
 
         # 課一覧（フィルター用）
-        if user.is_staff or user.is_superuser:
+        if user.is_leader or user.is_superuser:
             sections = Section.objects.filter(is_active=True).select_related('department').order_by('department__name', 'name')
         else:
             user_section = getattr(user, 'section', None)
@@ -143,7 +143,7 @@ class WorkloadCalendarView(LoginRequiredMixin, TemplateView):
             'all_users': all_users,
             'selected_department': department_filter,
             'selected_section': section_filter,
-            'is_admin': user.is_staff or user.is_superuser,
+            'is_admin': user.is_leader or user.is_superuser,
             'unique_users_count': unique_users,
             'year_month_first_day': first_day.weekday(),
         })
@@ -159,7 +159,7 @@ class WorkloadListView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff or user.is_superuser:
+        if user.is_leader or user.is_superuser:
             return Workload.objects.select_related(
                 'user', 'project', 'ticket'
             ).order_by('-year_month', 'user__username')
@@ -299,7 +299,7 @@ def update_workload_ajax(request):
             })
         
         # 権限チェック（本人または管理者のみ）
-        if workload.user != request.user and not request.user.is_staff:
+        if workload.user != request.user and not request.user.is_leader:
             return JsonResponse({
                 'success': False,
                 'error': '編集権限がありません。'
@@ -362,7 +362,7 @@ def bulk_update_workload_ajax(request):
                 workload = Workload.objects.get(id=workload_id)
                 
                 # 権限チェック
-                if workload.user != request.user and not request.user.is_staff:
+                if workload.user != request.user and not request.user.is_leader:
                     errors.append(f'工数ID {workload_id}: 編集権限がありません')
                     continue
                 
@@ -430,7 +430,7 @@ def delete_workload_ajax(request):
             })
         
         # 権限チェック（本人または管理者のみ）
-        if workload.user != request.user and not request.user.is_staff:
+        if workload.user != request.user and not request.user.is_leader:
             return JsonResponse({
                 'success': False,
                 'error': '削除権限がありません。'

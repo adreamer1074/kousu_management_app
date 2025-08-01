@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_http_methods
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import TemplateView, ListView, DetailView, UpdateView, CreateView, DeleteView
 from django.urls import reverse_lazy
@@ -15,72 +15,48 @@ from .models import CustomUser, Department, Section
 from .forms import CustomUserCreationForm, UserEditForm, ProfileEditForm, DepartmentForm, SectionForm, SuperUserEditForm
 import logging
 import json
+import pandas as pd
+from datetime import datetime
+from django.http import HttpResponse
 
 
 logger = logging.getLogger(__name__)
 
-def is_staff_or_superuser(user):
+def is_leader_or_superuser(user):
     """リーダーまたはスーパーユーザーかどうかを判定"""
-    return user.is_staff or user.is_superuser
+    return user.is_leader or user.is_superuser
 
 @login_required
-@user_passes_test(is_staff_or_superuser)
-def register(request):
-    """ユーザー登録ビュー（完全自動ログイン防止版）"""
+@user_passes_test(is_leader_or_superuser)
+def user_register(request):
+    """ユーザー登録ビュー"""
     if request.method == 'POST':
         form = CustomUserCreationForm(request.POST)
         if form.is_valid():
-            # 現在のログインユーザーを確実に保存
-            original_user = request.user
-            original_user_id = original_user.id
-            original_session_key = request.session.session_key
+            user = form.save()
             
-            logger.info(f"Before save: User={original_user.username}, ID={original_user_id}")
+            # 自動生成パスワードの場合は、パスワードを表示
+            auto_generate = request.POST.get('auto_generate_password') == 'on'
             
-            # ユーザーを作成
-            try:
-                # commit=Falseで作成してから手動保存
-                new_user = form.save(commit=False)
-                new_user.created_by = original_user
-                new_user.save()
-                
-                # 保存後のセッション状態を確認
-                current_user_after_save = request.user
-                logger.info(f"After save: User={current_user_after_save.username}, ID={current_user_after_save.id}")
-                
-                # セッションが変更された場合は強制復元
-                if request.user.id != original_user_id:
-                    logger.warning(f"Session hijacked! Restoring from {request.user.username} to {original_user.username}")
-                    
-                    # 完全にセッションをクリアして再ログイン
-                    logout(request)
-                    
-                    # 元のユーザーで再ログイン
-                    login(request, original_user, backend='django.contrib.auth.backends.ModelBackend')
-                    
-                    # 再度確認
-                    if request.user.id == original_user_id:
-                        logger.info(f"Session successfully restored to: {request.user.username}")
-                    else:
-                        logger.error(f"Session restoration failed! Current: {request.user.username}")
-                
-                messages.success(
-                    request, 
-                    f'ユーザー「{new_user.username}」を作成しました。現在のログイン: {request.user.username}'
-                )
-                
-                # リダイレクト前に再度セッション確認
-                final_user = request.user
-                logger.info(f"Before redirect: User={final_user.username}, ID={final_user.id}")
-                
-                # ユーザー一覧にリダイレクト（詳細画面ではなく）
-                return redirect('users:user_list')
-                
-            except Exception as e:
-                logger.error(f"Error during user creation: {e}")
-                messages.error(request, f'ユーザー作成エラー: {e}')
+            if auto_generate:
+                generated_password = getattr(form, 'generated_password', None)
+                if generated_password:
+                    messages.success(
+                        request, 
+                        f'ユーザー「{user.username}」が正常に登録されました。<br>'
+                        f'<strong>生成されたパスワード: {generated_password}</strong><br>'
+                        f'<span style="color: red;">⚠️ このパスワードは再表示されません。必ずメモしてください。</span>',
+                        extra_tags='safe'
+                    )
+                else:
+                    messages.success(request, f'ユーザー「{user.username}」が正常に登録されました。')
+            else:
+                messages.success(request, f'ユーザー「{user.username}」が正常に登録されました。')
+            
+            return redirect('users:user_list')
         else:
-            logger.warning(f"Form is invalid: {form.errors}")
+            # フォームエラーがある場合、エラーメッセージを表示
+            messages.error(request, '入力内容に問題があります。以下のエラーを確認してください。')
     else:
         form = CustomUserCreationForm()
     
@@ -94,7 +70,7 @@ class UserListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     paginate_by = 50
     
     def test_func(self):
-        return self.request.user.is_staff or self.request.user.is_superuser
+        return self.request.user.is_leader or self.request.user.is_superuser
     
     def get_queryset(self):
         # すべてのユーザー（アクティブ・非アクティブ両方）を取得
@@ -122,7 +98,7 @@ class UserListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         elif status == 'inactive':
             queryset = queryset.filter(is_active=False)
         elif status == 'staff':
-            queryset = queryset.filter(is_staff=True)
+            queryset = queryset.filter(is_leader=True)
         elif status == 'superuser':
             queryset = queryset.filter(is_superuser=True)
         
@@ -201,7 +177,7 @@ class UserDetailView(LoginRequiredMixin, DetailView):
         logger.info(f"Context - Display target user: {target_user.username} (ID: {target_user.id})")
         
         # 権限判定は現在のログインユーザーで行う
-        context['can_edit'] = current_user.is_superuser or current_user.is_staff
+        context['can_edit'] = current_user.is_superuser or current_user.is_leader
         context['can_delete'] = current_user.is_superuser
         context['current_login_user'] = current_user
         context['is_own_profile'] = current_user.id == target_user.id
@@ -217,7 +193,7 @@ class UserEditView(LoginRequiredMixin, UpdateView):
     
     def dispatch(self, request, *args, **kwargs):
         """アクセス権限をチェック"""
-        if not (request.user.is_staff or request.user.is_superuser):
+        if not (request.user.is_leader or request.user.is_superuser):
             messages.error(request, 'この操作を実行する権限がありません。')
             return redirect('users:user_list')
         return super().dispatch(request, *args, **kwargs)
@@ -241,7 +217,7 @@ class UserEditView(LoginRequiredMixin, UpdateView):
         if self.request.user.is_superuser:
             return SuperUserEditForm
         # リーダーが一般ユーザーを編集する場合
-        elif self.request.user.is_staff and not user_obj.is_superuser:
+        elif self.request.user.is_leader and not user_obj.is_superuser:
             return UserEditForm
         else:
             return UserEditForm
@@ -253,7 +229,7 @@ class UserEditView(LoginRequiredMixin, UpdateView):
         # 編集可能かどうかの判定
         context['can_edit_permissions'] = (
             self.request.user.is_superuser or 
-            (self.request.user.is_staff and not user_obj.is_superuser)
+            (self.request.user.is_leader and not user_obj.is_superuser)
         )
         context['can_edit_basic_info'] = True
         context['is_editing_superuser'] = user_obj.is_superuser
@@ -406,7 +382,7 @@ def custom_logout(request):
     return redirect('login')
 
 @login_required
-@user_passes_test(is_staff_or_superuser)
+@user_passes_test(is_leader_or_superuser)
 def user_create(request):
     """ユーザー作成（registerのエイリアス）"""
     return register(request)  # registerに転送
@@ -432,7 +408,7 @@ def user_detail_debug(request, pk):
         'user_obj': target_user,
         'current_login_user': request.user,
         'requested_pk': pk,
-        'can_edit': request.user.is_superuser or request.user.is_staff,
+        'can_edit': request.user.is_superuser or request.user.is_leader,
         'can_delete': request.user.is_superuser,
         'debug_info': {
             'request_user': request.user.username,
@@ -724,3 +700,116 @@ def cleanup_inactive_users(request):
     except Exception as e:
         logger.error(f"Cleanup error: {str(e)}")
         return JsonResponse({'success': False, 'error': f'クリーンアップ処理でエラーが発生しました: {str(e)}'})
+
+@login_required
+@user_passes_test(is_leader_or_superuser)
+def register(request):
+    """ユーザー登録ビュー"""
+    if request.method == 'POST':
+        form = CustomUserCreationForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            
+            # 自動生成パスワードの場合
+            if form.cleaned_data.get('auto_generate_password', True):
+                generated_password = getattr(form, 'generated_password', None)
+                if generated_password:
+                    # セッションにパスワードを保存
+                    request.session['generated_password'] = generated_password
+                    request.session['generated_user'] = user.username
+                    
+                    # パスワード表示ページにリダイレクト
+                    return redirect('users:user_password_display')
+                else:
+                    messages.success(request, f'ユーザー「{user.username}」が正常に登録されました。')
+            else:
+                messages.success(request, f'ユーザー「{user.username}」が正常に登録されました。')
+            
+            return redirect('users:user_list')
+        else:
+            messages.error(request, '入力内容に問題があります。エラーを確認してください。')
+    else:
+        form = CustomUserCreationForm()
+    
+    return render(request, 'users/user/user_register.html', {'form': form})
+
+@login_required
+@user_passes_test(is_leader_or_superuser)
+def user_password_display(request):
+    """生成されたパスワード表示ページ"""
+    generated_password = request.session.get('generated_password')
+    generated_user = request.session.get('generated_user')
+    
+    if not generated_password or not generated_user:
+        messages.error(request, '表示するパスワード情報がありません。')
+        return redirect('users:user_list')
+    
+    context = {
+        'generated_password': generated_password,
+        'generated_user': generated_user,
+    }
+    
+    # セッションからパスワード情報を削除（一度だけ表示）
+    if 'generated_password' in request.session:
+        del request.session['generated_password']
+    if 'generated_user' in request.session:
+        del request.session['generated_user']
+    
+    return render(request, 'users/user/password_display.html', context)
+
+@login_required
+@user_passes_test(is_leader_or_superuser)
+def user_export(request):
+    """ユーザー一覧をExcelファイルでエクスポート"""
+    try:
+        users = CustomUser.objects.select_related('department').all().order_by('date_joined')
+        
+        data = []
+        for user in users:
+            data.append({
+                'ユーザー名': user.username,
+                'メールアドレス': user.email,
+                '姓': user.first_name,
+                '名': user.last_name,
+                'フルネーム': user.get_full_name(),
+                '所属部署': user.department.name if user.department else '未設定',
+                '社員レベル': user.get_employee_level_display() if user.employee_level else '未設定',
+                'リーダー権限': 'はい' if user.is_leader else 'いいえ',
+                'アクティブ': 'はい' if user.is_active else 'いいえ',
+                '最終ログイン': user.last_login.strftime('%Y-%m-%d %H:%M:%S') if user.last_login else '未ログイン',
+                '登録日': user.date_joined.strftime('%Y-%m-%d %H:%M:%S'),
+            })
+        
+        df = pd.DataFrame(data)
+        
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'ユーザー一覧_{timestamp}.xlsx'
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        with pd.ExcelWriter(response, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='ユーザー一覧', index=False)
+            
+            # 列幅調整
+            worksheet = writer.sheets['ユーザー一覧']
+            for column in worksheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                worksheet.column_dimensions[column_letter].width = adjusted_width
+        
+        messages.success(request, f'ユーザー一覧をExcelファイルとしてエクスポートしました。（{len(data)}件）')
+        return response
+        
+    except Exception as e:
+        messages.error(request, f'エクスポート中にエラーが発生しました: {str(e)}')
+        return redirect('users:user_list')

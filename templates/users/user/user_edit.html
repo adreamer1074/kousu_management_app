@@ -26,7 +26,7 @@
                     <i class="bi bi-pencil"></i> {{ user_obj.username }} の編集
                     {% if is_editing_superuser %}
                         <span class="badge bg-danger">スーパーユーザー</span>
-                    {% elif user_obj.is_staff %}
+                    {% elif user_obj.is_leader %}
                         <span class="badge bg-warning">リーダー</span>
                     {% endif %}
                 </h5>
@@ -180,14 +180,14 @@
                             <div class="col-md-4">
                                 <div class="mb-3">
                                     <div class="form-check">
-                                        {{ form.is_staff }}
-                                        <label class="form-check-label" for="{{ form.is_staff.id_for_label }}">
+                                        {{ form.is_leader }}
+                                        <label class="form-check-label" for="{{ form.is_leader.id_for_label }}">
                                             リーダー権限
                                         </label>
                                     </div>
                                     <div class="form-text">管理画面アクセスとユーザー管理</div>
-                                    {% if form.is_staff.errors %}
-                                        <div class="text-danger small">{{ form.is_staff.errors.0 }}</div>
+                                    {% if form.is_leader.errors %}
+                                        <div class="text-danger small">{{ form.is_leader.errors.0 }}</div>
                                     {% endif %}
                                 </div>
                             </div>

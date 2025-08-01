@@ -1,6 +1,10 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth import authenticate, login
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+import secrets
+import string
 from .models import CustomUser, Department, Section
 
 class CustomUserCreationForm(forms.ModelForm):
@@ -8,18 +12,31 @@ class CustomUserCreationForm(forms.ModelForm):
     password1 = forms.CharField(
         label='パスワード',
         widget=forms.PasswordInput(attrs={'class': 'form-control'}),
-        help_text='8文字以上で入力してください。'
+        help_text='8文字以上で入力してください。',
+        required=False
     )
     password2 = forms.CharField(
         label='パスワード（確認）',
         widget=forms.PasswordInput(attrs={'class': 'form-control'}),
-        help_text='確認のため、同じパスワードを入力してください。'
+        help_text='確認のため、同じパスワードを入力してください。',
+        required=False
+    )
+    auto_generate_password = forms.BooleanField(
+        label='ランダムパスワード自動生成',
+        required=False,
+        initial=True
+    )
+    # 隠しフィールド
+    auto_generate_password = forms.BooleanField(
+        widget=forms.HiddenInput(),
+        required=False,
+        initial=True
     )
 
     class Meta:
         model = CustomUser
         fields = ('username', 'email', 'first_name', 'last_name', 'department', 'section', 'employee_level',
-                 'is_staff', 'is_active')
+                 'is_leader', 'is_active')
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
@@ -28,8 +45,8 @@ class CustomUserCreationForm(forms.ModelForm):
             'department': forms.Select(attrs={'class': 'form-select', 'onchange': 'loadSections(this.value)'}),
             'section': forms.Select(attrs={'class': 'form-select', 'id': 'id_section'}),
             'employee_level': forms.Select(attrs={'class': 'form-select'}),
-            'is_staff': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'is_leader': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input', 'checked': True}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -39,46 +56,58 @@ class CustomUserCreationForm(forms.ModelForm):
         self.fields['department'].empty_label = "選択してください"
         self.fields['section'].empty_label = "選択してください"
         self.fields['employee_level'].empty_label = "選択してください"
+        self.fields['is_active'].initial = True
 
-    def clean_password2(self):
-        password1 = self.cleaned_data.get("password1")
-        password2 = self.cleaned_data.get("password2")
-        if password1 and password2 and password1 != password2:
-            raise forms.ValidationError("パスワードが一致しません。")
-        return password2
+        # 必須フィールド
+        self.fields['username'].required = True
+        self.fields['email'].required = True
+        self.fields['first_name'].required = True
+        self.fields['last_name'].required = True
+        
+    def generate_random_password(self):
+        """セキュアなランダムパスワードを生成"""
+        alphabet = string.ascii_letters + string.digits + "!@#$%&*"
+        password = ''.join(secrets.choice(alphabet) for _ in range(12))
+        return password
 
-    def clean_username(self):
-        username = self.cleaned_data.get('username')
-        if CustomUser.objects.filter(username=username).exists():
-            raise forms.ValidationError("このユーザー名は既に使用されています。")
-        return username
+    def clean(self):
+        cleaned_data = super().clean()
+        auto_generate = self.data.get('auto_generate_password') == 'on'
+        password1 = cleaned_data.get('password1')
+        password2 = cleaned_data.get('password2')
+
+        cleaned_data['auto_generate_password'] = auto_generate
+
+        if not auto_generate:
+            if not password1:
+                raise ValidationError({'password1': 'パスワードを入力してください。'})
+            if not password2:
+                raise ValidationError({'password2': 'パスワード確認を入力してください。'})
+            if password1 != password2:
+                raise ValidationError({'password2': 'パスワードが一致しません。'})
+
+            try:
+                validate_password(password1)
+            except ValidationError as e:
+                raise ValidationError({'password1': e.messages})
+
+        return cleaned_data
 
     def save(self, commit=True):
-        """
-        完全自動ログイン防止版save
-        UserCreationFormを一切使わない独自実装
-        """
-        # 新しいユーザーインスタンスを作成
-        user = CustomUser(
-            username=self.cleaned_data['username'],
-            email=self.cleaned_data.get('email', ''),
-            first_name=self.cleaned_data.get('first_name', ''),
-            last_name=self.cleaned_data.get('last_name', ''),
-            department=self.cleaned_data.get('department'),
-            section=self.cleaned_data.get('section'),
-            employee_level=self.cleaned_data.get('employee_level'),
-            is_staff=self.cleaned_data.get('is_staff', False),
-            is_active=self.cleaned_data.get('is_active', True),
-            is_superuser=False,  # 明示的にFalse
-        )
-        
-        # パスワードを設定
-        user.set_password(self.cleaned_data['password1'])
-        
+        user = super().save(commit=False)
+
+        # パスワード設定
+        auto_generate = self.cleaned_data.get('auto_generate_password', True)
+        if auto_generate:
+            password = self.generate_random_password()
+            self.generated_password = password  # 後で表示用に保存
+        else:
+            password = self.cleaned_data['password1']
+
+        user.set_password(password)
+
         if commit:
             user.save()
-        
-        # 重要: authenticate()やlogin()を一切呼ばない
         return user
 
 class CustomUserForm(forms.ModelForm):
@@ -102,7 +131,7 @@ class SuperUserEditForm(forms.ModelForm):
     class Meta:
         model = CustomUser
         fields = ['username', 'first_name', 'last_name', 'email', 'department', 'section', 
-                 'is_staff', 'is_superuser', 'is_active', 'employee_level']
+                 'is_leader', 'is_superuser', 'is_active', 'employee_level']
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-control'}),
             'first_name': forms.TextInput(attrs={'class': 'form-control'}),
@@ -110,7 +139,7 @@ class SuperUserEditForm(forms.ModelForm):
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'department': forms.Select(attrs={'class': 'form-select'}),
             'section': forms.Select(attrs={'class': 'form-select'}),
-            'is_staff': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'is_leader': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'is_superuser': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'employee_level': forms.Select(attrs={'class': 'form-select'}),
@@ -130,7 +159,7 @@ class UserEditForm(forms.ModelForm):
 
     class Meta:
         model = CustomUser
-        fields = ['username', 'first_name', 'last_name', 'email', 'department', 'section', 'is_staff', 'is_active', 'employee_level']
+        fields = ['username', 'first_name', 'last_name', 'email', 'department', 'section', 'is_leader', 'is_active', 'employee_level']
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-control'}),
             'first_name': forms.TextInput(attrs={'class': 'form-control'}),
@@ -138,7 +167,7 @@ class UserEditForm(forms.ModelForm):
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'department': forms.Select(attrs={'class': 'form-select'}),
             'section': forms.Select(attrs={'class': 'form-select'}),
-            'is_staff': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'is_leader': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'employee_level': forms.Select(attrs={'class': 'form-select'}),
         }
@@ -215,7 +244,7 @@ class AdminUserCreationForm(forms.ModelForm):
     class Meta:
         model = CustomUser
         fields = ('username', 'email', 'first_name', 'last_name', 'department', 'section', 'employee_level',
-                 'is_staff', 'is_active')
+                 'is_leader', 'is_active')
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
@@ -224,7 +253,7 @@ class AdminUserCreationForm(forms.ModelForm):
             'department': forms.Select(attrs={'class': 'form-select'}),
             'section': forms.Select(attrs={'class': 'form-select'}),
             'employee_level': forms.Select(attrs={'class': 'form-select'}),
-            'is_staff': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'is_leader': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 

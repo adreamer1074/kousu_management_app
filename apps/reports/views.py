@@ -277,7 +277,7 @@ class ReportExportListView(LoginRequiredMixin, ListView):
     def get_queryset(self):
         queryset = ReportExport.objects.select_related('requested_by').order_by('-requested_at')
         # 一般ユーザーは自分のエクスポートのみ表示
-        if not self.request.user.is_staff:
+        if not self.request.user.is_leader:
             queryset = queryset.filter(requested_by=self.request.user)
         return queryset
 

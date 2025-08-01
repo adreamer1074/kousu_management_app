@@ -11,7 +11,7 @@ from apps.projects.models import Project, Case
 from apps.cost_master.models import OutsourcingCost
 
 @login_required
-@user_passes_test(lambda u: u.is_staff)
+@user_passes_test(lambda u: u.is_leader)
 def admin_dashboard(request):
     """管理者ダッシュボード"""
     
