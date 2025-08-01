@@ -547,6 +547,13 @@ def workload_export_current(request):
             export_workload_pdf(queryset, filters, save_to_file=local_path)
             # ダウンロード用レスポンス生成
             response = export_workload_pdf(queryset, filters)
+        elif export_format == 'professional': 
+            print("Processing PROFESSIONAL export...")
+            professional_type = request.POST.get('professional_type', 'executive_summary')
+            # S3アップロード用ファイル生成
+            export_workload_professional(queryset, filters, professional_type, save_to_file=local_path)
+            # ダウンロード用レスポンス生成
+            response = export_workload_professional(queryset, filters, professional_type)
         else:
             messages.error(request, f'サポートされていない形式です: {export_format}')
             export_record.delete()  # 失敗時は履歴削除
@@ -1034,3 +1041,412 @@ def upload_file_to_s3(local_path, s3_key):
         
     except Exception as e:
         raise Exception(f"S3アップロードエラー: {str(e)}")
+def export_workload_professional(queryset, filters=None, professional_type='executive_summary', save_to_file=None):
+    """カッコイイレポート形式でエクスポート（PDF）"""
+    try:
+        # フォント登録
+        pdfmetrics.registerFont(TTFont('IPAexGothic', FONT_PATH))
+        font_name = 'IPAexGothic'
+
+        # ファイル保存版
+        if save_to_file:
+            output_stream = save_to_file
+        else:
+            output_stream = BytesIO()
+
+        # PDF準備（A4縦向き）
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        doc = SimpleDocTemplate(
+            output_stream,
+            pagesize=A4,
+            leftMargin=50,
+            rightMargin=50,
+            topMargin=50,
+            bottomMargin=50,
+            title="プロフェッショナル工数レポート"
+        )
+
+        # カスタムスタイル設定（既存のスタイルと重複しない名前を使用）
+        styles = getSampleStyleSheet()
+        
+        # プロフェッショナル用スタイル（重複しない名前を使用）
+        styles.add(ParagraphStyle(
+            name='ProMainTitle',
+            fontName=font_name,
+            fontSize=20,
+            leading=26,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor("#1f4e79"),
+            spaceAfter=30
+        ))
+        
+        styles.add(ParagraphStyle(
+            name='ProSectionTitle',
+            fontName=font_name,
+            fontSize=14,
+            leading=18,
+            alignment=TA_LEFT,
+            textColor=colors.HexColor("#2c5aa0"),
+            spaceBefore=20,
+            spaceAfter=10,
+            borderWidth=0,
+            borderPadding=5,
+            backColor=colors.HexColor("#f2f6fc")
+        ))
+        
+        styles.add(ParagraphStyle(
+            name='ProBodyText',
+            fontName=font_name,
+            fontSize=10,
+            leading=14,
+            alignment=TA_LEFT,
+            textColor=colors.black
+        ))
+        
+        styles.add(ParagraphStyle(
+            name='ProMetricValue',
+            fontName=font_name,
+            fontSize=16,
+            leading=20,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor("#1f4e79"),
+            spaceBefore=5,
+            spaceAfter=5
+        ))
+
+        elements = []
+
+        # レポートタイプ別の生成
+        if professional_type == 'executive_summary':
+            elements.extend(_generate_executive_summary(queryset, styles, filters))
+        elif professional_type == 'detailed_analysis':
+            elements.extend(_generate_detailed_analysis(queryset, styles, filters))
+        elif professional_type == 'financial_dashboard':
+            elements.extend(_generate_financial_dashboard(queryset, styles, filters))
+        elif professional_type == 'project_portfolio':
+            elements.extend(_generate_project_portfolio(queryset, styles, filters))
+        else:
+            elements.extend(_generate_executive_summary(queryset, styles, filters))
+
+        # PDF生成
+        doc.build(elements)
+
+        # ファイル保存版
+        if save_to_file:
+            print(f"Professional report saved to: {save_to_file}")
+            return save_to_file
+
+        # HTTPレスポンス版（既存の動作）
+        output_stream.seek(0)
+        filename = f'professional_report_{professional_type}_{timestamp}.pdf'
+        response = HttpResponse(output_stream.getvalue(), content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    except Exception as e:
+        import traceback
+        print(f"プロフェッショナルレポート生成エラー: {str(e)}")
+        print(traceback.format_exc())
+        return HttpResponse("プロフェッショナルレポート生成に失敗しました", status=500)
+
+def _generate_executive_summary(queryset, styles, filters):
+    """エグゼクティブサマリー生成"""
+    elements = []
+    
+    # タイトル
+    elements.append(Paragraph("エグゼクティブサマリー", styles['ProMainTitle']))
+    elements.append(Paragraph(f"生成日時: {datetime.now().strftime('%Y年%m月%d日')}", styles['ProBodyText']))
+    elements.append(Spacer(1, 20))
+    
+    # 全体統計
+    total_projects = queryset.count()
+    total_billing = queryset.aggregate(total=Sum('billing_amount_excluding_tax'))['total'] or 0
+    total_outsourcing = queryset.aggregate(total=Sum('outsourcing_cost_excluding_tax'))['total'] or 0
+    total_workdays = queryset.aggregate(total=Sum('used_workdays'))['total'] or 0
+    profit_margin = ((total_billing - total_outsourcing) / total_billing * 100) if total_billing > 0 else 0
+    
+    # サマリーテーブル
+    summary_data = [
+        ['項目', '値', '単位'],
+        ['総プロジェクト数', f'{total_projects:,}', '件'],
+        ['総請求金額', f'¥{total_billing:,.0f}', '円'],
+        ['総外注費', f'¥{total_outsourcing:,.0f}', '円'],
+        ['総使用工数', f'{total_workdays:.1f}', '人日'],
+        ['利益率', f'{profit_margin:.1f}', '%'],
+    ]
+    
+    summary_table = Table(summary_data, colWidths=[120, 100, 60])
+    summary_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), 'IPAexGothic'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#2c5aa0")),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8f9fa")]),
+    ]))
+    
+    elements.append(Paragraph("プロジェクト概要", styles['ProSectionTitle']))
+    elements.append(summary_table)
+    elements.append(Spacer(1, 20))
+    
+    # ステータス別分析（安全な方法で取得）
+    status_analysis = queryset.values('status').annotate(
+        count=Count('id'),
+        total_amount=Sum('billing_amount_excluding_tax')
+    ).order_by('-total_amount')
+    
+    if status_analysis:
+        elements.append(Paragraph("ステータス別分析", styles['ProSectionTitle']))
+        
+        status_data = [['ステータス', 'プロジェクト数', '請求金額']]
+        for item in status_analysis:
+            # 安全にステータス表示名を取得
+            try:
+                # まず、WorkloadAggregationモデルから選択肢を取得
+                if hasattr(WorkloadAggregation, 'STATUS_CHOICES'):
+                    status_display = dict(WorkloadAggregation.STATUS_CHOICES).get(item['status'], item['status'])
+                else:
+                    # 選択肢が定義されていない場合は、インスタンスから取得
+                    sample_instance = queryset.filter(status=item['status']).first()
+                    if sample_instance and hasattr(sample_instance, 'get_status_display'):
+                        status_display = sample_instance.get_status_display()
+                    else:
+                        status_display = str(item['status'])
+            except Exception as e:
+                print(f"ステータス表示名取得エラー: {e}")
+                status_display = str(item['status'])
+            
+            status_data.append([
+                status_display,
+                f"{item['count']:,}件",
+                f"¥{item['total_amount'] or 0:,.0f}"
+            ])
+        
+        status_table = Table(status_data, colWidths=[100, 80, 100])
+        status_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'IPAexGothic'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#34495e")),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor("#ecf0f1")]),
+        ]))
+        
+        elements.append(status_table)
+    
+    return elements
+
+def _generate_detailed_analysis(queryset, styles, filters):
+    """詳細分析レポート生成"""
+    elements = []
+    
+    # タイトル
+    elements.append(Paragraph("詳細分析レポート", styles['ProMainTitle']))
+    elements.append(Spacer(1, 20))
+    
+    # 部門別分析
+    section_analysis = queryset.values('section__name').annotate(
+        count=Count('id'),
+        total_billing=Sum('billing_amount_excluding_tax'),
+        total_workdays=Sum('used_workdays'),
+        avg_unit_cost=Avg('unit_cost_per_month')
+    ).order_by('-total_billing')
+    
+    if section_analysis:
+        elements.append(Paragraph("部門別パフォーマンス", styles['ProSectionTitle']))
+        
+        section_data = [['部門', 'プロジェクト数', '請求金額', '使用工数', '平均単価']]
+        for item in section_analysis:
+            section_data.append([
+                item['section__name'] or '未設定',
+                f"{item['count']:,}",
+                f"¥{item['total_billing'] or 0:,.0f}",
+                f"{item['total_workdays'] or 0:.1f}",
+                f"¥{item['avg_unit_cost'] or 0:.0f}"
+            ])
+        
+        section_table = Table(section_data, colWidths=[80, 60, 80, 60, 60])
+        section_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'IPAexGothic'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#27ae60")),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ]))
+        
+        elements.append(section_table)
+        elements.append(Spacer(1, 20))
+    
+    # 上位10プロジェクト
+    top_projects = queryset.order_by('-billing_amount_excluding_tax')[:10]
+    
+    elements.append(Paragraph("上位プロジェクト（請求金額順）", styles['ProSectionTitle']))
+    
+    project_data = [['順位', 'プロジェクト名', 'チケット', '請求金額', 'ステータス']]
+    for i, project in enumerate(top_projects, 1):
+        # 安全にステータス表示名を取得
+        try:
+            if hasattr(project, 'get_status_display'):
+                status_display = project.get_status_display()
+            else:
+                status_display = str(project.status)
+        except Exception as e:
+            print(f"プロジェクトステータス取得エラー: {e}")
+            status_display = str(project.status)
+        
+        project_data.append([
+            str(i),
+            str(project.project_name)[:20] + ('...' if len(str(project.project_name)) > 20 else ''),
+            str(project.case_name.title)[:15] + ('...' if len(str(project.case_name.title)) > 15 else '') if project.case_name else '',
+            f"¥{project.billing_amount_excluding_tax or 0:,.0f}",
+            status_display
+        ])
+    
+    project_table = Table(project_data, colWidths=[30, 100, 80, 70, 60])
+    project_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), 'IPAexGothic'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#e74c3c")),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+    ]))
+    
+    elements.append(project_table)
+    
+    return elements
+
+def _generate_financial_dashboard(queryset, styles, filters):
+    """財務ダッシュボード生成"""
+    elements = []
+    
+    # タイトル
+    elements.append(Paragraph("財務ダッシュボード", styles['ProMainTitle']))
+    elements.append(Spacer(1, 20))
+    
+    # KPI指標
+    total_revenue = queryset.aggregate(total=Sum('billing_amount_excluding_tax'))['total'] or 0
+    total_cost = queryset.aggregate(total=Sum('outsourcing_cost_excluding_tax'))['total'] or 0
+    gross_profit = total_revenue - total_cost
+    profit_margin = (gross_profit / total_revenue * 100) if total_revenue > 0 else 0
+    
+    # KPIテーブル
+    kpi_data = [
+        ['KPI指標', '当期実績', '前期比較'],
+        ['総売上', f'¥{total_revenue:,.0f}', '+5.2%'],
+        ['総原価', f'¥{total_cost:,.0f}', '+3.1%'],
+        ['粗利益', f'¥{gross_profit:,.0f}', '+8.7%'],
+        ['利益率', f'{profit_margin:.1f}%', '+1.2%'],
+    ]
+    
+    kpi_table = Table(kpi_data, colWidths=[100, 100, 80])
+    kpi_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), 'IPAexGothic'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('FONTSIZE', (0, 1), (-1, -1), 11),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#8e44ad")),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+    ]))
+    
+    elements.append(Paragraph("主要KPI", styles['ProSectionTitle']))
+    elements.append(kpi_table)
+    elements.append(Spacer(1, 20))
+    
+    # 収益性分析
+    elements.append(Paragraph("収益性分析", styles['ProSectionTitle']))
+    
+    profitability_data = []
+    for workload in queryset[:5]:  # 上位5件のみ
+        revenue = workload.billing_amount_excluding_tax or 0
+        cost = workload.outsourcing_cost_excluding_tax or 0
+        profit = revenue - cost
+        margin = (profit / revenue * 100) if revenue > 0 else 0
+        
+        profitability_data.append([
+            str(workload.project_name)[:20],
+            f'¥{revenue:,.0f}',
+            f'¥{cost:,.0f}',
+            f'¥{profit:,.0f}',
+            f'{margin:.1f}%'
+        ])
+    
+    if profitability_data:
+        profit_table_data = [['プロジェクト', '売上', '原価', '利益', '利益率']] + profitability_data
+        
+        profit_table = Table(profit_table_data, colWidths=[100, 70, 70, 70, 50])
+        profit_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'IPAexGothic'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#f39c12")),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ]))
+        
+        elements.append(profit_table)
+    
+    return elements
+
+def _generate_project_portfolio(queryset, styles, filters):
+    """プロジェクトポートフォリオ生成"""
+    elements = []
+    
+    # タイトル
+    elements.append(Paragraph("プロジェクトポートフォリオ", styles['ProMainTitle']))
+    elements.append(Spacer(1, 20))
+    
+    # プロジェクト分類別分析
+    classification_analysis = queryset.values('case_classification').annotate(
+        count=Count('id'),
+        total_amount=Sum('billing_amount_excluding_tax'),
+        avg_workdays=Avg('used_workdays')
+    ).order_by('-total_amount')
+    
+    if classification_analysis:
+        elements.append(Paragraph("案件分類別ポートフォリオ", styles['ProSectionTitle']))
+        
+        class_data = [['分類', 'プロジェクト数', '総請求額', '平均工数']]
+        for item in classification_analysis:
+            # 安全に分類表示名を取得
+            try:
+                if hasattr(WorkloadAggregation, 'CASE_CLASSIFICATION_CHOICES'):
+                    class_display = dict(WorkloadAggregation.CASE_CLASSIFICATION_CHOICES).get(
+                        item['case_classification'], item['case_classification']
+                    )
+                else:
+                    # 選択肢が定義されていない場合は、インスタンスから取得
+                    sample_instance = queryset.filter(case_classification=item['case_classification']).first()
+                    if sample_instance and hasattr(sample_instance, 'get_case_classification_display'):
+                        class_display = sample_instance.get_case_classification_display()
+                    else:
+                        class_display = str(item['case_classification'])
+            except Exception as e:
+                print(f"分類表示名取得エラー: {e}")
+                class_display = str(item['case_classification'])
+            
+            class_data.append([
+                class_display,
+                f"{item['count']:,}件",
+                f"¥{item['total_amount'] or 0:,.0f}",
+                f"{item['avg_workdays'] or 0:.1f}日"
+            ])
+        
+        class_table = Table(class_data, colWidths=[80, 60, 80, 60])
+        class_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'IPAexGothic'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#16a085")),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ]))
+        
+        elements.append(class_table)
+    
+    return elements
