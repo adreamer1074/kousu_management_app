@@ -25,7 +25,7 @@ class CustomLoginView(LoginView):
         if user.is_superuser:
             # スーパーユーザー → 管理ダッシュボード
             return reverse('core:admin_dashboard')
-        elif user.is_staff:
+        elif user.is_leader:
             # リーダー → リーダーダッシュボード
             return reverse('core:staff_dashboard')
         else:
@@ -49,7 +49,7 @@ class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
         # システム統計情報
         total_users = CustomUser.objects.count()
         active_users = CustomUser.objects.filter(is_active=True).count()
-        staff_users = CustomUser.objects.filter(is_staff=True).count()
+        leader_users = CustomUser.objects.filter(is_leader=True).count()
         
         try:
             total_projects = Project.objects.count()
@@ -213,7 +213,7 @@ class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
             # 基本統計
             'total_users': total_users,
             'active_users': active_users,
-            'staff_users': staff_users,
+            'leader_users': leader_users,
             'total_projects': total_projects,
             'active_projects': active_projects,
             'total_workload_entries': workload_count,
@@ -243,7 +243,7 @@ class StaffDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
     template_name = 'dashboard/staff_dashboard.html'
     
     def test_func(self):
-        return self.request.user.is_staff
+        return self.request.user.is_leader
     
     def handle_no_permission(self):
         messages.error(self.request, 'アクセス権限がありません。')
@@ -365,7 +365,7 @@ class HomeView(LoginRequiredMixin, TemplateView):
         if request.user.is_authenticated:
             if request.user.is_superuser:
                 return redirect('core:admin_dashboard')
-            elif request.user.is_staff:
+            elif request.user.is_leader:
                 return redirect('core:staff_dashboard')
             else:
                 return redirect('core:user_dashboard')

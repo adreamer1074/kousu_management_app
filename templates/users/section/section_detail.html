@@ -219,7 +219,7 @@
                                             <strong>{{ user.username }}</strong>
                                             {% if user.is_superuser %}
                                                 <span class="badge bg-danger ms-2">管理者</span>
-                                            {% elif user.is_staff %}
+                                            {% elif user.is_leader %}
                                                 <span class="badge bg-warning ms-2">リーダー</span>
                                             {% endif %}
                                         </div>

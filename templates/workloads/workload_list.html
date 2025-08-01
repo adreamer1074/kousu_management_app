@@ -74,7 +74,7 @@
                                                class="btn btn-outline-info" title="詳細">
                                                 <i class="bi bi-eye"></i>
                                             </a>
-                                            {% if workload.user == user or user.is_staff or user.is_superuser %}
+                                            {% if workload.user == user or user.is_leader or user.is_superuser %}
                                                 <a href="{% url 'workloads:workload_edit' workload.pk %}" 
                                                    class="btn btn-outline-primary" title="編集">
                                                     <i class="bi bi-pencil"></i>

@@ -4,8 +4,8 @@ from .models import CustomUser, UserProfile
 
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
-    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'is_active', 'date_joined')
-    list_filter = ('is_staff', 'is_active', 'date_joined')
+    list_display = ('username', 'email', 'first_name', 'last_name', 'is_leader', 'is_active', 'date_joined')
+    list_filter = ('is_leader', 'is_active', 'date_joined')
     fieldsets = UserAdmin.fieldsets + (
         ('Additional Info', {'fields': ('department',)}),
     )

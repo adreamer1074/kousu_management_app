@@ -62,7 +62,7 @@ class WorkloadCalendarForm(forms.Form):
     def __init__(self, user=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if user:
-            if user.is_staff or user.is_superuser:
+            if user.is_leader or user.is_superuser:
                 # 管理者は全ユーザーを選択可能
                 from apps.users.models import CustomUser
                 self.fields['user'].queryset = CustomUser.objects.filter(is_active=True)

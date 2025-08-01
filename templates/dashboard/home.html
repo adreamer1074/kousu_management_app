@@ -92,7 +92,7 @@
             </div>
         </div>
         
-        {% if user.is_staff or user.is_superuser %}
+        {% if user.is_leader or user.is_superuser %}
         <div class="col-lg-3 col-md-6">
             <div class="card dashboard-card text-center h-100">
                 <div class="card-body">
@@ -107,7 +107,7 @@
         </div>
         {% endif %}
         
-        {% if user.is_staff or user.is_superuser %}
+        {% if user.is_leader or user.is_superuser %}
         <div class="col-lg-3 col-md-6">
             <div class="card dashboard-card text-center h-100">
                 <div class="card-body">
@@ -167,7 +167,7 @@
                         <a href="{% url 'workloads:workload_calendar' %}" class="btn btn-outline-primary">
                             <i class="bi bi-plus-circle"></i> 工数入力
                         </a>
-                        {% if user.is_staff or user.is_superuser %}
+                        {% if user.is_leader or user.is_superuser %}
                         <a href="{% url 'projects:project_create' %}" class="btn btn-outline-success">
                             <i class="bi bi-folder-plus"></i> プロジェクト作成
                         </a>

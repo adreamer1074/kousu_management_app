@@ -40,6 +40,12 @@ class CustomUser(AbstractUser):
         blank=True,
         help_text='社員のスキルレベルや役職レベルを設定'
     )
+    # リーダー権限
+    is_leader = models.BooleanField(
+        'リーダー権限',
+        default=False,
+        help_text='ユーザー管理やプロジェクト管理権限を持つリーダーかどうか'
+    )
 
     class Meta:
         verbose_name = "ユーザー"

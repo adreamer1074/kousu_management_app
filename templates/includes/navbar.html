@@ -27,7 +27,7 @@
                     <a class="nav-link" href="{% url 'reports:workload_aggregation' %}">
                         <i class="bi bi-graph-up"></i> レポート
                     </a>
-                {% elif user.is_staff %}
+                {% elif user.is_leader %}
                     <!-- リーダーメニュー -->
                     <a class="nav-link" href="{% url 'core:staff_dashboard' %}">
                         <i class="bi bi-speedometer2"></i> ダッシュボード
