@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ title }}</h2>
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>ファイル名</th>
+            <th>種別</th>
+            <th>形式</th>
+            <th>ダウンロード</th>
+            <th>ステータス</th>
+            <th>リクエスト日時</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for report in reports %}
+        <tr>
+            <td>{{ report.file_name }}</td>
+            <td>{{ report.get_export_type_display }}</td>
+            <td>{{ report.get_export_format_display }}</td>
+            <td>
+                {% if report.file_s3_url %}
+                    <a href="{{ report.file_s3_url }}" target="_blank" class="btn btn-sm btn-primary">S3ダウンロード</a>
+                {% elif report.file_path %}
+                    <a href="{% url 'reports:download_export' report.pk %}" class="btn btn-sm btn-secondary">ローカルDL</a>
+                {% else %}
+                    未生成
+                {% endif %}
+            </td>
+            <td>{{ report.get_status_display }}</td>
+            <td>{{ report.requested_at }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6">エクスポート履歴がありません。</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

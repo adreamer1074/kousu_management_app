@@ -365,6 +365,7 @@ class ReportExport(models.Model):
     file_name = models.CharField('ファイル名', max_length=255)
     file_path = models.CharField('ファイルパス', max_length=500, blank=True)
     file_size = models.PositiveIntegerField('ファイルサイズ（バイト）', null=True, blank=True)
+    file_s3_url = models.URLField('S3ファイルURL', blank=True, null=True)
     
     # フィルター条件（JSON形式で保存）
     filter_conditions = models.JSONField(
