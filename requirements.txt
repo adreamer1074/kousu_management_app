@@ -8,3 +8,5 @@ pandas
 pytest
 pytest-django
 reportlab
+django-storages
+boto3
