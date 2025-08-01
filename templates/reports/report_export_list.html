@@ -13,22 +13,20 @@
         </tr>
     </thead>
     <tbody>
-        {% for report in reports %}
+        {% for export in reports %}
         <tr>
-            <td>{{ report.file_name }}</td>
-            <td>{{ report.get_export_type_display }}</td>
-            <td>{{ report.get_export_format_display }}</td>
+            <td>{{ export.file_name }}</td>
+            <td>{{ export.get_export_type_display }}</td>
+            <td>{{ export.get_export_format_display }}</td>
             <td>
-                {% if report.file_s3_url %}
-                    <a href="{{ report.file_s3_url }}" target="_blank" class="btn btn-sm btn-primary">S3ダウンロード</a>
-                {% elif report.file_path %}
-                    <a href="{% url 'reports:download_export' report.pk %}" class="btn btn-sm btn-secondary">ローカルDL</a>
-                {% else %}
-                    未生成
-                {% endif %}
+              {% if export.file_s3_url %}
+                <a href="{{ export.file_s3_url }}" target="_blank" class="btn btn-sm btn-primary">S3ダウンロード</a>
+              {% else %}
+                未生成
+              {% endif %}
             </td>
-            <td>{{ report.get_status_display }}</td>
-            <td>{{ report.requested_at }}</td>
+            <td>{{ export.get_status_display }}</td>
+            <td>{{ export.requested_at }}</td>
         </tr>
         {% empty %}
         <tr><td colspan="6">エクスポート履歴がありません。</td></tr>
