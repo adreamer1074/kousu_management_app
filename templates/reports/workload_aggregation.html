@@ -110,6 +110,28 @@
                             <i class="bi bi-file-earmark-pdf text-danger"></i> PDF (.pdf)
                         </a>
                     </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <!-- カッコイイレポート-->
+                    <li>
+                        <a class="dropdown-item" href="#" onclick="exportProfessional('executive_summary')">
+                            <i class="bi bi-graph-up text-success"></i> エグゼクティブサマリー
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="#" onclick="exportProfessional('detailed_analysis')">
+                            <i class="bi bi-table text-info"></i> 詳細分析レポート
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="#" onclick="exportProfessional('financial_dashboard')">
+                            <i class="bi bi-graph-up-arrow text-warning"></i> 財務ダッシュボード
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="#" onclick="exportProfessional('project_portfolio')">
+                            <i class="bi bi-diagram-3 text-primary"></i> プロジェクトポートフォリオ
+                        </a>
+                    </li>
                 </ul>
             </div>
             
@@ -478,6 +500,62 @@ if (!document.querySelector('[name=csrfmiddlewaretoken]')) {
     csrfInput.name = 'csrfmiddlewaretoken';
     csrfInput.value = '{{ csrf_token }}';
     document.body.appendChild(csrfInput);
+}
+
+// プロフェッショナルレポート用のJavaScript関数
+function exportProfessional(reportType) {
+    console.log('カッコイイレポート:', reportType);
+    
+    // フォームを作成
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{% url "reports:workload_export_current" %}';
+    
+    // CSRFトークン
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrfmiddlewaretoken';
+    csrfInput.value = csrfToken;
+    form.appendChild(csrfInput);
+    
+    // フォーマット指定
+    const formatInput = document.createElement('input');
+    formatInput.type = 'hidden';
+    formatInput.name = 'format';
+    formatInput.value = 'professional';
+    form.appendChild(formatInput);
+    
+    // レポートタイプ指定
+    const typeInput = document.createElement('input');
+    typeInput.type = 'hidden';
+    typeInput.name = 'professional_type';
+    typeInput.value = reportType;
+    form.appendChild(typeInput);
+    
+    // 現在のフィルター値も追加
+    const currentFilters = {
+        project_name: '{{ current_filters.project_name }}',
+        case_name: '{{ current_filters.case_name_id }}',
+        status: '{{ current_filters.status }}',
+        case_classification: '{{ current_filters.case_classification }}',
+        section: '{{ current_filters.section_id }}',
+        search: '{{ current_filters.search }}'
+    };
+    
+    Object.keys(currentFilters).forEach(key => {
+        if (currentFilters[key]) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = currentFilters[key];
+            form.appendChild(input);
+        }
+    });
+    
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
 }
 </script>
 {% endblock %}
