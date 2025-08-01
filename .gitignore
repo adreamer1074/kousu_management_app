@@ -15,3 +15,4 @@ migrations/
 .env
 # Virtual environment
 .venv/
+kousu_management_app/settings.py
