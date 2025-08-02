@@ -167,7 +167,7 @@ class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
         
         # 目標達成率
         monthly_target = working_days_this_month * 0.8
-        target_achievement = (this_month_workdays / monthly_target * 100) if monthly_target > 0 else 0
+        target_achievement = (float(this_month_workdays) / monthly_target * 100) if monthly_target > 0 else 0
         
         # 最近の登録データ取得
         recent_workload_entries = []
