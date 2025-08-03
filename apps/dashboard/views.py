@@ -5,13 +5,17 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 from calendar import monthrange
 
+from apps.core.decorators import (
+    leader_or_superuser_required_403,
+    LeaderOrSuperuserRequiredMixin
+)
 from apps.reports.models import WorkloadAggregation
 from apps.workloads.models import Workload 
 from apps.projects.models import Project, Case
 from apps.cost_master.models import OutsourcingCost
 
 @login_required
-@user_passes_test(lambda u: u.is_leader)
+@leader_or_superuser_required_403
 def admin_dashboard(request):
     """管理者ダッシュボード"""
     

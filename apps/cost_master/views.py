@@ -1,5 +1,4 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView
@@ -10,6 +9,10 @@ from django.core.paginator import Paginator
 from datetime import date
 import json
 
+from apps.core.decorators import (
+    leader_or_superuser_required_403,
+    LeaderOrSuperuserRequiredMixin
+)
 from .models import BusinessPartner, OutsourcingCost, OutsourcingCostSummary
 from .forms import BusinessPartnerForm, OutsourcingCostForm, OutsourcingCostFilterForm
 from apps.projects.models import Project, ProjectTicket
@@ -17,6 +20,7 @@ from apps.projects.models import Project, ProjectTicket
 
 # ダッシュボード
 @login_required
+@leader_or_superuser_required_403
 def outsourcing_dashboard(request):
     """外注費管理ダッシュボード"""
     current_month = date.today().strftime('%Y-%m')
@@ -47,7 +51,7 @@ def outsourcing_dashboard(request):
 
 
 # ビジネスパートナー管理
-class BusinessPartnerListView(LoginRequiredMixin, ListView):
+class BusinessPartnerListView(LeaderOrSuperuserRequiredMixin, ListView):
     """ビジネスパートナー一覧"""
     model = BusinessPartner
     template_name = 'cost_master/business_partner_list.html'
@@ -82,7 +86,7 @@ class BusinessPartnerListView(LoginRequiredMixin, ListView):
         return context
 
 
-class BusinessPartnerCreateView(LoginRequiredMixin, CreateView):
+class BusinessPartnerCreateView(LeaderOrSuperuserRequiredMixin, CreateView):
     """ビジネスパートナー作成"""
     model = BusinessPartner
     form_class = BusinessPartnerForm
@@ -95,7 +99,7 @@ class BusinessPartnerCreateView(LoginRequiredMixin, CreateView):
         return super().form_valid(form)
 
 
-class BusinessPartnerUpdateView(LoginRequiredMixin, UpdateView):
+class BusinessPartnerUpdateView(LeaderOrSuperuserRequiredMixin, UpdateView):
     """ビジネスパートナー編集"""
     model = BusinessPartner
     form_class = BusinessPartnerForm
@@ -108,6 +112,7 @@ class BusinessPartnerUpdateView(LoginRequiredMixin, UpdateView):
 
 
 @login_required
+@leader_or_superuser_required_403
 def business_partner_delete(request, pk):
     """ビジネスパートナー削除"""
     bp = get_object_or_404(BusinessPartner, pk=pk)
@@ -123,6 +128,7 @@ def business_partner_delete(request, pk):
 
 # 外注費管理
 @login_required
+@leader_or_superuser_required_403
 def outsourcing_cost_list(request):
     """外注費一覧・管理画面"""
     # フィルターフォーム
@@ -171,6 +177,7 @@ def outsourcing_cost_list(request):
 
 
 @login_required
+@leader_or_superuser_required_403
 def outsourcing_cost_create(request):
     """外注費登録"""
     if request.method == 'POST':
@@ -198,6 +205,7 @@ def outsourcing_cost_create(request):
 
 
 @login_required
+@leader_or_superuser_required_403
 def outsourcing_cost_update(request, pk):
     """外注費編集"""
     cost = get_object_or_404(OutsourcingCost, pk=pk)
@@ -229,6 +237,7 @@ def outsourcing_cost_update(request, pk):
 
 
 @login_required
+@leader_or_superuser_required_403
 def outsourcing_cost_delete(request, pk):
     """外注費削除"""
     cost = get_object_or_404(OutsourcingCost, pk=pk)
@@ -248,6 +257,7 @@ def outsourcing_cost_delete(request, pk):
 
 # API エンドポイント
 @login_required
+@leader_or_superuser_required_403
 def get_project_tickets_api(request):
     """プロジェクトのチケット一覧取得API"""
     project_id = request.GET.get('project_id')
@@ -296,6 +306,7 @@ def get_bp_hourly_rate_api(request):
 
 
 @login_required
+@leader_or_superuser_required_403
 def get_bp_projects_api(request):
     """ビジネスパートナーの参加プロジェクト取得API"""
     bp_id = request.GET.get('bp_id')
@@ -322,6 +333,7 @@ def get_bp_projects_api(request):
 
 
 @login_required
+@leader_or_superuser_required_403
 def get_ticket_outsourcing_cost_api(request):
     """チケットの外注費取得API"""
     ticket_id = request.GET.get('ticket_id')

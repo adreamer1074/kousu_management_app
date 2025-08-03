@@ -18,7 +18,10 @@ import json
 import pandas as pd
 from datetime import datetime
 from django.http import HttpResponse
-
+from apps.core.decorators import (
+    leader_or_superuser_required_403,
+    LeaderOrSuperuserRequiredMixin
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +65,7 @@ def user_register(request):
     
     return render(request, 'users/user/user_register.html', {'form': form})
 
-class UserListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+class UserListView(LeaderOrSuperuserRequiredMixin, UserPassesTestMixin, ListView):
     """ユーザー一覧ビュー"""
     model = CustomUser
     template_name = 'users/user/user_list.html'
@@ -121,7 +124,7 @@ class UserListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         
         return context
 
-class UserDetailView(LoginRequiredMixin, DetailView):
+class UserDetailView(LeaderOrSuperuserRequiredMixin, DetailView):
     model = CustomUser
     template_name = 'users/user/user_detail.html'
     context_object_name = 'user_obj'
@@ -184,7 +187,7 @@ class UserDetailView(LoginRequiredMixin, DetailView):
         
         return context
 
-class UserEditView(LoginRequiredMixin, UpdateView):
+class UserEditView(LeaderOrSuperuserRequiredMixin, UpdateView):
     """ユーザー編集ビュー"""
     model = CustomUser
     form_class = UserEditForm
@@ -260,7 +263,7 @@ class ProfileEditView(LoginRequiredMixin, UpdateView):
         return super().form_valid(form)
 
 # 部署管理
-class DepartmentListView(LoginRequiredMixin, ListView):
+class DepartmentListView(LeaderOrSuperuserRequiredMixin, ListView):
     model = Department
     template_name = 'users/department/department_list.html'
     context_object_name = 'departments'
@@ -280,7 +283,7 @@ class DepartmentListView(LoginRequiredMixin, ListView):
         }
         return context
 
-class DepartmentDetailView(LoginRequiredMixin, DetailView):
+class DepartmentDetailView(LeaderOrSuperuserRequiredMixin, DetailView):
     model = Department
     template_name = 'users/department/department_detail.html'
     context_object_name = 'department'
@@ -292,7 +295,7 @@ class DepartmentDetailView(LoginRequiredMixin, DetailView):
         context['users'] = department.users.filter(is_active=True)
         return context
 
-class DepartmentCreateView(LoginRequiredMixin, CreateView):
+class DepartmentCreateView(LeaderOrSuperuserRequiredMixin, CreateView):
     model = Department
     form_class = DepartmentForm
     template_name = 'users/department/department_form.html'
@@ -302,7 +305,7 @@ class DepartmentCreateView(LoginRequiredMixin, CreateView):
         messages.success(self.request, f'部署「{form.instance.name}」を作成しました。')
         return super().form_valid(form)
 
-class DepartmentUpdateView(LoginRequiredMixin, UpdateView):
+class DepartmentUpdateView(LeaderOrSuperuserRequiredMixin, UpdateView):
     model = Department
     form_class = DepartmentForm
     template_name = 'users/department/department_form.html'
@@ -312,7 +315,7 @@ class DepartmentUpdateView(LoginRequiredMixin, UpdateView):
         messages.success(self.request, f'部署「{form.instance.name}」を更新しました。')
         return super().form_valid(form)
 
-class DepartmentDeleteView(LoginRequiredMixin, DeleteView):
+class DepartmentDeleteView(LeaderOrSuperuserRequiredMixin, DeleteView):
     model = Department
     template_name = 'users/department/department_delete.html'
     success_url = reverse_lazy('users:department_list')
@@ -323,7 +326,7 @@ class DepartmentDeleteView(LoginRequiredMixin, DeleteView):
         return super().delete(request, *args, **kwargs)
 
 # 課管理
-class SectionListView(LoginRequiredMixin, ListView):
+class SectionListView(LeaderOrSuperuserRequiredMixin, ListView):
     model = Section
     template_name = 'users/section/section_list.html'
     context_object_name = 'sections'
@@ -333,12 +336,12 @@ class SectionListView(LoginRequiredMixin, ListView):
             user_count=Count('users', filter=models.Q(users__is_active=True))
         ).order_by('department__name', 'name')
 
-class SectionDetailView(LoginRequiredMixin, DetailView):
+class SectionDetailView(LeaderOrSuperuserRequiredMixin, DetailView):
     model = Section
     template_name = 'users/section/section_detail.html'
     context_object_name = 'section'
 
-class SectionCreateView(LoginRequiredMixin, CreateView):
+class SectionCreateView(LeaderOrSuperuserRequiredMixin, CreateView):
     model = Section
     form_class = SectionForm
     template_name = 'users/section/section_form.html'
@@ -348,7 +351,7 @@ class SectionCreateView(LoginRequiredMixin, CreateView):
         messages.success(self.request, f'課「{form.instance.name}」を作成しました。')
         return super().form_valid(form)
 
-class SectionUpdateView(LoginRequiredMixin, UpdateView):
+class SectionUpdateView(LeaderOrSuperuserRequiredMixin, UpdateView):
     model = Section
     form_class = SectionForm
     template_name = 'users/section/section_form.html'
@@ -358,7 +361,7 @@ class SectionUpdateView(LoginRequiredMixin, UpdateView):
         messages.success(self.request, f'課「{form.instance.name}」を更新しました。')
         return super().form_valid(form)
 
-class SectionDeleteView(LoginRequiredMixin, DeleteView):
+class SectionDeleteView(LeaderOrSuperuserRequiredMixin, DeleteView):
     model = Section
     template_name = 'users/section/section_delete.html'
     success_url = reverse_lazy('users:section_list')
@@ -421,7 +424,7 @@ def user_detail_debug(request, pk):
     
     return render(request, 'users/user/user_detail_debug.html', context)
 
-class UserDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+class UserDeleteView(LeaderOrSuperuserRequiredMixin, UserPassesTestMixin, DeleteView):
     """ユーザー削除ビュー"""
     model = CustomUser
     template_name = 'users/user/user_delete.html'
@@ -525,7 +528,7 @@ def user_restore_ajax(request):
     except Exception as e:
         return JsonResponse({'success': False, 'error': f'復元に失敗しました: {str(e)}'})
 
-class UserPermanentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+class UserPermanentDeleteView(LeaderOrSuperuserRequiredMixin, UserPassesTestMixin, DeleteView):
     """ユーザー完全削除ビュー（物理削除）"""
     model = CustomUser
     template_name = 'users/user/user_permanent_delete.html'

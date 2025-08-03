@@ -27,7 +27,6 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.views.generic import (
     ListView, CreateView, DetailView, UpdateView, DeleteView, TemplateView
 )
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.urls import reverse_lazy
@@ -40,16 +39,21 @@ from django.views.decorators.http import require_http_methods, require_POST
 from django.contrib.auth import get_user_model
 from kousu_management_app.settings import FONT_PATH
 
+
 # ローカルアプリ
 from .models import ReportExport, WorkloadAggregation
 from .forms import WorkloadAggregationForm, WorkloadAggregationFilterForm
 from apps.users.models import Department, Section
 from apps.projects.models import ProjectTicket
 from .utils import upload_file_to_s3
+from apps.core.decorators import (
+    leader_or_superuser_required_403,
+    LeaderOrSuperuserRequiredMixin
+)
 
 User = get_user_model()
 
-class WorkloadAggregationListView(LoginRequiredMixin, ListView):
+class WorkloadAggregationListView(LeaderOrSuperuserRequiredMixin, ListView):
     """工数集計一覧画面（工数集計レポート機能）"""
     model = WorkloadAggregation
     template_name = 'reports/workload_aggregation.html'
@@ -115,7 +119,7 @@ class WorkloadAggregationListView(LoginRequiredMixin, ListView):
         
         return context
 
-class WorkloadAggregationCreateView(LoginRequiredMixin, CreateView):
+class WorkloadAggregationCreateView(LeaderOrSuperuserRequiredMixin, CreateView):
     """工数集計作成画面"""
     model = WorkloadAggregation
     form_class = WorkloadAggregationForm
@@ -146,13 +150,13 @@ class WorkloadAggregationCreateView(LoginRequiredMixin, CreateView):
         context['title'] = '工数集計登録'
         return context
 
-class WorkloadAggregationDetailView(LoginRequiredMixin, DetailView):
+class WorkloadAggregationDetailView(LeaderOrSuperuserRequiredMixin, DetailView):
     """工数集計詳細画面"""
     model = WorkloadAggregation
     template_name = 'reports/workload_aggregation_detail.html'
     context_object_name = 'workload_aggregation'
 
-class WorkloadAggregationUpdateView(LoginRequiredMixin, UpdateView):
+class WorkloadAggregationUpdateView(LeaderOrSuperuserRequiredMixin, UpdateView):
     """工数集計編集画面"""
     model = WorkloadAggregation
     form_class = WorkloadAggregationForm
@@ -164,7 +168,7 @@ class WorkloadAggregationUpdateView(LoginRequiredMixin, UpdateView):
         context['title'] = '工数集計編集'
         return context
 
-class WorkloadAggregationDeleteView(LoginRequiredMixin, DeleteView):
+class WorkloadAggregationDeleteView(LeaderOrSuperuserRequiredMixin, DeleteView):
     """工数集計削除画面"""
     model = WorkloadAggregation
     template_name = 'reports/workload_aggregation_confirm_delete.html'
@@ -175,6 +179,7 @@ class WorkloadAggregationDeleteView(LoginRequiredMixin, DeleteView):
         return super().delete(request, *args, **kwargs)
 
 @login_required
+@leader_or_superuser_required_403
 def workload_export(request):
     """工数データのエクスポート"""
     import csv
@@ -239,7 +244,7 @@ def workload_export(request):
     
     return response
 
-class ReportListView(LoginRequiredMixin, TemplateView):
+class ReportListView(LeaderOrSuperuserRequiredMixin, TemplateView):
     """レポート一覧画面"""
     template_name = 'reports/report_list.html'
     
@@ -267,7 +272,7 @@ class ReportListView(LoginRequiredMixin, TemplateView):
         context['reports'] = reports
         return context
 
-class ReportExportListView(LoginRequiredMixin, ListView):
+class ReportExportListView(LeaderOrSuperuserRequiredMixin, ListView):
     """エクスポート履歴一覧表示"""
     model = ReportExport
     template_name = 'reports/report_export_list.html'
@@ -288,6 +293,7 @@ class ReportExportListView(LoginRequiredMixin, ListView):
 
 
 @login_required
+@leader_or_superuser_required_403
 @require_http_methods(["POST"])
 def calculate_workdays_api(request):
     """工数自動計算API（Workloadモデル対応版）"""
@@ -398,6 +404,7 @@ def calculate_workdays_api(request):
         })
 
 @login_required
+@leader_or_superuser_required_403
 @require_POST
 def calculate_workdays_ajax(request):
     """AJAX工数計算エンドポイント"""
@@ -447,6 +454,7 @@ def calculate_workdays_ajax(request):
         })
 
 @login_required
+@leader_or_superuser_required_403
 def workload_export_current(request):
     """現在表示中の工数集計データをエクスポート（即時ダウンロード＋S3アップロード＋履歴登録）"""
     if request.method != 'POST':
@@ -748,6 +756,7 @@ def export_workload_text_fallback(queryset, filters=None):
     print(f"Text file created: {filename}")
     return response
 @login_required
+@leader_or_superuser_required_403
 @require_http_methods(["POST"])
 def export_report_with_history(request):
     """エクスポート履歴に登録しつつレポートをエクスポート（CSV例）"""

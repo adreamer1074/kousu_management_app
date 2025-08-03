@@ -1,5 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.mixins import UserPassesTestMixin
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.urls import reverse_lazy, reverse
 from django.contrib import messages
@@ -10,13 +10,16 @@ from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
 from django.core.paginator import Paginator
-
+from apps.core.decorators import (
+    leader_or_superuser_required_403,
+    LeaderOrSuperuserRequiredMixin
+)
 from .models import Project, ProjectTicket
 from .forms import ProjectForm, ProjectTicketForm
 
 User = get_user_model()
 
-class ProjectListView(LoginRequiredMixin, ListView):
+class ProjectListView(LeaderOrSuperuserRequiredMixin, ListView):
     """プロジェクト一覧"""
     model = Project
     template_name = 'projects/project_list.html'
@@ -59,7 +62,7 @@ class ProjectListView(LoginRequiredMixin, ListView):
         
         return context
 
-class ProjectDetailView(LoginRequiredMixin, DetailView):
+class ProjectDetailView(LeaderOrSuperuserRequiredMixin, DetailView):
     """プロジェクト詳細ビュー"""
     model = Project
     template_name = 'projects/project_detail.html'
@@ -98,7 +101,7 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
         
         return context
 
-class ProjectCreateView(LoginRequiredMixin, CreateView):
+class ProjectCreateView(LeaderOrSuperuserRequiredMixin, CreateView):
     """プロジェクト作成"""
     model = Project
     form_class = ProjectForm
@@ -108,7 +111,7 @@ class ProjectCreateView(LoginRequiredMixin, CreateView):
         messages.success(self.request, 'プロジェクトを作成しました。')
         return super().form_valid(form)
 
-class ProjectUpdateView(LoginRequiredMixin, UpdateView):
+class ProjectUpdateView(LeaderOrSuperuserRequiredMixin, UpdateView):
     """プロジェクト編集"""
     model = Project
     form_class = ProjectForm
@@ -118,7 +121,7 @@ class ProjectUpdateView(LoginRequiredMixin, UpdateView):
         messages.success(self.request, 'プロジェクトを更新しました。')
         return super().form_valid(form)
 
-class ProjectDeleteView(LoginRequiredMixin, DeleteView):
+class ProjectDeleteView(LeaderOrSuperuserRequiredMixin, DeleteView):
     """プロジェクト削除"""
     model = Project
     template_name = 'projects/project_delete.html'
@@ -128,7 +131,7 @@ class ProjectDeleteView(LoginRequiredMixin, DeleteView):
         messages.success(request, 'プロジェクトを削除しました。')
         return super().delete(request, *args, **kwargs)
 
-class TicketListView(LoginRequiredMixin, ListView):
+class TicketListView(LeaderOrSuperuserRequiredMixin, ListView):
     """チケット一覧ビュー（プロジェクト別・全体対応）"""
     model = ProjectTicket
     template_name = 'projects/ticket_list.html'
@@ -234,7 +237,7 @@ class TicketListView(LoginRequiredMixin, ListView):
         
         return context
 
-class TicketDetailView(LoginRequiredMixin, DetailView):
+class TicketDetailView(LeaderOrSuperuserRequiredMixin, DetailView):
     """チケット詳細ビュー"""
     model = ProjectTicket
     template_name = 'projects/ticket_detail.html'
@@ -284,7 +287,7 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
         
         return context
 
-class TicketUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+class TicketUpdateView(LeaderOrSuperuserRequiredMixin, UserPassesTestMixin, UpdateView):
     """チケット編集ビュー"""
     model = ProjectTicket
     form_class = ProjectTicketForm
@@ -326,7 +329,7 @@ class TicketUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     def get_success_url(self):
         return reverse('projects:ticket_detail', kwargs={'pk': self.object.pk})
 
-class TicketDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+class TicketDeleteView(LeaderOrSuperuserRequiredMixin, UserPassesTestMixin, DeleteView):
     """チケット削除ビュー"""
     model = ProjectTicket
     template_name = 'projects/ticket_delete.html'
@@ -367,7 +370,7 @@ class TicketDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
         return redirect('projects:project_detail', pk=project.pk)
         # return result
 
-class ProjectTicketCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
+class ProjectTicketCreateView(LeaderOrSuperuserRequiredMixin, UserPassesTestMixin, CreateView):
     """チケット作成ビュー"""
     model = ProjectTicket
     form_class = ProjectTicketForm
@@ -461,6 +464,7 @@ class ProjectTicketCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateVie
             return reverse('projects:ticket_detail', kwargs={'pk': self.object.pk})
 
 @login_required
+@leader_or_superuser_required_403
 @require_http_methods(["GET"])
 def get_project_tickets_api(request, project_id):
     """プロジェクトのチケット一覧API"""
@@ -502,6 +506,7 @@ def get_project_tickets_api(request, project_id):
         })
 
 @login_required
+@leader_or_superuser_required_403
 @require_http_methods(["GET"])
 def get_tickets_api(request):
     """全チケット一覧API"""
