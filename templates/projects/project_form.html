@@ -39,17 +39,35 @@
                         </div>
                     {% endif %}
                     
-                    <!-- プロジェクト名 -->
-                    <div class="mb-3">
-                        <label for="{{ form.name.id_for_label }}" class="form-label">
-                            {{ form.name.label }}
-                        </label>
-                        {{ form.name }}
-                        {% if form.name.errors %}
-                            <div class="text-danger small">{{ form.name.errors.0 }}</div>
-                        {% endif %}
+                        <!-- プロジェクト番号フィールドを追加 -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="{{ form.project_no.id_for_label }}" class="form-label">
+                                {{ form.project_no.label }}
+                            </label>
+                            <div class="input-group">
+                                {{ form.project_no }}
+                                <button type="button" class="btn btn-outline-secondary" onclick="generateProjectNo()">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </button>
+                            </div>
+                            {% if form.project_no.help_text %}
+                                <div class="form-text">{{ form.project_no.help_text }}</div>
+                            {% endif %}
+                            {% if form.project_no.errors %}
+                                <div class="text-danger small">{{ form.project_no.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-8">
+                            <label for="{{ form.name.id_for_label }}" class="form-label">
+                                {{ form.name.label }} <span class="text-danger">*</span>
+                            </label>
+                            {{ form.name }}
+                            {% if form.name.errors %}
+                                <div class="text-danger small">{{ form.name.errors.0 }}</div>
+                            {% endif %}
+                        </div>
                     </div>
-                    
                     <!-- 説明 -->
                     <div class="mb-3">
                         <label for="{{ form.description.id_for_label }}" class="form-label">

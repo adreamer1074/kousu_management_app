@@ -3,7 +3,12 @@
 {% block title %}{{ project.name }} - プロジェクト詳細{% endblock %}
 
 {% block page_title %}
-    <i class="bi bi-folder"></i> {{ project.name }}
+    <i class="bi bi-folder"></i> 
+    {% if project.project_no %}
+        [{{ project.project_no }}] {{ project.name }}
+    {% else %}
+        {{ project.name }}
+    {% endif %}
 {% endblock %}
 
 {% block page_actions %}
@@ -14,8 +19,9 @@
         </a>
     </div>
     <div class="btn-group me-2">
-        <a href="{% url 'projects:ticket_create' project.pk %}" class="btn btn-success">
-            <i class="bi bi-plus-circle"></i> チケット追加
+        <!-- チケット一覧へのリンクを正しいURL名に修正 -->
+        <a href="{% url 'projects:project_ticket_list' project.pk %}" class="btn btn-outline-primary">
+            <i class="bi bi-ticket"></i> チケット一覧
         </a>
     </div>
     <div class="btn-group">
@@ -41,6 +47,13 @@
             </div>
             <div class="card-body">
                 <div class="row">
+                    <!-- プロジェクト番号を追加 -->
+                    {% if project.project_no %}
+                    <div class="col-md-6 mb-3">
+                        <strong>プロジェクト番号:</strong><br>
+                        <code>{{ project.project_no }}</code>
+                    </div>
+                    {% endif %}
                     <div class="col-md-6 mb-3">
                         <strong>プロジェクト名:</strong><br>
                         {{ project.name }}
@@ -91,54 +104,50 @@
             </div>
         </div>
         
-        <!-- チケット一覧 -->
+        <!-- チケット概要（詳細はチケット一覧ページへのリンク） -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0">
-                    <i class="bi bi-ticket"></i> チケット一覧 ({{ total_tickets }}件)
+                    <i class="bi bi-ticket"></i> チケット概要 ({{ total_tickets }}件)
                 </h5>
-                <a href="{% url 'projects:ticket_create' project.pk %}" class="btn btn-sm btn-success">
-                    <i class="bi bi-plus"></i> 新規チケット
-                </a>
+                <div class="btn-group btn-group-sm">
+                    <a href="{% url 'projects:ticket_create' project.pk %}" class="btn btn-success">
+                        <i class="bi bi-plus"></i> 新規チケット
+                    </a>
+                    <!-- チケット概要セクション内のリンクも修正 -->
+                    <a href="{% url 'projects:project_ticket_list' project.pk %}" class="btn btn-outline-primary">
+                        <i class="bi bi-list"></i> 全て表示
+                    </a>
+                </div>
             </div>
             <div class="card-body">
                 {% if tickets %}
+                    <!-- 最新のチケット5件のみ表示 -->
                     <div class="table-responsive">
-                        <table class="table table-hover">
+                        <table class="table table-sm">
                             <thead class="table-light">
                                 <tr>
-                                    <th style="width: 25%;">タイトル</th>
-                                    <th style="width: 12%;">分類</th>
-                                    <th style="width: 10%;">優先度</th>
-                                    <th style="width: 12%;">ステータス</th>
-                                    <th style="width: 12%;">請求ステータス</th>
-                                    <th style="width: 15%;">担当者</th>
-                                    <th style="width: 8%;">期限</th>
-                                    <th style="width: 6%;">操作</th>
+                                    <th>チケット番号</th>
+                                    <th>タイトル</th>
+                                    <th>ステータス</th>
+                                    <th>担当者</th>
+                                    <th>期限</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for ticket in tickets %}
+                                {% for ticket in tickets|slice:":5" %}
                                     <tr>
                                         <td>
-                                            <strong class="d-block">{{ ticket.title }}</strong>
-                                            {% if ticket.description %}
-                                                <small class="text-muted">{{ ticket.description|truncatechars:40 }}</small>
+                                            {% if ticket.ticket_no %}
+                                                <code class="small">{{ ticket.ticket_no }}</code>
+                                            {% else %}
+                                                <span class="text-muted small">未設定</span>
                                             {% endif %}
                                         </td>
                                         <td>
-                                            {% with classification=ticket.get_case_classification_display_with_color %}
-                                                <span class="badge bg-{{ classification.color }} text-white">
-                                                    {{ classification.text }}
-                                                </span>
-                                            {% endwith %}
-                                        </td>
-                                        <td>
-                                            {% with priority_info=ticket.get_priority_display_with_color %}
-                                                <span class="badge bg-{{ priority_info.color }} text-white">
-                                                    {{ priority_info.text }}
-                                                </span>
-                                            {% endwith %}
+                                            <a href="{% url 'projects:ticket_detail' ticket.pk %}" class="text-decoration-none">
+                                                {{ ticket.title|truncatechars:30 }}
+                                            </a>
                                         </td>
                                         <td>
                                             {% with status_info=ticket.get_status_display_with_color %}
@@ -148,20 +157,8 @@
                                             {% endwith %}
                                         </td>
                                         <td>
-                                            {% with billing_info=ticket.get_billing_status_display_with_color %}
-                                                <span class="badge bg-{{ billing_info.color }} text-white">
-                                                    {{ billing_info.text }}
-                                                </span>
-                                            {% endwith %}
-                                        </td>
-                                        <td>
                                             {% if ticket.assigned_user %}
-                                                <div class="d-flex align-items-center">
-                                                    <div class="bg-primary rounded-circle d-flex align-items-center justify-content-center text-white me-2" style="width: 24px; height: 24px; font-size: 0.7rem;">
-                                                        {{ ticket.assigned_user.get_full_name.0|default:ticket.assigned_user.username.0|upper }}
-                                                    </div>
-                                                    <span class="small">{{ ticket.assigned_user.get_full_name|default:ticket.assigned_user.username }}</span>
-                                                </div>
+                                                <span class="small">{{ ticket.assigned_user.get_full_name|default:ticket.assigned_user.username }}</span>
                                             {% else %}
                                                 <span class="text-muted small">未設定</span>
                                             {% endif %}
@@ -175,46 +172,32 @@
                                                 <span class="text-muted">-</span>
                                             {% endif %}
                                         </td>
-                                        <td>
-                                            <div class="btn-group btn-group-sm">
-                                                <button type="button" class="btn btn-outline-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
-                                                    <i class="bi bi-three-dots"></i>
-                                                </button>
-                                                <ul class="dropdown-menu">
-                                                    <li><a class="dropdown-item" href="#"><i class="bi bi-eye"></i> 詳細</a></li>
-                                                    <li><a class="dropdown-item" href="#"><i class="bi bi-pencil"></i> 編集</a></li>
-                                                    <li><hr class="dropdown-divider"></li>
-                                                    <li><a class="dropdown-item text-danger" href="#"><i class="bi bi-trash"></i> 削除</a></li>
-                                                </ul>
-                                            </div>
-                                        </td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
                     
-                    <!-- チケット統計 -->
+                    {% if total_tickets > 5 %}
+                        <div class="text-center mt-3">
+                            <a href="{% url 'projects:ticket_list' project.pk %}" class="btn btn-sm btn-outline-primary">
+                                残り{{ total_tickets|add:"-5" }}件のチケットを表示
+                            </a>
+                        </div>
+                    {% endif %}
+                    
+                    <!-- チケット統計（簡易版） -->
                     <div class="row mt-3">
                         <div class="col-md-12">
                             <div class="card bg-light">
                                 <div class="card-body py-2">
                                     <div class="row text-center">
                                         <div class="col">
-                                            <small class="text-muted">分類別統計</small>
-                                            <div class="mt-1">
-                                                {% regroup tickets by case_classification as classification_groups %}
-                                                {% for group in classification_groups %}
-                                                    <span class="badge bg-secondary me-1">{{ group.grouper|default:"未分類" }}: {{ group.list|length }}件</span>
-                                                {% endfor %}
-                                            </div>
-                                        </div>
-                                        <div class="col">
                                             <small class="text-muted">ステータス別統計</small>
                                             <div class="mt-1">
                                                 {% regroup tickets by status as status_groups %}
                                                 {% for group in status_groups %}
-                                                    <span class="badge bg-info me-1">{{ group.grouper|default:"未設定" }}: {{ group.list|length }}件</span>
+                                                    <span class="badge bg-info me-1 small">{{ group.grouper|default:"未設定" }}: {{ group.list|length }}件</span>
                                                 {% endfor %}
                                             </div>
                                         </div>
@@ -224,8 +207,8 @@
                         </div>
                     </div>
                 {% else %}
-                    <div class="text-center text-muted py-5">
-                        <i class="bi bi-ticket fs-1 mb-3 d-block text-muted"></i>
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-ticket fs-3 mb-2 d-block text-muted"></i>
                         <h6>チケットがありません</h6>
                         <p class="mb-3">このプロジェクトにはまだチケットが作成されていません。</p>
                         <a href="{% url 'projects:ticket_create' project.pk %}" class="btn btn-success">
@@ -237,6 +220,7 @@
         </div>
     </div>
     
+    <!-- 右サイドバーは既存のまま -->
     <div class="col-md-4">
         <!-- 担当課 -->
         <div class="card mb-4">
@@ -360,6 +344,7 @@
 </div>
 {% endblock %}
 
+<!-- 既存のJavaScriptは保持 -->
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {

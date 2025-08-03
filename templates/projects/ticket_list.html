@@ -1,0 +1,412 @@
+{% extends 'base.html' %}
+
+{% block title %}
+    チケット一覧{% if project %} - {{ project.name }}{% endif %} - 工数管理システム
+{% endblock %}
+
+{% block page_title %}
+    <i class="bi bi-ticket"></i> チケット一覧
+    {% if project %}
+        <small class="text-muted">- {{ project.name }}</small>
+    {% endif %}
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-toolbar mb-3">
+    <div class="btn-group me-2">
+        {% if project %}
+            <a href="{% url 'projects:project_detail' project.pk %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> プロジェクトに戻る
+            </a>
+        {% else %}
+            <a href="{% url 'projects:project_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> プロジェクト一覧
+            </a>
+        {% endif %}
+    </div>
+    <div class="btn-group">
+        {% if project %}
+            <a href="{% url 'projects:ticket_create' project.pk %}" class="btn btn-success">
+                <i class="bi bi-plus-circle"></i> 新規チケット
+            </a>
+        {% else %}
+            <a href="{% url 'projects:ticket_create_global' %}" class="btn btn-success">
+                <i class="bi bi-plus-circle"></i> 新規チケット
+            </a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <!-- フィルター・検索エリア -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <form method="get" class="row g-3">
+                    <!-- <div class="col-md-3">
+                        <label class="form-label">プロジェクト</label>
+                        <select name="project" class="form-select">
+                            <option value="">全プロジェクト</option>
+                            {% for p in all_projects %}
+                                <option value="{{ p.pk }}" 
+                                    {% if request.GET.project == p.pk|stringformat:"s" %}selected{% endif %}>
+                                    {% if p.project_no %}[{{ p.project_no }}] {% endif %}{{ p.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div> -->
+                    <div class="col-md-2">
+                        <label class="form-label">ステータス</label>
+                        <select name="status" class="form-select">
+                            <option value="">全ステータス</option>
+                            <option value="open" {% if request.GET.status == "open" %}selected{% endif %}>未着手</option>
+                            <option value="estimate" {% if request.GET.status == "estimate" %}selected{% endif %}>見積</option>
+                            <option value="in_progress" {% if request.GET.status == "in_progress" %}selected{% endif %}>進行中</option>
+                            <option value="on_hold" {% if request.GET.status == "on_hold" %}selected{% endif %}>保留</option>
+                            <option value="closed" {% if request.GET.status == "closed" %}selected{% endif %}>クローズ</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">優先度</label>
+                        <select name="priority" class="form-select">
+                            <option value="">全優先度</option>
+                            <option value="low" {% if request.GET.priority == "low" %}selected{% endif %}>低</option>
+                            <option value="normal" {% if request.GET.priority == "normal" %}selected{% endif %}>中</option>
+                            <option value="high" {% if request.GET.priority == "high" %}selected{% endif %}>高</option>
+                            <option value="urgent" {% if request.GET.priority == "urgent" %}selected{% endif %}>緊急</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">検索</label>
+                        <input type="text" name="search" class="form-control" placeholder="タイトル、説明で検索" value="{{ request.GET.search }}">
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary me-2">
+                            <i class="bi bi-search"></i> 検索
+                        </button>
+                        <a href="{% if project %}{% url 'projects:ticket_list' project.pk %}{% else %}{% url 'projects:ticket_list' %}{% endif %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- チケット一覧 -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-ticket"></i> チケット一覧 ({{ total_tickets }}件)
+                    {% if project %}
+                        <small class="text-muted">- {{ project.name }}</small>
+                    {% endif %}
+                </h5>
+                <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="bi bi-funnel"></i> 表示
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="#"><i class="bi bi-view-list"></i> リスト表示</a></li>
+                        <li><a class="dropdown-item" href="#"><i class="bi bi-kanban"></i> カンバン表示</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="#"><i class="bi bi-download"></i> エクスポート</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if tickets %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 15%;">チケット番号</th>
+                                    <th style="width: 20%;">タイトル</th>
+                                    {% if not project %}
+                                        <th style="width: 15%;">プロジェクト</th>
+                                    {% endif %}
+                                    <th style="width: 10%;">分類</th>
+                                    <th style="width: 8%;">優先度</th>
+                                    <th style="width: 10%;">ステータス</th>
+                                    <th style="width: 10%;">請求ステータス</th>
+                                    <th style="width: 12%;">担当者</th>
+                                    <th style="width: 8%;">期限</th>
+                                    <th style="width: 8%;">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for ticket in tickets %}
+                                    <tr>
+                                        <td>
+                                            {% if ticket.ticket_no %}
+                                                <code>{{ ticket.ticket_no }}</code>
+                                            {% else %}
+                                                <span class="text-muted">未設定</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <a href="{% url 'projects:ticket_detail' ticket.pk %}" class="text-decoration-none">
+                                                <strong class="d-block">{{ ticket.title }}</strong>
+                                            </a>
+                                            {% if ticket.description %}
+                                                <small class="text-muted">{{ ticket.description|truncatechars:40 }}</small>
+                                            {% endif %}
+                                        </td>
+                                        {% if not project %}
+                                            <td>
+                                                <a href="{% url 'projects:project_detail' ticket.project.pk %}" class="text-decoration-none">
+                                                    {% if ticket.project.project_no %}
+                                                        <small class="text-muted">[{{ ticket.project.project_no }}]</small><br>
+                                                    {% endif %}
+                                                    {{ ticket.project.name }}
+                                                </a>
+                                            </td>
+                                        {% endif %}
+                                        <td>
+                                            {% with classification=ticket.get_case_classification_display_with_color %}
+                                                <span class="badge bg-{{ classification.color }} text-white">
+                                                    {{ classification.text }}
+                                                </span>
+                                            {% endwith %}
+                                        </td>
+                                        <td>
+                                            {% with priority_info=ticket.get_priority_display_with_color %}
+                                                <span class="badge bg-{{ priority_info.color }} text-white">
+                                                    {{ priority_info.text }}
+                                                </span>
+                                            {% endwith %}
+                                        </td>
+                                        <td>
+                                            {% with status_info=ticket.get_status_display_with_color %}
+                                                <span class="badge bg-{{ status_info.color }} text-white">
+                                                    {{ status_info.text }}
+                                                </span>
+                                            {% endwith %}
+                                        </td>
+                                        <td>
+                                            {% with billing_info=ticket.get_billing_status_display_with_color %}
+                                                <span class="badge bg-{{ billing_info.color }} text-white">
+                                                    {{ billing_info.text }}
+                                                </span>
+                                            {% endwith %}
+                                        </td>
+                                        <td>
+                                            {% if ticket.assigned_user %}
+                                                <div class="d-flex align-items-center">
+                                                    <div class="bg-primary rounded-circle d-flex align-items-center justify-content-center text-white me-2" style="width: 24px; height: 24px; font-size: 0.7rem;">
+                                                        {{ ticket.assigned_user.get_full_name.0|default:ticket.assigned_user.username.0|upper }}
+                                                    </div>
+                                                    <span class="small">{{ ticket.assigned_user.get_full_name|default:ticket.assigned_user.username }}</span>
+                                                </div>
+                                            {% else %}
+                                                <span class="text-muted small">未設定</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if ticket.due_date %}
+                                                <small class="{% if ticket.due_date < today %}text-danger{% endif %}">
+                                                    {{ ticket.due_date|date:"m/d" }}
+                                                </small>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <button type="button" class="btn btn-outline-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                                                    <i class="bi bi-three-dots"></i>
+                                                </button>
+                                                <ul class="dropdown-menu">
+                                                    <li><a class="dropdown-item" href="{% url 'projects:ticket_detail' ticket.pk %}"><i class="bi bi-eye"></i> 詳細</a></li>
+                                                    <li><a class="dropdown-item" href="{% url 'projects:ticket_edit' ticket.pk %}"><i class="bi bi-pencil"></i> 編集</a></li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li><a class="dropdown-item text-danger" href="{% url 'projects:ticket_delete' ticket.pk %}"><i class="bi bi-trash"></i> 削除</a></li>
+                                                </ul>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- チケット統計 -->
+                    <div class="row mt-3">
+                        <div class="col-md-12">
+                            <div class="card bg-light">
+                                <div class="card-body py-2">
+                                    <div class="row text-center">
+                                        <div class="col">
+                                            <small class="text-muted">分類別統計</small>
+                                            <div class="mt-1">
+                                                {% regroup tickets by case_classification as classification_groups %}
+                                                {% for group in classification_groups %}
+                                                    <span class="badge bg-secondary me-1">{{ group.grouper|default:"未分類" }}: {{ group.list|length }}件</span>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        <div class="col">
+                                            <small class="text-muted">ステータス別統計</small>
+                                            <div class="mt-1">
+                                                {% regroup tickets by status as status_groups %}
+                                                {% for group in status_groups %}
+                                                    <span class="badge bg-info me-1">{{ group.grouper|default:"未設定" }}: {{ group.list|length }}件</span>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        <div class="col">
+                                            <small class="text-muted">優先度別統計</small>
+                                            <div class="mt-1">
+                                                {% regroup tickets by priority as priority_groups %}
+                                                {% for group in priority_groups %}
+                                                    <span class="badge bg-warning me-1">{{ group.grouper|default:"未設定" }}: {{ group.list|length }}件</span>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ページネーション -->
+                    {% if page_obj %}
+                        <nav aria-label="チケット一覧ページネーション" class="mt-4">
+                            <ul class="pagination justify-content-center">
+                                {% if page_obj.has_previous %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page=1{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.project %}&project={{ request.GET.project }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.priority %}&priority={{ request.GET.priority }}{% endif %}">最初</a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.project %}&project={{ request.GET.project }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.priority %}&priority={{ request.GET.priority }}{% endif %}">前へ</a>
+                                    </li>
+                                {% endif %}
+                                
+                                <li class="page-item active">
+                                    <span class="page-link">
+                                        {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+                                    </span>
+                                </li>
+                                
+                                {% if page_obj.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.project %}&project={{ request.GET.project }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.priority %}&priority={{ request.GET.priority }}{% endif %}">次へ</a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.project %}&project={{ request.GET.project }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.priority %}&priority={{ request.GET.priority }}{% endif %}">最後</a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                    {% endif %}
+                {% else %}
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-ticket fs-1 mb-3 d-block text-muted"></i>
+                        <h6>チケットがありません</h6>
+                        <p class="mb-3">
+                            {% if project %}
+                                このプロジェクトにはまだチケットが作成されていません。
+                            {% else %}
+                                チケットが作成されていません。
+                            {% endif %}
+                        </p>
+                        {% if project %}
+                            <a href="{% url 'projects:ticket_create' project.pk %}" class="btn btn-success">
+                                <i class="bi bi-plus"></i> 最初のチケットを作成
+                            </a>
+                        {% else %}
+                            <a href="{% url 'projects:ticket_create_global' %}" class="btn btn-success">
+                                <i class="bi bi-plus"></i> 新規チケット作成
+                            </a>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 今日の日付を取得（期限の色分け用）
+    const today = new Date();
+    
+    // 検索フォームの自動送信（検索ボックスでEnterキー）
+    const searchInput = document.querySelector('input[name="search"]');
+    if (searchInput) {
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.target.closest('form').submit();
+            }
+        });
+    }
+    
+    // フィルターの変更時に自動送信
+    const filterSelects = document.querySelectorAll('select[name="project"], select[name="status"], select[name="priority"]');
+    filterSelects.forEach(select => {
+        select.addEventListener('change', function() {
+            // 少し遅延をつけて送信（ユーザーが選択を確認できるように）
+            setTimeout(() => {
+                this.closest('form').submit();
+            }, 100);
+        });
+    });
+    
+    // フィルター状態の表示
+    const currentFilters = {
+        project: '{{ request.GET.project|default:"" }}',
+        status: '{{ request.GET.status|default:"" }}',
+        priority: '{{ request.GET.priority|default:"" }}',
+        search: '{{ request.GET.search|default:"" }}'
+    };
+    
+    console.log('チケット一覧ページ読み込み完了');
+    console.log('総チケット数:', {{ total_tickets }});
+    console.log('現在のフィルター:', currentFilters);
+    
+    // アクティブなフィルターの表示
+    showActiveFilters(currentFilters);
+});
+
+// アクティブなフィルターを表示する関数
+function showActiveFilters(filters) {
+    const activeFilters = [];
+    
+    if (filters.project) {
+        const projectSelect = document.querySelector('select[name="project"]');
+        const selectedOption = projectSelect.querySelector(`option[value="${filters.project}"]`);
+        if (selectedOption) {
+            activeFilters.push(`プロジェクト: ${selectedOption.textContent}`);
+        }
+    }
+    
+    if (filters.status) {
+        const statusSelect = document.querySelector('select[name="status"]');
+        const selectedOption = statusSelect.querySelector(`option[value="${filters.status}"]`);
+        if (selectedOption) {
+            activeFilters.push(`ステータス: ${selectedOption.textContent}`);
+        }
+    }
+    
+    if (filters.priority) {
+        const prioritySelect = document.querySelector('select[name="priority"]');
+        const selectedOption = prioritySelect.querySelector(`option[value="${filters.priority}"]`);
+        if (selectedOption) {
+            activeFilters.push(`優先度: ${selectedOption.textContent}`);
+        }
+    }
+    
+    if (filters.search) {
+        activeFilters.push(`検索: "${filters.search}"`);
+    }
+    
+    // アクティブフィルターの表示エリア（任意）
+    if (activeFilters.length > 0) {
+        console.log('アクティブフィルター:', activeFilters.join(', '));
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,298 @@
+{% extends 'base.html' %}
+
+{% block title %}
+    {% if ticket.ticket_no %}[{{ ticket.ticket_no }}] {% endif %}{{ ticket.title }} - チケット詳細
+{% endblock %}
+
+{% block page_title %}
+    <i class="bi bi-ticket-detailed"></i> 
+    {% if ticket.ticket_no %}
+        [{{ ticket.ticket_no }}] {{ ticket.title }}
+    {% else %}
+        {{ ticket.title }}
+    {% endif %}
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-toolbar mb-3">
+    <div class="btn-group me-2">
+        <a href="{% url 'projects:project_detail' ticket.project.pk %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> プロジェクトに戻る
+        </a>
+        <a href="{% url 'projects:ticket_list' ticket.project.pk %}" class="btn btn-outline-secondary">
+            <i class="bi bi-list"></i> チケット一覧
+        </a>
+    </div>
+    {% if can_edit %}
+    <div class="btn-group">
+        <a href="{% url 'projects:ticket_edit' ticket.pk %}" class="btn btn-primary">
+            <i class="bi bi-pencil"></i> 編集
+        </a>
+        {% if user.is_superuser or user.is_leader %}
+        <a href="{% url 'projects:ticket_delete' ticket.pk %}" class="btn btn-outline-danger">
+            <i class="bi bi-trash"></i> 削除
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <!-- チケット詳細 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-info-circle"></i> チケット詳細
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- チケット番号 -->
+                    {% if ticket.ticket_no %}
+                    <div class="col-md-6 mb-3">
+                        <strong>チケット番号:</strong><br>
+                        <code>{{ ticket.ticket_no }}</code>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- プロジェクト -->
+                    <div class="col-md-6 mb-3">
+                        <strong>プロジェクト:</strong><br>
+                        <a href="{% url 'projects:project_detail' ticket.project.pk %}" class="text-decoration-none">
+                            {% if ticket.project.project_no %}
+                                [{{ ticket.project.project_no }}] 
+                            {% endif %}
+                            {{ ticket.project.name }}
+                        </a>
+                    </div>
+                    
+                    <!-- タイトル -->
+                    <div class="col-12 mb-3">
+                        <strong>タイトル:</strong><br>
+                        <h6 class="mb-0">{{ ticket.title }}</h6>
+                    </div>
+                    
+                    <!-- 説明 -->
+                    {% if ticket.description %}
+                    <div class="col-12 mb-3">
+                        <strong>説明:</strong><br>
+                        <div class="bg-light p-3 rounded">
+                            {{ ticket.description|linebreaks }}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- 優先度 -->
+                    <div class="col-md-6 mb-3">
+                        <strong>優先度:</strong><br>
+                        {% with priority_info=ticket.get_priority_display_with_color %}
+                            <span class="badge bg-{{ priority_info.color }} fs-6">
+                                {{ priority_info.text }}
+                            </span>
+                        {% endwith %}
+                    </div>
+                    
+                    <!-- 案件分類 -->
+                    <div class="col-md-6 mb-3">
+                        <strong>案件分類:</strong><br>
+                        {% with classification_info=ticket.get_case_classification_display_with_color %}
+                            <span class="badge bg-{{ classification_info.color }} fs-6">
+                                {{ classification_info.text }}
+                            </span>
+                        {% endwith %}
+                    </div>
+                    
+                    <!-- 請求ステータス -->
+                    <div class="col-md-6 mb-3">
+                        <strong>請求ステータス:</strong><br>
+                        {% with billing_info=ticket.get_billing_status_display_with_color %}
+                            <span class="badge bg-{{ billing_info.color }} fs-6">
+                                {{ billing_info.text }}
+                            </span>
+                        {% endwith %}
+                    </div>
+                    
+                    <!-- 担当者 -->
+                    <div class="col-md-6 mb-3">
+                        <strong>担当者:</strong><br>
+                        {% if ticket.assigned_user %}
+                            <div class="d-flex align-items-center">
+                                <div class="bg-primary rounded-circle d-flex align-items-center justify-content-center text-white me-2" style="width: 32px; height: 32px;">
+                                    {{ ticket.assigned_user.get_full_name.0|default:ticket.assigned_user.username.0|upper }}
+                                </div>
+                                <span>{{ ticket.assigned_user.get_full_name|default:ticket.assigned_user.username }}</span>
+                            </div>
+                        {% else %}
+                            <span class="text-muted">未設定</span>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- 期限 -->
+                    <div class="col-md-6 mb-3">
+                        <strong>期限:</strong><br>
+                        {% if ticket.due_date %}
+                            <span class="{% if ticket.due_date < today %}text-danger fw-bold{% endif %}">
+                                {{ ticket.due_date }}
+                                {% if ticket.due_date < today %}
+                                    <i class="bi bi-exclamation-triangle text-danger ms-1"></i>
+                                {% endif %}
+                            </span>
+                        {% else %}
+                            <span class="text-muted">未設定</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 関連チケット -->
+        {% if related_tickets %}
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-link"></i> 関連チケット
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    {% for related_ticket in related_tickets %}
+                    <div class="list-group-item border-0 px-0">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <a href="{% url 'projects:ticket_detail' related_ticket.pk %}" class="text-decoration-none">
+                                    {% if related_ticket.ticket_no %}
+                                        <code class="small">[{{ related_ticket.ticket_no }}]</code>
+                                    {% endif %}
+                                    {{ related_ticket.title }}
+                                </a>
+                            </div>
+                            <div class="text-end">
+                                {% with status_info=related_ticket.get_status_display_with_color %}
+                                    <span class="badge bg-{{ status_info.color }}">
+                                        {{ status_info.text }}
+                                    </span>
+                                {% endwith %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- 右サイドバー -->
+    <div class="col-md-4">
+        <!-- チケット情報サマリー -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-info"></i> チケット情報
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <strong class="small text-muted">作成日時:</strong><br>
+                    <small>{{ ticket.created_at|date:"Y年m月d日 H:i" }}</small>
+                </div>
+                {% if ticket.updated_at != ticket.created_at %}
+                <div class="mb-3">
+                    <strong class="small text-muted">最終更新:</strong><br>
+                    <small>{{ ticket.updated_at|date:"Y年m月d日 H:i" }}</small>
+                </div>
+                {% endif %}
+                <!-- 作成者情報 -->
+                <div class="mb-3">
+                    <strong class="small text-muted">作成者:</strong><br>
+                    {% if ticket.created_by %}
+                        <small>{{ ticket.created_by.get_full_name|default:ticket.created_by.username }}</small>
+                    {% else %}
+                        <small class="text-muted">不明</small>
+                    {% endif %}
+                </div>
+
+                <!-- 最終更新者情報 -->
+                {% if ticket.updated_by and ticket.updated_by != ticket.created_by %}
+                <div class="mb-3">
+                    <strong class="small text-muted">最終更新者:</strong><br>
+                    <small>{{ ticket.updated_by.get_full_name|default:ticket.updated_by.username }}</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- プロジェクト情報 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-folder"></i> プロジェクト情報
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <strong class="small text-muted">プロジェクト名:</strong><br>
+                    <a href="{% url 'projects:project_detail' project.pk %}" class="text-decoration-none">
+                        {{ project.name }}
+                    </a>
+                </div>
+                {% if project.client %}
+                <div class="mb-2">
+                    <strong class="small text-muted">クライアント:</strong><br>
+                    <small>{{ project.client }}</small>
+                </div>
+                {% endif %}
+                <div class="mb-2">
+                    <strong class="small text-muted">期間:</strong><br>
+                    <small>{{ project.period_display }}</small>
+                </div>
+                {% if project.assigned_section %}
+                <div class="mb-2">
+                    <strong class="small text-muted">担当課:</strong><br>
+                    <small>{{ project.assigned_section.department.name }} - {{ project.assigned_section.name }}</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- アクション -->
+        {% if can_edit %}
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-gear"></i> アクション
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'projects:ticket_edit' ticket.pk %}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-pencil"></i> チケットを編集
+                    </a>
+                    <a href="{% url 'projects:ticket_create' ticket.project.pk %}" class="btn btn-success btn-sm">
+                        <i class="bi bi-plus"></i> 新しいチケット作成
+                    </a>
+                    {% if user.is_superuser or user.is_leader %}
+                    <a href="{% url 'projects:ticket_delete' ticket.pk %}" class="btn btn-outline-danger btn-sm">
+                        <i class="bi bi-trash"></i> チケットを削除
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('チケット詳細ページ読み込み完了');
+    console.log('チケットID:', {{ ticket.pk }});
+    console.log('プロジェクトID:', {{ ticket.project.pk }});
+});
+</script>
+{% endblock %}

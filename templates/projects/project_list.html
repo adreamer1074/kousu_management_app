@@ -75,6 +75,7 @@
                 <!-- テーブルヘッダー部分 -->
                 <thead class="table-light">
                     <tr>
+                        <th>No</th>
                         <th>プロジェクト</th>
                         <th>ステータス</th>
                         <th>クライアント</th>
@@ -88,6 +89,13 @@
                 <tbody>
                     {% for project in projects %}
                         <tr>
+                            <td>
+                                {% if project.project_no %}
+                                    <code>{{ project.project_no }}</code>
+                                {% else %}
+                                    <span class="text-muted">未設定</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 <div>
                                     <strong>
