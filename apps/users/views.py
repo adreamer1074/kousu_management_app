@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.forms import UserCreationForm
-from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST, require_http_methods
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import TemplateView, ListView, DetailView, UpdateView, CreateView, DeleteView
@@ -30,7 +30,7 @@ def is_leader_or_superuser(user):
     return user.is_leader or user.is_superuser
 
 @login_required
-@user_passes_test(is_leader_or_superuser)
+@leader_or_superuser_required_403
 def user_register(request):
     """ユーザー登録ビュー"""
     if request.method == 'POST':
@@ -385,7 +385,7 @@ def custom_logout(request):
     return redirect('login')
 
 @login_required
-@user_passes_test(is_leader_or_superuser)
+@leader_or_superuser_required_403
 def user_create(request):
     """ユーザー作成（registerのエイリアス）"""
     return register(request)  # registerに転送
@@ -705,7 +705,7 @@ def cleanup_inactive_users(request):
         return JsonResponse({'success': False, 'error': f'クリーンアップ処理でエラーが発生しました: {str(e)}'})
 
 @login_required
-@user_passes_test(is_leader_or_superuser)
+@leader_or_superuser_required_403
 def register(request):
     """ユーザー登録ビュー"""
     if request.method == 'POST':
@@ -737,7 +737,7 @@ def register(request):
     return render(request, 'users/user/user_register.html', {'form': form})
 
 @login_required
-@user_passes_test(is_leader_or_superuser)
+@leader_or_superuser_required_403
 def user_password_display(request):
     """生成されたパスワード表示ページ"""
     generated_password = request.session.get('generated_password')
@@ -761,7 +761,7 @@ def user_password_display(request):
     return render(request, 'users/user/password_display.html', context)
 
 @login_required
-@user_passes_test(is_leader_or_superuser)
+@leader_or_superuser_required_403
 def user_export(request):
     """ユーザー一覧をExcelファイルでエクスポート"""
     try:
