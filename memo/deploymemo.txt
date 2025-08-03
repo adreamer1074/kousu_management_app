@@ -1,0 +1,82 @@
+# EC2デプロイ メモー（テスト版）
+============================
+
+1. EC2インスタンス作成
+    セキュリティグループ設定（SSH 22、HTTP 80開放）
+2. 必要パッケージインストール
+    sudo yum update -y
+    sudo yum install -y python3 python3-pip nginx git gcc mariadb-devel
+3. Djangoプロジェクト配置
+    Git clone または scp でプロジェクトコピー
+4. 仮想環境作成・起動と依存パッケージインストール
+    python3 -m venv env
+    source env/bin/activate
+    pip install -r requirements.txt
+    ※足りない場合は都度
+        pip install reportlab
+    など追加
+5. Django設定変更
+    `settings.py`   
+    ALLOWED_HOSTS = ['<EC2パブリックIP>', 'localhost']
+    STATIC_ROOT = '/home/ec2-user/kousu_management_app/staticfiles'
+    S3設定
+6. 静的ファイル収集
+    python manage.py collectstatic --noinput
+7. マイグレーション実行
+    python manage.py makemigrations
+    python manage.py migrate
+8. Gunicorn動作確認
+    gunicorn --bind 127.0.0.1:8000 kousu_management_app.wsgi:application
+9. Gunicorn systemdサービス作成
+    /etc/systemd/system/gunicorn.service に設定作成し
+    [Unit]
+    Description=gunicorn daemon
+    After=network.target
+
+    [Service]
+    User=ec2-user
+    Group=nginx
+    WorkingDirectory=/home/ec2-user/kousu_management_app
+    Environment="PATH=/home/ec2-user/kousu_management_app/env/bin"
+    ExecStart=/home/ec2-user/kousu_management_app/env/bin/gunicorn --workers 3 --bind 127.0.0.1:8000 <プロジェクト名>.wsgi:application
+
+    [Install]
+    WantedBy=multi-user.target
+
+9.1 サービス起動と有効化
+    sudo systemctl daemon-reload
+    sudo systemctl start gunicorn
+    sudo systemctl enable gunicorn
+
+10. Nginx設定
+    /etc/nginx/conf.d/kousu_app.conf に設定作成
+    server {
+        listen 80;
+        server_name <EC2パブリックIP>;
+    
+        location /static/ {
+            alias /home/ec2-user/kousu_management_app/staticfiles/;
+        }
+    
+        location / {
+            proxy_pass http://127.0.0.1:8000;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+
+10.1設定確認とリロード
+
+    sudo nginx -t
+    sudo systemctl restart nginx
+    sudo systemctl enable nginx
+
+12. 動作確認
+ブラウザから http://<EC2パブリックIP>/ にアクセスし正常に動作確認
+
+13. その他ポイント
+MySQL設定は settings.py のDATABASESセクションに正しく記載
+依存モジュール不足は仮想環境でインストール（pip install）
+依存パッケージは requirements.txt に管理

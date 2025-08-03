@@ -1,0 +1,105 @@
+#データベース構成
+#未更新
+
+1. ユーザー管理テーブル
+
+
+users_customuser (カスタムユーザー)
+
+┌─────────────────┬──────────────┬─────────────────────────────┐
+│ フィールド名      │ データ型      │ 説明                         │
+├─────────────────┼──────────────┼─────────────────────────────┤
+│ id              │ AutoField    │ 主キー                       │
+│ username        │ CharField    │ ユーザー名（ユニーク）        │
+│ email           │ EmailField   │ メールアドレス               │
+│ first_name      │ CharField    │ 名                          │
+│ last_name       │ CharField    │ 姓                          │
+│ department_id   │ ForeignKey   │ 部署ID                      │
+│ section_id      │ ForeignKey   │ 課ID                        │
+│ employee_id     │ CharField    │ 社員番号                     │
+│ employee_level  │ CharField    │ 社員レベル                   │
+│ is_active       │ BooleanField │ アクティブ状態               │
+│ is_staff        │ BooleanField │ スタッフ権限                 │
+│ is_leader       │ BooleanField │ リーダー権限                 │
+│ is_superuser    │ BooleanField │ スーパーユーザー権限         │
+│ date_joined     │ DateTimeField│ 登録日時                     │
+└─────────────────┴──────────────┴─────────────────────────────┘
+
+users_department (部署)
+
+┌─────────────────┬──────────────┬─────────────────────────────┐
+│ フィールド名      │ データ型      │ 説明                         │
+├─────────────────┼──────────────┼─────────────────────────────┤
+│ id              │ AutoField    │ 主キー                       │
+│ name            │ CharField    │ 部署名                       │
+│ description     │ TextField    │ 部署説明                     │
+│ is_active       │ BooleanField │ アクティブ状態               │
+│ created_at      │ DateTimeField│ 作成日時                     │
+└─────────────────┴──────────────┴─────────────────────────────┘
+users_section (課)
+┌─────────────────┬──────────────┬─────────────────────────────┐
+│ フィールド名      │ データ型      │ 説明                         │
+├─────────────────┼──────────────┼─────────────────────────────┤
+│ id              │ AutoField    │ 主キー                       │
+│ name            │ CharField    │ 課名                         │
+│ department_id   │ ForeignKey   │ 所属部署ID                   │
+│ is_active       │ BooleanField │ アクティブ状態               │
+│ created_at      │ DateTimeField│ 作成日時                     │
+└─────────────────┴──────────────┴─────────────────────────────┘
+
+
+
+2. プロジェクト管理テーブル
+
+projects_project (プロジェクト)
+┌─────────────────┬──────────────┬─────────────────────────────┐
+│ フィールド名      │ データ型      │ 説明                         │
+├─────────────────┼──────────────┼─────────────────────────────┤
+│ id              │ AutoField    │ 主キー                       │
+│ name            │ CharField    │ プロジェクト名               │
+│ description     │ TextField    │ プロジェクト説明             │
+│ status          │ CharField    │ ステータス（計画中/進行中等）│
+│ start_date      │ DateField    │ 開始日                       │
+│ end_date        │ DateField    │ 終了日                       │
+│ is_active       │ BooleanField │ アクティブ状態               │
+│ created_by_id   │ ForeignKey   │ 作成者ID                     │
+│ created_at      │ DateTimeField│ 作成日時                     │
+│ updated_at      │ DateTimeField│ 更新日時                     │
+└─────────────────┴──────────────┴─────────────────────────────┘
+
+projects_projectticket (チケット)
+┌─────────────────┬──────────────┬─────────────────────────────┐
+│ フィールド名      │ データ型      │ 説明                         │
+├─────────────────┼──────────────┼─────────────────────────────┤
+│ id              │ AutoField    │ 主キー                       │
+│ title           │ CharField    │ チケットタイトル             │
+│ description     │ TextField    │ チケット説明                 │
+│ project_id      │ ForeignKey   │ プロジェクトID               │
+│ assigned_to_id  │ ForeignKey   │ 担当者ID                     │
+│ status          │ CharField    │ ステータス（新規/進行中等）  │
+│ priority        │ CharField    │ 優先度（高/中/低）          │
+│ estimated_hours │ DecimalField │ 見積時間                     │
+│ due_date        │ DateField    │ 期限日                       │
+│ created_by_id   │ ForeignKey   │ 作成者ID                     │
+│ created_at      │ DateTimeField│ 作成日時                     │
+│ updated_at      │ DateTimeField│ 更新日時                     │
+└─────────────────┴──────────────┴─────────────────────────────┘
+
+3. 工数管理テーブル
+
+workloads_workload (工数)
+┌─────────────────┬──────────────┬─────────────────────────────┐
+│ フィールド名      │ データ型      │ 説明                         │
+├─────────────────┼──────────────┼─────────────────────────────┤
+│ id              │ AutoField    │ 主キー                       │
+│ user_id         │ ForeignKey   │ ユーザーID                   │
+│ project_id      │ ForeignKey   │ プロジェクトID               │
+│ ticket_id       │ ForeignKey   │ チケットID（NULL可）         │
+│ year_month      │ CharField    │ 年月（YYYY-MM形式）          │
+│ day_1           │ DecimalField │ 1日の工数                    │
+│ day_2           │ DecimalField │ 2日の工数                    │
+│ ...             │ ...          │ ...                         │
+│ day_31          │ DecimalField │ 31日の工数                   │
+│ created_at      │ DateTimeField│ 作成日時                     │
+│ updated_at      │ DateTimeField│ 更新日時                     │
+└─────────────────┴──────────────┴─────────────────────────────┘
