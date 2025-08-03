@@ -18,5 +18,4 @@ migrations/
 kousu_management_app/settings.py
 
 # Static files 
-static/
 staticfiles/

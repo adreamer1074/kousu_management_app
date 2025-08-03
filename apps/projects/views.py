@@ -1,5 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.urls import reverse_lazy, reverse
 from django.contrib import messages
@@ -8,6 +8,8 @@ from django.db.models import Q
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_http_methods
+from django.core.paginator import Paginator
 
 from .models import Project, ProjectTicket
 from .forms import ProjectForm, ProjectTicketForm
@@ -67,9 +69,10 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         
         # プロジェクトに関連するチケット一覧を取得
-        tickets = self.object.tickets.filter(
-            is_active=True
-        ).select_related('assigned_user').order_by('-created_at')
+        tickets = self.object.tickets.select_related('assigned_user').order_by('-created_at')
+        # tickets = self.object.tickets.filter(
+        #     is_active=True
+        # ).select_related('assigned_user').order_by('-created_at')
         
         context['tickets'] = tickets
         
@@ -125,71 +128,427 @@ class ProjectDeleteView(LoginRequiredMixin, DeleteView):
         messages.success(request, 'プロジェクトを削除しました。')
         return super().delete(request, *args, **kwargs)
 
-class ProjectTicketCreateView(LoginRequiredMixin, CreateView):
-    """プロジェクトチケット作成"""
+class TicketListView(LoginRequiredMixin, ListView):
+    """チケット一覧ビュー（プロジェクト別・全体対応）"""
+    model = ProjectTicket
+    template_name = 'projects/ticket_list.html'
+    context_object_name = 'tickets'
+    paginate_by = 20
+    
+    def get_queryset(self):
+        # デバッグ用: 全チケットを確認
+        all_tickets = ProjectTicket.objects.all()
+        print(f"全チケット数: {all_tickets.count()}")
+        for ticket in all_tickets:
+            print(f"チケット: {ticket.pk} - {ticket.title} - プロジェクト: {ticket.project.pk if ticket.project else 'なし'}")
+            # print(f"チケット: {ticket.pk} - {ticket.title} - プロジェクト: {ticket.project.pk if ticket.project else 'なし'} - アクティブ: {ticket.is_active}")
+        
+        queryset = ProjectTicket.objects.select_related(
+            'project', 'assigned_user', 'project__assigned_section'
+        )
+        # queryset = ProjectTicket.objects.select_related(
+        #     'project', 'assigned_user', 'project__assigned_section'
+        # ).filter(is_active=True)
+        
+        print(f"全チケット数: {queryset.count()}")
+        # print(f"アクティブチケット数: {queryset.count()}")
+        
+        # プロジェクト別フィルター（URLパラメータから）
+        project_pk = self.kwargs.get('project_pk')
+        print(f"project_pk: {project_pk}")
+        
+        if project_pk:
+            queryset = queryset.filter(project_id=project_pk)
+            print(f"プロジェクト{project_pk}のチケット数: {queryset.count()}")
+        
+        # 検索フィルター
+        search = self.request.GET.get('search', '').strip()
+        if search:
+            queryset = queryset.filter(
+                Q(title__icontains=search) |
+                Q(description__icontains=search) |
+                Q(ticket_no__icontains=search)
+            )
+            print(f"検索後のチケット数: {queryset.count()}")
+        
+        # ステータスフィルター
+        status = self.request.GET.get('status', '').strip()
+        if status:
+            queryset = queryset.filter(status=status)
+            print(f"ステータス「{status}」フィルター後: {queryset.count()}")
+        
+        # 優先度フィルター
+        priority = self.request.GET.get('priority', '').strip()
+        if priority:
+            queryset = queryset.filter(priority=priority)
+            print(f"優先度「{priority}」フィルター後: {queryset.count()}")
+        
+        # プロジェクトフィルター（全チケット一覧でのフィルター）
+        project_filter = self.request.GET.get('project', '').strip()
+        if project_filter and not project_pk:
+            try:
+                project_id = int(project_filter)
+                queryset = queryset.filter(project_id=project_id)
+                print(f"プロジェクトフィルター「{project_id}」後: {queryset.count()}")
+            except (ValueError, TypeError):
+                print(f"無効なプロジェクトID: {project_filter}")
+                pass
+        
+        final_queryset = queryset.order_by('-created_at')
+        print(f"最終チケット数: {final_queryset.count()}")
+        
+        return final_queryset
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # プロジェクト情報（project_pk がある場合）
+        project_pk = self.kwargs.get('project_pk')
+        if project_pk:
+            try:
+                context['project'] = get_object_or_404(Project, pk=project_pk)
+                print(f"プロジェクト情報取得: {context['project'].name}")
+            except Project.DoesNotExist:
+                print(f"プロジェクトが見つかりません: {project_pk}")
+        
+        # 全プロジェクト（フィルター用）
+        context['all_projects'] = Project.objects.filter(is_active=True).order_by('name')
+        
+        # 統計情報
+        tickets = self.get_queryset()
+        context['total_tickets'] = tickets.count()
+        
+        # 今日の日付（期限判定用）
+        from datetime import date
+        context['today'] = date.today()
+        
+        # 現在のフィルター状態をコンテキストに追加
+        context['current_filters'] = {
+            'project': self.request.GET.get('project', ''),
+            'status': self.request.GET.get('status', ''),
+            'priority': self.request.GET.get('priority', ''),
+            'search': self.request.GET.get('search', ''),
+        }
+        
+        print(f"コンテキスト - 総チケット数: {context['total_tickets']}")
+        
+        return context
+
+class TicketDetailView(LoginRequiredMixin, DetailView):
+    """チケット詳細ビュー"""
+    model = ProjectTicket
+    template_name = 'projects/ticket_detail.html'
+    context_object_name = 'ticket'
+    
+    def get_queryset(self):
+        return ProjectTicket.objects.select_related(
+            'project', 'assigned_user', 'project__assigned_section'
+        ).prefetch_related(
+            'project__assigned_users'
+        )
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        ticket = self.object
+        
+        # プロジェクト情報
+        context['project'] = ticket.project
+        
+        # 同じプロジェクトの他のチケット（最新5件）
+        context['related_tickets'] = ProjectTicket.objects.filter(
+            project=ticket.project
+        ).exclude(pk=ticket.pk).order_by('-created_at')[:5]
+        # context['related_tickets'] = ProjectTicket.objects.filter(
+        #     project=ticket.project,
+        #     is_active=True
+        # ).exclude(pk=ticket.pk).order_by('-created_at')[:5]
+        
+        # チケットの進捗率計算（ステータスベース）
+        status_progress = {
+            'open': 0,
+            'estimate': 25,
+            'in_progress': 50,
+            'on_hold': 40,
+            'closed': 100,
+        }
+        context['progress_percentage'] = status_progress.get(ticket.status, 0)
+        
+        # 編集権限チェック
+        context['can_edit'] = self.request.user.is_superuser or \
+                            self.request.user.is_leader or \
+                            ticket.assigned_user == self.request.user
+        
+        # 今日の日付
+        from datetime import date
+        context['today'] = date.today()
+        
+        return context
+
+class TicketUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+    """チケット編集ビュー"""
+    model = ProjectTicket
+    form_class = ProjectTicketForm
+    template_name = 'projects/ticket_form.html'
+    context_object_name = 'ticket'
+    
+    def test_func(self):
+        """編集権限チェック"""
+        ticket = self.get_object()
+        return (
+            self.request.user.is_superuser or 
+            self.request.user.is_leader or 
+            ticket.assigned_user == self.request.user
+        )
+    
+    def handle_no_permission(self):
+        """権限がない場合の処理"""
+        messages.error(self.request, 'このチケットを編集する権限がありません。')
+        return redirect('projects:ticket_detail', pk=self.get_object().pk)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['project'] = self.object.project
+        return context
+    
+    def form_valid(self, form):
+        """フォーム送信成功時の処理"""
+        # 更新者のみを設定（作成者は変更しない）
+        form.instance.updated_by = self.request.user
+        
+        messages.success(self.request, f'チケット「{form.instance.title}」を更新しました。')
+        return super().form_valid(form)
+    
+    def form_invalid(self, form):
+        """フォーム送信失敗時の処理"""
+        messages.error(self.request, 'チケットの更新に失敗しました。入力内容を確認してください。')
+        return super().form_invalid(form)
+    
+    def get_success_url(self):
+        return reverse('projects:ticket_detail', kwargs={'pk': self.object.pk})
+
+class TicketDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+    """チケット削除ビュー"""
+    model = ProjectTicket
+    template_name = 'projects/ticket_delete.html'
+    context_object_name = 'ticket'
+    
+    def test_func(self):
+        """削除権限チェック"""
+        ticket = self.get_object()
+        return (
+            self.request.user.is_superuser or 
+            self.request.user.is_leader
+        )
+    
+    def handle_no_permission(self):
+        """権限がない場合の処理"""
+        messages.error(self.request, 'このチケットを削除する権限がありません。')
+        return redirect('projects:ticket_detail', pk=self.get_object().pk)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['project'] = self.object.project
+        return context
+    
+    def delete(self, request, *args, **kwargs):
+        """削除処理（物理削除）"""
+        # """削除処理（論理削除）"""
+        ticket = self.get_object()
+        project = ticket.project
+        ticket_title = ticket.title
+        
+        # 物理削除
+        result = super().delete(request, *args, **kwargs)
+        # 論理削除
+        # ticket.is_active = False
+        # ticket.save()
+        
+        messages.success(request, f'チケット「{ticket_title}」を削除しました。')
+        return redirect('projects:project_detail', pk=project.pk)
+        # return result
+
+class ProjectTicketCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
+    """チケット作成ビュー"""
     model = ProjectTicket
     form_class = ProjectTicketForm
     template_name = 'projects/ticket_form.html'
     
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['project'] = get_object_or_404(Project, pk=self.kwargs['project_pk'])
-        return kwargs
+    def test_func(self):
+        """作成権限チェック"""
+        return (
+            self.request.user.is_superuser or 
+            self.request.user.is_leader or 
+            self.request.user.is_active
+        )
     
-    def form_valid(self, form):
-        form.instance.project = get_object_or_404(Project, pk=self.kwargs['project_pk'])
-        messages.success(self.request, 'チケットを作成しました。')
-        return super().form_valid(form)
-    
-    def get_success_url(self):
-        return reverse('projects:project_detail', kwargs={'pk': self.kwargs['project_pk']})
+    def get_initial(self):
+        """初期値設定"""
+        initial = super().get_initial()
+        project_pk = self.kwargs.get('project_pk')
+        print(f"チケット作成 - project_pk: {project_pk}")
+        
+        if project_pk:
+            try:
+                project = get_object_or_404(Project, pk=project_pk)
+                initial['project'] = project
+                print(f"プロジェクト設定: {project.name} (ID: {project.pk})")
+            except Project.DoesNotExist:
+                print(f"プロジェクトが見つかりません: {project_pk}")
+        
+        return initial
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['project'] = get_object_or_404(Project, pk=self.kwargs['project_pk'])
+        project_pk = self.kwargs.get('project_pk')
+        if project_pk:
+            try:
+                context['project'] = get_object_or_404(Project, pk=project_pk)
+                print(f"コンテキストにプロジェクト設定: {context['project'].name}")
+            except Project.DoesNotExist:
+                print(f"コンテキスト用プロジェクトが見つかりません: {project_pk}")
         return context
-
-@login_required
-def get_tickets_api(request):
-    """プロジェクトのチケット一覧取得API（既存）"""
-    project_id = request.GET.get('project_id')
     
-    if not project_id:
-        return JsonResponse({'success': False, 'tickets': []})
-    
-    try:
-        tickets = ProjectTicket.objects.filter(
-            project_id=project_id
-        ).values('id', 'title', 'status')
+    def form_valid(self, form):
+        """フォーム送信成功時の処理"""
+        # 作成者・更新者を設定
+        form.instance.created_by = self.request.user
+        form.instance.updated_by = self.request.user
         
-        return JsonResponse({
-            'success': True,
-            'tickets': list(tickets)
-        })
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': str(e),
-            'tickets': []
-        })
+        # プロジェクトが設定されているかチェック
+        if not form.instance.project:
+            project_pk = self.kwargs.get('project_pk')
+            if project_pk:
+                try:
+                    form.instance.project = get_object_or_404(Project, pk=project_pk)
+                    print(f"フォーム送信時にプロジェクト設定: {form.instance.project.name}")
+                except Project.DoesNotExist:
+                    print(f"フォーム送信時プロジェクトが見つかりません: {project_pk}")
+                    messages.error(self.request, 'プロジェクトが見つかりません。')
+                    return self.form_invalid(form)
+        
+        print(f"保存前チケット情報:")
+        print(f"  - タイトル: {form.instance.title}")
+        print(f"  - プロジェクト: {form.instance.project}")
+        # print(f"  - is_active: {form.instance.is_active}")
+        print(f"  - created_by: {form.instance.created_by}")
+        
+        result = super().form_valid(form)
+        
+        print(f"保存後チケット情報:")
+        print(f"  - ID: {form.instance.pk}")
+        print(f"  - タイトル: {form.instance.title}")
+        print(f"  - プロジェクト: {form.instance.project}")
+        # print(f"  - is_active: {form.instance.is_active}")
+        
+        messages.success(self.request, f'チケット「{form.instance.title}」を作成しました。')
+        return result
+    
+    def form_invalid(self, form):
+        """フォーム送信失敗時の処理"""
+        print("フォームが無効です:")
+        for field, errors in form.errors.items():
+            print(f"  - {field}: {errors}")
+        
+        messages.error(self.request, 'チケットの作成に失敗しました。入力内容を確認してください。')
+        return super().form_invalid(form)
+    
+    def get_success_url(self):
+        # プロジェクト別チケット一覧に戻る
+        project_pk = self.kwargs.get('project_pk')
+        if project_pk:
+            return reverse('projects:project_ticket_list', kwargs={'project_pk': project_pk})
+        else:
+            return reverse('projects:ticket_detail', kwargs={'pk': self.object.pk})
 
 @login_required
+@require_http_methods(["GET"])
 def get_project_tickets_api(request, project_id):
-    """プロジェクトのチケット一覧取得API"""
+    """プロジェクトのチケット一覧API"""
     try:
-        project = get_object_or_404(Project, pk=project_id, is_active=True)
-        tickets = project.tickets.filter(is_active=True).values(
-            'id', 'title', 'case_classification', 'status'
-        ).order_by('title')
+        project = get_object_or_404(Project, pk=project_id)
+        tickets = ProjectTicket.objects.filter(
+            project=project
+        ).select_related('assigned_user')
+        # tickets = ProjectTicket.objects.filter(
+        #     project=project,
+        #     is_active=True
+        # ).select_related('assigned_user')
+        
+        tickets_data = []
+        for ticket in tickets:
+            tickets_data.append({
+                'id': ticket.pk,
+                'ticket_no': ticket.ticket_no or '',
+                'title': ticket.title,
+                'status': ticket.status,
+                'status_display': ticket.get_status_display(),
+                'priority': ticket.priority,
+                'priority_display': ticket.get_priority_display(),
+                'assigned_user': ticket.assigned_user.get_full_name() if ticket.assigned_user else '',
+                'due_date': ticket.due_date.isoformat() if ticket.due_date else None,
+                'created_at': ticket.created_at.isoformat(),
+            })
         
         return JsonResponse({
             'success': True,
-            'tickets': list(tickets),
-            'project_name': project.name
+            'tickets': tickets_data,
+            'total': len(tickets_data)
         })
+        
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': str(e),
-            'tickets': []
+            'error': str(e)
+        })
+
+@login_required
+@require_http_methods(["GET"])
+def get_tickets_api(request):
+    """全チケット一覧API"""
+    try:
+        tickets = ProjectTicket.objects.select_related('project', 'assigned_user')
+        # tickets = ProjectTicket.objects.filter(
+        #     is_active=True
+        # ).select_related('project', 'assigned_user')
+        
+        # フィルター適用
+        project_id = request.GET.get('project')
+        if project_id:
+            tickets = tickets.filter(project_id=project_id)
+        
+        status = request.GET.get('status')
+        if status:
+            tickets = tickets.filter(status=status)
+        
+        priority = request.GET.get('priority')
+        if priority:
+            tickets = tickets.filter(priority=priority)
+        
+        tickets_data = []
+        for ticket in tickets:
+            tickets_data.append({
+                'id': ticket.pk,
+                'ticket_no': ticket.ticket_no or '',
+                'title': ticket.title,
+                'project_id': ticket.project.pk,
+                'project_name': ticket.project.name,
+                'status': ticket.status,
+                'status_display': ticket.get_status_display(),
+                'priority': ticket.priority,
+                'priority_display': ticket.get_priority_display(),
+                'assigned_user': ticket.assigned_user.get_full_name() if ticket.assigned_user else '',
+                'due_date': ticket.due_date.isoformat() if ticket.due_date else None,
+                'created_at': ticket.created_at.isoformat(),
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'tickets': tickets_data,
+            'total': len(tickets_data)
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
         })

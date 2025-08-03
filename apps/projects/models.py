@@ -14,6 +14,16 @@ class Project(models.Model):
         ('completed', '完了'),
         ('cancelled', 'キャンセル'),
     ]
+
+    #project_no
+    project_no = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        unique=True, 
+        verbose_name="プロジェクト番号",
+        help_text=""
+    )
     
     name = models.CharField(max_length=200, verbose_name="プロジェクト名")
     description = models.TextField(blank=True, default="", verbose_name="説明")
@@ -67,6 +77,12 @@ class Project(models.Model):
     def get_absolute_url(self):
         return reverse('projects:project_detail', kwargs={'pk': self.pk})
     
+    # プロジェクトのURLを取得
+    def __str__(self):
+        if self.project_no:
+            return f"[{self.project_no}] {self.name}"
+        return self.name
+
     @property
     def period_display(self):
         """期間の表示用プロパティ"""
@@ -129,6 +145,14 @@ class ProjectTicket(models.Model):
         BILLED = 'billed', '請求済み'
         IN_PROGRESS = 'in_progress', '着手'
     
+    ticket_no = models.CharField(
+        max_length=30,
+        blank=True,
+        null=True,
+        unique=True,
+        verbose_name="チケット番号",
+        help_text=""
+    )
     project = models.ForeignKey(
         Project,
         on_delete=models.CASCADE,
@@ -180,11 +204,38 @@ class ProjectTicket(models.Model):
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新日時")
     is_active = models.BooleanField('アクティブ', default=True)
 
+    # 作成者・更新者フィールドを追加
+    created_by = models.ForeignKey(
+        'users.CustomUser',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_tickets',
+        verbose_name="作成者"
+    )
+    updated_by = models.ForeignKey(
+        'users.CustomUser',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_tickets',
+        verbose_name="最終更新者"
+    )
+
     class Meta:
-        verbose_name = "チケット"
-        verbose_name_plural = "チケット"
+        verbose_name = "プロジェクトチケット"
+        verbose_name_plural = "プロジェクトチケット"
         ordering = ['-created_at']
 
+    # チケットのURLを取得
+    def __str__(self):
+        """チケット番号付きで表示"""
+        if self.ticket_no:
+            return f"[{self.ticket_no}] {self.title}"
+        elif self.project:
+            return f"[{self.project.name}] {self.title}"
+        return self.title
+    
     def __str__(self):
         """プロジェクト名付きでチケットを表示"""
         if self.project:
