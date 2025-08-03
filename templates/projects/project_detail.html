@@ -111,10 +111,10 @@
                     <i class="bi bi-ticket"></i> チケット概要 ({{ total_tickets }}件)
                 </h5>
                 <div class="btn-group btn-group-sm">
-                    <a href="{% url 'projects:ticket_create' project.pk %}" class="btn btn-success">
+                    <a href="{% url 'projects:project_ticket_create' project.pk %}" class="btn btn-success">
                         <i class="bi bi-plus"></i> 新規チケット
                     </a>
-                    <!-- チケット概要セクション内のリンクも修正 -->
+                    <!-- チケット概要セクション内 -->
                     <a href="{% url 'projects:project_ticket_list' project.pk %}" class="btn btn-outline-primary">
                         <i class="bi bi-list"></i> 全て表示
                     </a>
@@ -180,7 +180,7 @@
                     
                     {% if total_tickets > 5 %}
                         <div class="text-center mt-3">
-                            <a href="{% url 'projects:ticket_list' project.pk %}" class="btn btn-sm btn-outline-primary">
+                            <a href="{% url 'projects:project_ticket_list' project.pk %}" class="btn btn-sm btn-outline-primary">
                                 残り{{ total_tickets|add:"-5" }}件のチケットを表示
                             </a>
                         </div>
@@ -211,7 +211,7 @@
                         <i class="bi bi-ticket fs-3 mb-2 d-block text-muted"></i>
                         <h6>チケットがありません</h6>
                         <p class="mb-3">このプロジェクトにはまだチケットが作成されていません。</p>
-                        <a href="{% url 'projects:ticket_create' project.pk %}" class="btn btn-success">
+                        <a href="{% url 'projects:project_ticket_create' project.pk %}" class="btn btn-success">
                             <i class="bi bi-plus"></i> 最初のチケットを作成
                         </a>
                     </div>

@@ -16,10 +16,10 @@
 {% block page_actions %}
 <div class="btn-toolbar mb-3">
     <div class="btn-group me-2">
-        <a href="{% url 'projects:project_detail' ticket.project.pk %}" class="btn btn-outline-secondary">
+        <!-- <a href="{% url 'projects:project_detail' ticket.project.pk %}" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left"></i> プロジェクトに戻る
-        </a>
-        <a href="{% url 'projects:ticket_list' ticket.project.pk %}" class="btn btn-outline-secondary">
+          </a> -->
+        <a href="{% url 'projects:project_ticket_list' project.pk %}" class="btn btn-outline-secondary">
             <i class="bi bi-list"></i> チケット一覧
         </a>
     </div>
@@ -271,7 +271,7 @@
                     <a href="{% url 'projects:ticket_edit' ticket.pk %}" class="btn btn-primary btn-sm">
                         <i class="bi bi-pencil"></i> チケットを編集
                     </a>
-                    <a href="{% url 'projects:ticket_create' ticket.project.pk %}" class="btn btn-success btn-sm">
+                    <a href="{% url 'projects:project_ticket_create' project.pk %}" class="btn btn-success btn-sm">
                         <i class="bi bi-plus"></i> 新しいチケット作成
                     </a>
                     {% if user.is_superuser or user.is_leader %}

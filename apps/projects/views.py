@@ -264,14 +264,14 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
         # ).exclude(pk=ticket.pk).order_by('-created_at')[:5]
         
         # チケットの進捗率計算（ステータスベース）
-        status_progress = {
-            'open': 0,
-            'estimate': 25,
-            'in_progress': 50,
-            'on_hold': 40,
-            'closed': 100,
-        }
-        context['progress_percentage'] = status_progress.get(ticket.status, 0)
+        # status_progress = {
+        #     'open': 0,
+        #     'estimate': 25,
+        #     'in_progress': 50,
+        #     'on_hold': 40,
+        #     'closed': 100,
+        # }
+        # context['progress_percentage'] = status_progress.get(ticket.status, 0)
         
         # 編集権限チェック
         context['can_edit'] = self.request.user.is_superuser or \

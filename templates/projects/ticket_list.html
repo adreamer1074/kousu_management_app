@@ -26,11 +26,11 @@
     </div>
     <div class="btn-group">
         {% if project %}
-            <a href="{% url 'projects:ticket_create' project.pk %}" class="btn btn-success">
+            <a href="{% url 'projects:project_ticket_create' project.pk %}" class="btn btn-success">
                 <i class="bi bi-plus-circle"></i> 新規チケット
             </a>
         {% else %}
-            <a href="{% url 'projects:ticket_create_global' %}" class="btn btn-success">
+            <a href="{% url 'projects:project_ticket_create' project.pk %}" class="btn btn-success">
                 <i class="bi bi-plus-circle"></i> 新規チケット
             </a>
         {% endif %}
@@ -86,7 +86,7 @@
                         <button type="submit" class="btn btn-primary me-2">
                             <i class="bi bi-search"></i> 検索
                         </button>
-                        <a href="{% if project %}{% url 'projects:ticket_list' project.pk %}{% else %}{% url 'projects:ticket_list' %}{% endif %}" class="btn btn-outline-secondary">
+                        <a href="{% if project %}{% url 'projects:project_ticket_list' project.pk %}{% else %}{% url 'projects:ticket_list' %}{% endif %}" class="btn btn-outline-secondary">
                             <i class="bi bi-arrow-clockwise"></i>
                         </a>
                     </div>
@@ -312,11 +312,11 @@
                             {% endif %}
                         </p>
                         {% if project %}
-                            <a href="{% url 'projects:ticket_create' project.pk %}" class="btn btn-success">
+                            <a href="{% url 'projects:project_ticket_create' project.pk %}" class="btn btn-success">
                                 <i class="bi bi-plus"></i> 最初のチケットを作成
                             </a>
                         {% else %}
-                            <a href="{% url 'projects:ticket_create_global' %}" class="btn btn-success">
+                            <a href="{% url 'projects:project_ticket_create' project.pk %}" class="btn btn-success">
                                 <i class="bi bi-plus"></i> 新規チケット作成
                             </a>
                         {% endif %}

@@ -20,15 +20,9 @@
 {% block page_actions %}
 <div class="btn-toolbar mb-3">
     <div class="btn-group">
-        {% if project %}
-            <a href="{% url 'projects:project_detail' project.pk %}" class="btn btn-outline-secondary">
-                <i class="bi bi-arrow-left"></i> プロジェクトに戻る
-            </a>
-        {% else %}
-            <a href="{% url 'projects:ticket_list' %}" class="btn btn-outline-secondary">
-                <i class="bi bi-arrow-left"></i> チケット一覧に戻る
-            </a>
-        {% endif %}
+        <a href="{% url 'projects:project_ticket_list' project.pk %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> チケット一覧に戻る
+        </a>
     </div>
 </div>
 {% endblock %}
@@ -247,7 +241,7 @@
                                 <i class="bi bi-x-circle"></i> キャンセル
                             </a>
                         {% else %}
-                            <a href="{% url 'projects:ticket_list' %}" class="btn btn-outline-secondary">
+                            <a href="{% url 'projects:project_ticket_list' project.pk %}" class="btn btn-outline-secondary">
                                 <i class="bi bi-x-circle"></i> キャンセル
                             </a>
                         {% endif %}
