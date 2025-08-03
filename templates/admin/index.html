@@ -1,0 +1,158 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    /* シンプルな統計カード */
+    .stats-overview {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-bottom: 30px;
+        padding: 20px 0;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .stat-item {
+        text-align: center;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 4px;
+        border: 1px solid #e0e0e0;
+    }
+    
+    .stat-item h3 {
+        margin: 0 0 5px 0;
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: #417690;
+    }
+    
+    .stat-item p {
+        margin: 0;
+        font-size: 0.85rem;
+        color: #666;
+    }
+    
+    /* アプリケーション一覧 */
+    .app-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+    }
+    
+    .app-list .module {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: #fff;
+    }
+    
+    .app-list .module h2 {
+        background: #417690;
+        color: white;
+        margin: 0;
+        padding: 10px 15px;
+        font-size: 1rem;
+        font-weight: 500;
+        border-radius: 4px 4px 0 0;
+    }
+    
+    .app-list .module table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0;
+    }
+    
+    .app-list .module td {
+        padding: 8px 15px;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .app-list .module td:last-child {
+        border-bottom: none;
+    }
+    
+    .app-list .module a {
+        color: #333;
+        text-decoration: none;
+        font-size: 0.9rem;
+    }
+    
+    .app-list .module a:hover {
+        color: #417690;
+        text-decoration: underline;
+    }
+    
+    /* レスポンシブ対応 */
+    @media (max-width: 768px) {
+        .stats-overview {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .app-list {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <!-- 統計情報 -->
+    <div class="stats-overview">
+        <div class="stat-item">
+            <h3>{{ user_count|default:"0" }}</h3>
+            <p>ユーザー</p>
+        </div>
+        <div class="stat-item">
+            <h3>{{ project_count|default:"0" }}</h3>
+            <p>プロジェクト</p>
+        </div>
+        <div class="stat-item">
+            <h3>{{ ticket_count|default:"0" }}</h3>
+            <p>未完了チケット</p>
+        </div>
+        <div class="stat-item">
+            <h3>{{ workload_count|default:"0" }}</h3>
+            <p>今月の工数</p>
+        </div>
+    </div>
+
+    <!-- アプリケーション一覧 -->
+    {% if app_list %}
+        <div class="app-list">
+            {% for app in app_list %}
+                <div class="module">
+                    <h2>
+                        {% if app.app_label == 'users' %}ユーザー管理
+                        {% elif app.app_label == 'projects' %}プロジェクト管理
+                        {% elif app.app_label == 'workloads' %}工数管理
+                        {% elif app.app_label == 'cost_master' %}コスト管理
+                        {% elif app.app_label == 'reports' %}レポート
+                        {% else %}{{ app.name }}
+                        {% endif %}
+                    </h2>
+                    <table>
+                        {% for model in app.models %}
+                            <tr>
+                                <td>
+                                    {% if model.admin_url %}
+                                        <a href="{{ model.admin_url }}">{{ model.name }}</a>
+                                    {% else %}
+                                        {{ model.name }}
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div style="text-align: center; padding: 40px; color: #666;">
+            <p>管理できるデータがありません。</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

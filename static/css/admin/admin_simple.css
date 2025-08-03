@@ -1,0 +1,313 @@
+/* シンプルで機能的な Django 管理画面スタイル */
+/* 全体設定 */
+body {
+    font-family: "Roboto", "Lucida Grande", Verdana, Arial, sans-serif;
+    background-color: #f7f7f7;
+    color: #333;
+}
+
+/* ヘッダー */
+#header {
+    background: #417690;
+    color: #ffc;
+    padding: 10px 20px;
+}
+
+#branding h1 {
+    color: #ffc;
+    font-size: 18px;
+    font-weight: normal;
+    margin: 0;
+}
+
+#branding h1 a:link, #branding h1 a:visited {
+    color: #ffc;
+    text-decoration: none;
+}
+
+/* メインコンテンツ */
+#content {
+    background: #fff;
+    margin: 10px;
+    padding: 20px;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* ブレッドクラム */
+.breadcrumbs {
+    background: #79aec8;
+    color: #fff;
+    padding: 10px 20px;
+    margin: 0;
+    font-size: 11px;
+}
+
+.breadcrumbs a {
+    color: #fff;
+    text-decoration: none;
+}
+
+.breadcrumbs a:hover {
+    color: #ffc;
+}
+
+/* テーブル */
+#changelist table {
+    border-collapse: collapse;
+    width: 100%;
+    border: 1px solid #ddd;
+}
+
+#changelist table thead th {
+    background: #f6f6f6;
+    border-bottom: 1px solid #ddd;
+    font-weight: 600;
+    padding: 10px;
+    text-align: left;
+}
+
+#changelist table tbody tr {
+    border-bottom: 1px solid #eee;
+}
+
+#changelist table tbody tr:hover {
+    background: #f6f6f6;
+}
+
+#changelist table tbody td {
+    padding: 8px 10px;
+}
+
+/* ボタン */
+.default, input[type=submit].default, .submit-row input.default {
+    background: #417690;
+    border: 1px solid #2e5968;
+    color: #fff;
+    padding: 10px 15px;
+    text-decoration: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.default:hover {
+    background: #205067;
+}
+
+.addlink {
+    background: #5b80b2;
+    color: #fff;
+    padding: 3px 12px;
+    text-decoration: none;
+    border-radius: 4px;
+    font-size: 11px;
+}
+
+.addlink:hover {
+    background: #4d6ba3;
+}
+
+.changelink {
+    color: #5b80b2;
+    text-decoration: none;
+}
+
+.changelink:hover {
+    color: #036;
+}
+
+.deletelink {
+    color: #cc3434;
+    text-decoration: none;
+}
+
+.deletelink:hover {
+    color: #993333;
+}
+
+/* フォーム */
+.form-row {
+    overflow: hidden;
+    padding: 10px;
+    font-size: 13px;
+    border-bottom: 1px solid #eee;
+}
+
+.form-row:last-child {
+    border-bottom: none;
+}
+
+.form-row label {
+    font-weight: normal;
+    color: #666;
+    font-size: 12px;
+}
+
+.form-row input[type=text], .form-row input[type=password], .form-row input[type=email], .form-row input[type=url], .form-row input[type=number], .form-row textarea, .form-row select {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 5px 6px;
+    margin-top: 2px;
+}
+
+.form-row input:focus, .form-row textarea:focus, .form-row select:focus {
+    border-color: #417690;
+    outline: none;
+}
+
+/* アクション */
+.actions {
+    background: #f6f6f6;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+
+.actions select {
+    margin-right: 10px;
+}
+
+.actions label {
+    font-size: 12px;
+}
+
+/* フィルター */
+#changelist-filter {
+    background: #f6f6f6;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 15px;
+    margin-left: 20px;
+}
+
+#changelist-filter h2 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 10px;
+}
+
+#changelist-filter h3 {
+    font-weight: normal;
+    font-size: 12px;
+    margin: 10px 0 3px 0;
+}
+
+#changelist-filter a {
+    color: #5b80b2;
+    text-decoration: none;
+    font-size: 11px;
+}
+
+#changelist-filter a:hover {
+    color: #036;
+}
+
+#changelist-filter li.selected a {
+    color: #5b80b2;
+    font-weight: bold;
+}
+
+/* 検索 */
+#changelist-search input[type="text"] {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 5px;
+    margin-right: 10px;
+}
+
+#changelist-search input[type="submit"] {
+    background: #417690;
+    border: 1px solid #2e5968;
+    color: #fff;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* ページネーション */
+.paginator {
+    text-align: center;
+    border: 1px solid #ddd;
+    background: #f6f6f6;
+    overflow: hidden;
+    margin-top: 10px;
+    border-radius: 4px;
+}
+
+.paginator a, .paginator .this-page {
+    display: inline-block;
+    padding: 8px 12px;
+    text-decoration: none;
+    border-right: 1px solid #ddd;
+}
+
+.paginator a {
+    color: #5b80b2;
+}
+
+.paginator a:hover {
+    background: #e6e6e6;
+}
+
+.paginator .this-page {
+    background: #417690;
+    color: #fff;
+    font-weight: bold;
+}
+
+/* メッセージ */
+.messagelist {
+    margin: 0 0 20px 0;
+    padding: 0;
+}
+
+.messagelist li {
+    list-style: none;
+    padding: 10px 15px;
+    margin-bottom: 5px;
+    border-radius: 4px;
+}
+
+.messagelist .info {
+    background: #d9edf7;
+    border: 1px solid #bce8f1;
+    color: #31708f;
+}
+
+.messagelist .success {
+    background: #dff0d8;
+    border: 1px solid #d6e9c6;
+    color: #3c763d;
+}
+
+.messagelist .warning {
+    background: #fcf8e3;
+    border: 1px solid #faebcc;
+    color: #8a6d3b;
+}
+
+.messagelist .error {
+    background: #f2dede;
+    border: 1px solid #ebccd1;
+    color: #a94442;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+    #changelist .results {
+        overflow-x: auto;
+    }
+    
+    #changelist table {
+        min-width: 600px;
+    }
+    
+    #content {
+        margin: 5px;
+        padding: 10px;
+    }
+}

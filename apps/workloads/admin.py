@@ -1,6 +1,49 @@
 from django.contrib import admin
-from django.db.models import Sum
+from django.db.models import Sum, Count
+from datetime import datetime
 from .models import Workload
+
+# 管理画面のカスタマイズ
+admin.site.site_header = "工数管理システム"
+admin.site.site_title = "工数管理システム"
+admin.site.index_title = "システム管理"
+
+# インデックスページの統計情報を追加
+def get_admin_stats():
+    """管理画面用の統計情報を取得"""
+    from apps.users.models import CustomUser
+    from apps.projects.models import Project, ProjectTicket
+    from apps.workloads.models import WorkRecord
+    from django.utils import timezone
+    
+    current_month = timezone.now().replace(day=1)
+    
+    return {
+        'user_count': CustomUser.objects.filter(is_active=True).count(),
+        'project_count': Project.objects.filter(is_active=True).count(),
+        'ticket_count': ProjectTicket.objects.exclude(status='closed').count(),
+        'workload_count': WorkRecord.objects.filter(
+            work_date__gte=current_month
+        ).count(),
+    }
+
+# カスタムAdminSiteを作成（オプション）
+class CustomAdminSite(admin.AdminSite):
+    site_header = "工数管理システム"
+    site_title = "工数管理システム"
+    index_title = "システム管理"
+    
+    def index(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context.update(get_admin_stats())
+        return super().index(request, extra_context)
+
+# デフォルトのadmin.siteを使用する場合
+def admin_index_context(request):
+    """管理画面インデックスのコンテキストプロセッサー"""
+    if request.path.startswith('/admin/'):
+        return get_admin_stats()
+    return {}
 
 @admin.register(Workload)
 class WorkloadAdmin(admin.ModelAdmin):
@@ -132,8 +175,3 @@ class WorkloadAdmin(admin.ModelAdmin):
             'all': ('admin/css/workload_admin.css',)
         }
         js = ('admin/js/workload_admin.js',)
-
-# 管理画面のタイトルをカスタマイズ
-admin.site.site_header = "工数管理システム 管理画面"
-admin.site.site_title = "工数管理"
-admin.site.index_title = "システム管理"
