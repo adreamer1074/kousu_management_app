@@ -40,7 +40,7 @@ INSTALLED_APPS = [
     'apps.workloads',
     'apps.reports',
     'apps.cost_master',
-    # 'storages',
+    'storages',
 ]
 
 MIDDLEWARE = [
