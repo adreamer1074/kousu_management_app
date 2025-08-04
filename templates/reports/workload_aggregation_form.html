@@ -508,6 +508,11 @@
             // CSRFトークン
             csrfToken: '{{ csrf_token }}'
         };
+        // デバッグ用：編集時の初期値確認
+        console.log('=== 編集時デバッグ情報 ===');
+        console.log('編集モード: ID={{ form.instance.pk }}');
+        console.log('プロジェクト: {{ form.instance.project_name|default:"未設定" }}');
+        console.log('チケット: {{ form.instance.case_name|default:"未設定" }}');
     </script>
     <script src="{% static 'js/reports/workload_aggregation_form.js' %}"></script>
 {% endblock %}
