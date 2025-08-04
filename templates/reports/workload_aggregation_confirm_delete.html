@@ -1,0 +1,285 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}工数集計データ削除確認 | 工数管理システム{% endblock %}
+
+{% block extra_css %}
+<style>
+    .delete-warning {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .detail-card {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .detail-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #dee2e6;
+    }
+    .detail-row:last-child {
+        border-bottom: none;
+    }
+    .detail-label {
+        font-weight: bold;
+        color: #495057;
+        min-width: 200px;
+    }
+    .detail-value {
+        color: #212529;
+        text-align: right;
+    }
+    .status-badge {
+        font-size: 0.8rem;
+        padding: 0.3rem 0.6rem;
+    }
+    .number-value {
+        font-family: 'Courier New', monospace;
+        font-weight: bold;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- ページヘッダー -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="bi bi-trash text-danger"></i> 工数集計データ削除確認
+            </h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'core:home' %}">ホーム</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'reports:report_list' %}">レポート</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'reports:workload_aggregation' %}">工数集計一覧</a></li>
+                    <li class="breadcrumb-item active">削除確認</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- 削除警告 -->
+    <div class="delete-warning">
+        <div class="row align-items-center">
+            <div class="col-md-1 text-center">
+                <i class="bi bi-archive" style="font-size: 3rem;"></i> <!-- アイコン変更 -->
+            </div>
+            <div class="col-md-11">
+                <h4 class="mb-2">📁 削除の確認</h4>
+                <p class="mb-1">以下の工数集計データを削除しようとしています。</p>
+                <p class="mb-0"><strong>データは保持されますが、一覧から非表示になります。</strong></p> <!-- メッセージ変更 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 削除対象データの詳細 -->
+    <div class="detail-card">
+        <h5 class="mb-3">
+            <i class="bi bi-info-circle text-info"></i> 削除対象データの詳細
+        </h5>
+        
+        <!-- 基本情報 -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="detail-row">
+                    <span class="detail-label">プロジェクト名:</span>
+                    <span class="detail-value">{{ object.project_name.name }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">チケット名:</span>
+                    <span class="detail-value">{{ object.case_name.title }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">部署名:</span>
+                    <span class="detail-value">{{ object.section.name|default:"-" }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">ステータス:</span>
+                    <span class="detail-value">
+                        {% if object.status == 'planning' %}
+                            <span class="badge bg-secondary status-badge">{{ object.get_status_display }}</span>
+                        {% elif object.status == 'in_progress' %}
+                            <span class="badge bg-primary status-badge">{{ object.get_status_display }}</span>
+                        {% elif object.status == 'completed' %}
+                            <span class="badge bg-success status-badge">{{ object.get_status_display }}</span>
+                        {% elif object.status == 'inspection_waiting' %}
+                            <span class="badge bg-warning status-badge">{{ object.get_status_display }}</span>
+                        {% elif object.status == 'inspected' %}
+                            <span class="badge bg-info status-badge">{{ object.get_status_display }}</span>
+                        {% elif object.status == 'on_hold' %}
+                            <span class="badge bg-secondary status-badge">{{ object.get_status_display }}</span>
+                        {% else %}
+                            <span class="badge bg-danger status-badge">{{ object.get_status_display }}</span>
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">案件分類:</span>
+                    <span class="detail-value">{{ object.get_case_classification_display }}</span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="detail-row">
+                    <span class="detail-label">見積日:</span>
+                    <span class="detail-value">{{ object.estimate_date|date:"Y年m月d日"|default:"-" }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">受注日:</span>
+                    <span class="detail-value">{{ object.order_date|date:"Y年m月d日"|default:"-" }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">終了予定日:</span>
+                    <span class="detail-value">{{ object.planned_end_date|date:"Y年m月d日"|default:"-" }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">実際終了日:</span>
+                    <span class="detail-value">{{ object.actual_end_date|date:"Y年m月d日"|default:"-" }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">検収日:</span>
+                    <span class="detail-value">{{ object.inspection_date|date:"Y年m月d日"|default:"-" }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 金額情報 -->
+        <h6 class="mb-3 text-success">
+            <i class="bi bi-currency-yen"></i> 金額情報
+        </h6>
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="detail-row">
+                    <span class="detail-label">使用可能金額（税別）:</span>
+                    <span class="detail-value number-value">¥{{ object.available_amount|floatformat:0 }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">請求金額（税別）:</span>
+                    <span class="detail-value number-value">¥{{ object.billing_amount_excluding_tax|floatformat:0 }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">外注費（税別）:</span>
+                    <span class="detail-value number-value">¥{{ object.outsourcing_cost_excluding_tax|floatformat:0 }}</span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="detail-row">
+                    <span class="detail-label">残金額（税抜）:</span>
+                    <span class="detail-value number-value">¥{{ object.remaining_amount|floatformat:0 }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">利益率:</span>
+                    <span class="detail-value number-value">{{ object.profit_rate|floatformat:1 }}%</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">単価（万円/月）:</span>
+                    <span class="detail-value number-value">{{ object.unit_cost_per_month|floatformat:2 }}万円</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 工数情報 -->
+        <h6 class="mb-3 text-primary">
+            <i class="bi bi-clock"></i> 工数情報
+        </h6>
+        <div class="row">
+            <div class="col-md-6">
+                <div class="detail-row">
+                    <span class="detail-label">見積工数（人日）:</span>
+                    <span class="detail-value number-value">{{ object.estimated_workdays|floatformat:1 }}人日</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">使用工数（人日）:</span>
+                    <span class="detail-value number-value">{{ object.used_workdays|floatformat:1 }}人日</span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="detail-row">
+                    <span class="detail-label">新入社員工数（人日）:</span>
+                    <span class="detail-value number-value">{{ object.newbie_workdays|floatformat:1 }}人日</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">残工数（人日）:</span>
+                    <span class="detail-value number-value">{{ object.remaining_workdays|floatformat:1 }}人日</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 削除確認フォーム -->
+    <div class="card border-danger">
+        <div class="card-header bg-danger text-white">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-exclamation-triangle"></i> 削除の実行
+            </h5>
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="alert alert-danger" role="alert">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>注意:</strong> 本当にこの工数集計データを削除してもよろしいですか？
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <a href="{% url 'reports:workload_aggregation_detail' object.pk %}" 
+                           class="btn btn-secondary me-2">
+                            <i class="bi bi-arrow-left"></i> キャンセル
+                        </a>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-trash"></i> 削除する
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 関連データの警告（もしあれば） -->
+    <div class="card border-warning mt-3">
+        <div class="card-header bg-warning text-dark">
+            <h6 class="card-title mb-0">
+                <i class="bi bi-info-circle"></i> 削除による影響
+            </h6>
+        </div>
+        <div class="card-body">
+            <ul class="mb-0">
+                <li>この工数集計データが一覧から非表示になります</li>
+                <li>データは保持されており、開発者により復元可能です</li> 
+                <li>関連するレポートからこのデータが除外されます</li>
+                <li>統計情報が再計算されます</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 削除確認の二重チェック
+document.querySelector('form').addEventListener('submit', function(e) {
+    const confirmed = confirm('最終確認: 本当にこの工数集計データを削除しますか？\n\nこの操作は取り消すことができません。');
+    if (!confirmed) {
+        e.preventDefault();
+        return false;
+    }
+    
+    // 削除ボタンを無効化して重複送信を防ぐ
+    const deleteButton = document.querySelector('button[type="submit"]');
+    deleteButton.disabled = true;
+    deleteButton.innerHTML = '<i class="bi bi-hourglass-split"></i> 削除中...';
+    
+    return true;
+});
+
+</script>
+{% endblock %}

@@ -2,8 +2,15 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator, MaxValueValidator
 from decimal import Decimal
+from django.utils import timezone
 
 User = get_user_model()
+
+class ActiveWorkloadManager(models.Manager):
+    """アクティブ（削除されていない）データのみを取得するマネージャー"""
+    
+    def get_queryset(self):
+        return super().get_queryset().filter(del_flag=False)
 
 class WorkloadAggregation(models.Model):
     """工数集計一覧テーブル"""
@@ -155,10 +162,15 @@ class WorkloadAggregation(models.Model):
         verbose_name='作成者'
     )
     
+    # 論理削除用フィールドを追加
+    del_flag = models.BooleanField(default=False, verbose_name='削除フラグ')
+    deleted_at = models.DateTimeField(null=True, blank=True, verbose_name='削除日時')
+    
     class Meta:
         verbose_name = '工数集計'
         verbose_name_plural = '工数集計'
         ordering = ['-order_date', '-created_at']
+        db_table = "reports_workloadaggregation"
     
     def __str__(self):
         return f"{self.project_name.name} - {self.case_name.title}"
@@ -325,6 +337,29 @@ class WorkloadAggregation(models.Model):
     def tax_excluded_billing_amount(self):
         """税抜請求金額（表示用）"""
         return self.billing_amount_excluding_tax
+    
+    # カスタムマネージャーを追加
+    objects = models.Manager()  # デフォルトマネージャー（削除済み含む）
+    active_objects = ActiveWorkloadManager()  # アクティブなデータのみ
+    
+    def soft_delete(self):
+        """論理削除"""
+        print(f"論理削除実行: ID={self.id}")  # デバッグ用
+        self.del_flag = True
+        self.deleted_at = timezone.now()
+        self.save(update_fields=['del_flag', 'deleted_at'])
+        print(f"削除フラグ設定完了: del_flag={self.del_flag}")  # デバッグ用
+    
+    def restore(self):
+        """削除を復元"""
+        self.del_flag = False
+        self.deleted_at = None
+        self.save(update_fields=['del_flag', 'deleted_at'])
+    
+    @property
+    def is_deleted(self):
+        """削除済みかどうか"""
+        return self.del_flag
 
 
 class ReportExport(models.Model):

@@ -34,13 +34,13 @@ def admin_dashboard(request):
         total_workload_entries = workload_count + aggregation_count
         
         # 進行中チケット数
-        active_tickets_count = WorkloadAggregation.objects.filter(
+        active_tickets_count = WorkloadAggregation.active_objects.filter(
             status__in=['planning', 'in_progress'],
             case_name__isnull=False
         ).count()
         
         # 期限超過チケット数
-        overdue_tickets_count = WorkloadAggregation.objects.filter(
+        overdue_tickets_count = WorkloadAggregation.active_objects.filter(
             planned_end_date__lt=now.date(),
             status__in=['planning', 'in_progress'],
             case_name__isnull=False
@@ -50,7 +50,7 @@ def admin_dashboard(request):
         print("=== 収益統計計算開始 ===")
         
         # WorkloadAggregationから収益データを取得
-        revenue_query = WorkloadAggregation.objects.all()
+        revenue_query = WorkloadAggregation.active_objects.all()
         print(f"総レコード数: {revenue_query.count()}")
         
         # 各項目の合計を個別に計算
@@ -78,7 +78,7 @@ def admin_dashboard(request):
         
         # === 今月の工数統計 ===
         # 今月の工数集計データ
-        this_month_aggregation = WorkloadAggregation.objects.filter(
+        this_month_aggregation = WorkloadAggregation.active_objects.filter(
             created_at__gte=first_day_of_month
         ).aggregate(
             total_workdays=Sum('used_workdays'),
@@ -114,7 +114,7 @@ def admin_dashboard(request):
         
         # === 前月比較 ===
         # 前月の工数集計データ
-        last_month_aggregation = WorkloadAggregation.objects.filter(
+        last_month_aggregation = WorkloadAggregation.active_objects.filter(
             created_at__gte=last_month_first_day,
             created_at__lte=last_month_last_day
         ).aggregate(
@@ -149,7 +149,7 @@ def admin_dashboard(request):
         ticket_status_stats = []
         
         # case_nameがあるもので、ステータス別に集計
-        status_query = WorkloadAggregation.objects.filter(
+        status_query = WorkloadAggregation.active_objects.filter(
             case_name__isnull=False
         )
         
@@ -202,7 +202,7 @@ def admin_dashboard(request):
                     display_name = status_display_names[status_value]
                 else:
                     # サンプルインスタンスから取得を試行
-                    sample_instance = WorkloadAggregation.objects.filter(
+                    sample_instance = WorkloadAggregation.active_objects.filter(
                         status=status_value
                     ).first()
                     
@@ -227,7 +227,7 @@ def admin_dashboard(request):
         recent_workload_entries = []
         
         # 工数集計データから最近の登録を取得
-        recent_aggregations = WorkloadAggregation.objects.select_related(
+        recent_aggregations = WorkloadAggregation.active_objects.select_related(
             'case_name'
         ).order_by('-created_at')[:5]
         
@@ -246,7 +246,7 @@ def admin_dashboard(request):
         
         # 期限超過チケット
         try:
-            overdue_tickets = WorkloadAggregation.objects.filter(
+            overdue_tickets = WorkloadAggregation.active_objects.filter(
                 planned_end_date__lt=now.date(),
                 status__in=['planning', 'in_progress'],
                 case_name__isnull=False
@@ -276,7 +276,7 @@ def admin_dashboard(request):
         
         # 締切間近のチケット（3日以内）
         try:
-            upcoming_deadline_tickets = WorkloadAggregation.objects.filter(
+            upcoming_deadline_tickets = WorkloadAggregation.active_objects.filter(
                 planned_end_date__gte=now.date(),
                 planned_end_date__lte=now.date() + timedelta(days=3),
                 status__in=['planning', 'in_progress'],

@@ -30,7 +30,7 @@ from django.views.generic import (
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.urls import reverse_lazy
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseRedirect
 from django.db.models import Q, Sum, Avg, Count
 from django.utils import timezone
 from django.conf import settings
@@ -61,7 +61,7 @@ class WorkloadAggregationListView(LeaderOrSuperuserRequiredMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        queryset = WorkloadAggregation.objects.select_related(
+        queryset = WorkloadAggregation.active_objects.select_related(
             'case_name', 'section', 'mub_manager', 'created_by'
         ).order_by('-order_date', '-created_at')
         
@@ -179,9 +179,36 @@ class WorkloadAggregationDeleteView(LeaderOrSuperuserRequiredMixin, DeleteView):
     template_name = 'reports/workload_aggregation_confirm_delete.html'
     success_url = reverse_lazy('reports:workload_aggregation')
     
+    def get_queryset(self):
+        """削除されていないデータのみを対象"""
+        return WorkloadAggregation.active_objects.all()
+    
+    def post(self, request, *args, **kwargs):
+        """POSTリクエストでの削除処理"""     
+        return self.delete(request, *args, **kwargs)
+    
     def delete(self, request, *args, **kwargs):
-        messages.success(request, '工数集計データを削除しました。')
-        return super().delete(request, *args, **kwargs)
+        """論理削除を実行"""
+        self.object = self.get_object()
+        success_url = self.get_success_url()
+        
+        # 削除前の情報をメッセージに記録
+        project_name = self.object.project_name
+        case_name = self.object.case_name.title if self.object.case_name else "N/A"
+        object_id = self.object.id
+        # 論理削除実行
+        self.object.soft_delete()
+
+        # 削除後の状態確認
+        self.object.refresh_from_db()
+        print(f"削除後の状態: del_flag={self.object.del_flag}, deleted_at={self.object.deleted_at}")  # デバッグ用
+        
+        # 成功メッセージ
+        messages.success(
+            request, 
+            f'工数集計データ「{project_name} - {case_name}」を削除しました。'
+        )
+        return HttpResponseRedirect(success_url)
 
 @login_required
 @leader_or_superuser_required_403
@@ -207,7 +234,7 @@ def workload_export(request):
     ])
     
     # フィルター適用
-    queryset = WorkloadAggregation.objects.select_related(
+    queryset = WorkloadAggregation.active_objects.select_related(
         'case_name', 'section', 'mub_manager'
     ).order_by('-order_date')
     
@@ -473,7 +500,7 @@ def workload_export_current(request):
             filters[key] = value
     
     # データセットを取得
-    queryset = WorkloadAggregation.objects.select_related(
+    queryset = WorkloadAggregation.active_objects.select_related(
         'case_name', 'section', 'mub_manager'
     )
     
@@ -772,7 +799,7 @@ def export_report_with_history(request):
         if value:
             filters[key] = value
 
-    queryset = WorkloadAggregation.objects.select_related(
+    queryset = WorkloadAggregation.active_objects.select_related(
         'case_name', 'section', 'mub_manager'
     )
     # フィルター適用
@@ -1484,7 +1511,7 @@ def bulk_update_work_hours(request):
         from apps.workloads.models import Workload
         
         # フィルター条件を適用
-        queryset = WorkloadAggregation.objects.all()
+        queryset = WorkloadAggregation.active_objects.all()
         
         # フィルター適用
         if filter_params.get('project_name'):
