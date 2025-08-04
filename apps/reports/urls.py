@@ -24,4 +24,9 @@ urlpatterns = [
     
     # AJAX工数計算
     path('calculate-workdays/', views.calculate_workdays_ajax, name='calculate_workdays_ajax'),
+
+    # 工数一括更新用URL
+    path('workload-aggregation/bulk-update-work-hours/', 
+         views.bulk_update_work_hours, 
+         name='bulk_update_work_hours'),
 ]

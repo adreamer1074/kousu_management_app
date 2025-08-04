@@ -211,6 +211,10 @@
             <h5 class="card-title mb-0">
                 <i class="bi bi-table"></i> 工数集計一覧
                 <span class="badge bg-primary ms-2">{{ page_obj.paginator.count }}件</span>
+                <!-- 工数更新ボタンを追加 -->
+                <button type="button" class="btn btn-warning me-2" style="float: right;" onclick="updateAllWorkHours()">
+                    <i class="bi bi-arrow-clockwise"></i> 工数更新
+                </button>
             </h5>
         </div>
         <div class="card-body p-0">
@@ -556,6 +560,55 @@ function exportProfessional(reportType) {
     document.body.appendChild(form);
     form.submit();
     document.body.removeChild(form);
+}
+
+// 工数更新機能
+function updateAllWorkHours() {
+    if (!confirm('現在表示されている全ての工数集計レコードの工数を更新しますか？\nこの処理には時間がかかる場合があります。')) {
+        return;
+    }
+    
+    // ローディング表示
+    const updateButton = document.querySelector('button[onclick="updateAllWorkHours()"]');
+    const originalText = updateButton.innerHTML;
+    updateButton.innerHTML = '<i class="bi bi-hourglass-split"></i> 更新中...';
+    updateButton.disabled = true;
+    
+    // 現在のフィルター条件を含めてAPIを呼び出し
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryString = urlParams.toString();
+    const apiUrl = '{% url "reports:bulk_update_work_hours" %}' + (queryString ? '?' + queryString : '');
+    
+    fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+            'action': 'update_work_hours',
+            'filter_params': Object.fromEntries(urlParams)
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`${data.updated_count}件の工数集計を更新しました。`);
+            // ページをリロードして最新データを表示
+            window.location.reload();
+        } else {
+            alert('工数更新に失敗しました: ' + (data.error || '不明なエラー'));
+        }
+    })
+    .catch(error => {
+        console.error('工数更新エラー:', error);
+        alert('工数更新中にエラーが発生しました。');
+    })
+    .finally(() => {
+        // ボタンを元に戻す
+        updateButton.innerHTML = originalText;
+        updateButton.disabled = false;
+    });
 }
 </script>
 {% endblock %}

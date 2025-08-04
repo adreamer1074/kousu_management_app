@@ -1241,7 +1241,8 @@ def _generate_executive_summary(queryset, styles, filters):
         status_table = Table(status_data, colWidths=[100, 80, 100])
         status_table.setStyle(TableStyle([
             ('FONTNAME', (0, 0), (-1, -1), 'IPAexGothic'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#34495e")),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -1285,7 +1286,8 @@ def _generate_detailed_analysis(queryset, styles, filters):
         section_table = Table(section_data, colWidths=[80, 60, 80, 60, 60])
         section_table.setStyle(TableStyle([
             ('FONTNAME', (0, 0), (-1, -1), 'IPAexGothic'),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#27ae60")),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -1454,7 +1456,7 @@ def _generate_project_portfolio(queryset, styles, filters):
         class_table = Table(class_data, colWidths=[80, 60, 80, 60])
         class_table.setStyle(TableStyle([
             ('FONTNAME', (0, 0), (-1, -1), 'IPAexGothic'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#16a085")),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -1464,3 +1466,161 @@ def _generate_project_portfolio(queryset, styles, filters):
         elements.append(class_table)
     
     return elements
+
+@login_required
+@require_http_methods(["POST"])
+def bulk_update_work_hours(request):
+    """工数集計の一括工数更新（Workloadモデル対応版）"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        logger.info(f"工数一括更新開始 - ユーザー: {request.user}")
+        
+        data = json.loads(request.body)
+        filter_params = data.get('filter_params', {})
+        
+        from .models import WorkloadAggregation
+        from apps.workloads.models import Workload
+        
+        # フィルター条件を適用
+        queryset = WorkloadAggregation.objects.all()
+        
+        # フィルター適用
+        if filter_params.get('project_name'):
+            queryset = queryset.filter(project_name_id=filter_params['project_name'])
+        
+        if filter_params.get('case_name'):
+            queryset = queryset.filter(case_name_id=filter_params['case_name'])
+        
+        if filter_params.get('status'):
+            queryset = queryset.filter(status=filter_params['status'])
+        
+        if filter_params.get('case_classification'):
+            queryset = queryset.filter(case_classification=filter_params['case_classification'])
+        
+        if filter_params.get('search'):
+            search_term = filter_params['search']
+            queryset = queryset.filter(
+                Q(project_name__name__icontains=search_term) |
+                Q(case_name__title__icontains=search_term) |
+                Q(billing_destination__icontains=search_term)
+            )
+        
+        logger.info(f"対象レコード数: {queryset.count()}件")
+        
+        updated_count = 0
+        error_count = 0
+        
+        for aggregation_record in queryset:
+            try:
+                if aggregation_record.case_name:
+                    # Workloadモデルから該当チケットの工数を取得
+                    workload_qs = Workload.objects.filter(
+                        ticket=aggregation_record.case_name
+                    )
+                    
+                    # 期間フィルターを適用（年月ベースで）
+                    if aggregation_record.order_date and aggregation_record.actual_end_date:
+                        # 開始日と終了日から対象年月を計算
+                        start_date = aggregation_record.order_date
+                        end_date = aggregation_record.actual_end_date
+                        
+                        # 対象年月のリストを作成
+                        target_year_months = []
+                        current_date = start_date.replace(day=1)
+                        
+                        while current_date <= end_date:
+                            year_month = current_date.strftime('%Y-%m')
+                            target_year_months.append(year_month)
+                            
+                            # 次の月へ
+                            if current_date.month == 12:
+                                current_date = current_date.replace(year=current_date.year + 1, month=1)
+                            else:
+                                current_date = current_date.replace(month=current_date.month + 1)
+                        
+                        if target_year_months:
+                            workload_qs = workload_qs.filter(year_month__in=target_year_months)
+                    
+                    # 工数を計算
+                    total_used_workdays = 0
+                    total_newbie_workdays = 0
+                    
+                    for workload in workload_qs:
+                        try:
+                            # 期間内の日付のみを対象とする場合の詳細計算
+                            if aggregation_record.order_date and aggregation_record.actual_end_date:
+                                # 該当年月の日数を計算
+                                year, month = map(int, workload.year_month.split('-'))
+                                
+                                # 期間内の開始日と終了日を計算
+                                period_start = max(
+                                    aggregation_record.order_date,
+                                    datetime(year, month, 1).date()
+                                )
+                                
+                                # その月の最終日を取得
+                                last_day = calendar.monthrange(year, month)[1]
+                                period_end = min(
+                                    aggregation_record.actual_end_date,
+                                    datetime(year, month, last_day).date()
+                                )
+                                
+                                # 期間内の日付の工数のみを合計
+                                month_hours = 0
+                                for day in range(period_start.day, period_end.day + 1):
+                                    if day <= last_day:
+                                        day_hours = workload.get_day_value(day)
+                                        month_hours += day_hours
+                                
+                            else:
+                                # 期間指定がない場合は月全体の工数
+                                month_hours = workload.total_hours
+                            
+                            workdays = month_hours / 8  # 8時間=1人日
+                            
+                            # 新入社員判定
+                            if hasattr(workload.user, 'is_newbie') and workload.user.is_newbie:
+                                total_newbie_workdays += workdays
+                            else:
+                                total_used_workdays += workdays
+                                
+                        except Exception as calc_error:
+                            logger.warning(f"工数計算エラー (WorkloadID: {workload.id}): {calc_error}")
+                            continue
+                    
+                    # 集計レコードを更新
+                    aggregation_record.used_workdays = total_used_workdays
+                    aggregation_record.newbie_workdays = total_newbie_workdays
+                    aggregation_record.updated_at = timezone.now()
+                    aggregation_record.save()
+                    
+                    updated_count += 1
+                    logger.info(f"更新完了: ID={aggregation_record.id}, チケット={aggregation_record.case_name.title}, 使用工数={total_used_workdays:.1f}, 新入社員工数={total_newbie_workdays:.1f}")
+                    
+                else:
+                    logger.warning(f"チケットが設定されていません: ID={aggregation_record.id}")
+                    error_count += 1
+                    
+            except Exception as e:
+                logger.error(f"工数更新エラー (ID: {aggregation_record.id}): {str(e)}")
+                error_count += 1
+                continue
+        
+        logger.info(f"工数一括更新完了 - 更新: {updated_count}件, エラー: {error_count}件")
+        
+        return JsonResponse({
+            'success': True,
+            'updated_count': updated_count,
+            'error_count': error_count,
+            'message': f'{updated_count}件の工数を更新しました。' + 
+                      (f' ({error_count}件でエラーが発生)' if error_count > 0 else '')
+        })
+        
+    except Exception as e:
+        logger.error(f"工数一括更新エラー: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })
