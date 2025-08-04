@@ -73,9 +73,9 @@ class ProjectDetailView(LeaderOrSuperuserRequiredMixin, DetailView):
         
         # プロジェクトに関連するチケット一覧を取得
         tickets = self.object.tickets.select_related('assigned_user').order_by('-created_at')
-        # tickets = self.object.tickets.filter(
-        #     is_active=True
-        # ).select_related('assigned_user').order_by('-created_at')
+        tickets = self.object.tickets.filter(
+            is_active=True
+        ).select_related('assigned_user').order_by('-created_at')
         
         context['tickets'] = tickets
         
@@ -149,9 +149,9 @@ class TicketListView(LeaderOrSuperuserRequiredMixin, ListView):
         queryset = ProjectTicket.objects.select_related(
             'project', 'assigned_user', 'project__assigned_section'
         )
-        # queryset = ProjectTicket.objects.select_related(
-        #     'project', 'assigned_user', 'project__assigned_section'
-        # ).filter(is_active=True)
+        queryset = ProjectTicket.objects.select_related(
+            'project', 'assigned_user', 'project__assigned_section'
+        ).filter(is_active=True)
         
         print(f"全チケット数: {queryset.count()}")
         # print(f"アクティブチケット数: {queryset.count()}")
@@ -259,7 +259,8 @@ class TicketDetailView(LeaderOrSuperuserRequiredMixin, DetailView):
         
         # 同じプロジェクトの他のチケット（最新5件）
         context['related_tickets'] = ProjectTicket.objects.filter(
-            project=ticket.project
+            project=ticket.project,
+            is_active=True
         ).exclude(pk=ticket.pk).order_by('-created_at')[:5]
         # context['related_tickets'] = ProjectTicket.objects.filter(
         #     project=ticket.project,
@@ -363,8 +364,8 @@ class TicketDeleteView(LeaderOrSuperuserRequiredMixin, UserPassesTestMixin, Dele
         # 物理削除
         result = super().delete(request, *args, **kwargs)
         # 論理削除
-        # ticket.is_active = False
-        # ticket.save()
+        ticket.is_active = False
+        ticket.save()
         
         messages.success(request, f'チケット「{ticket_title}」を削除しました。')
         return redirect('projects:project_detail', pk=project.pk)
@@ -387,8 +388,10 @@ class ProjectTicketCreateView(LeaderOrSuperuserRequiredMixin, UserPassesTestMixi
     def get_initial(self):
         """初期値設定"""
         initial = super().get_initial()
+        initial['is_active'] = True
         project_pk = self.kwargs.get('project_pk')
         print(f"チケット作成 - project_pk: {project_pk}")
+
         
         if project_pk:
             try:
@@ -470,13 +473,13 @@ def get_project_tickets_api(request, project_id):
     """プロジェクトのチケット一覧API"""
     try:
         project = get_object_or_404(Project, pk=project_id)
-        tickets = ProjectTicket.objects.filter(
-            project=project
-        ).select_related('assigned_user')
         # tickets = ProjectTicket.objects.filter(
-        #     project=project,
-        #     is_active=True
+            # project=project
         # ).select_related('assigned_user')
+        tickets = ProjectTicket.objects.filter(
+            project=project,
+            is_active=True
+        ).select_related('assigned_user')
         
         tickets_data = []
         for ticket in tickets:
@@ -511,10 +514,10 @@ def get_project_tickets_api(request, project_id):
 def get_tickets_api(request):
     """全チケット一覧API"""
     try:
-        tickets = ProjectTicket.objects.select_related('project', 'assigned_user')
-        # tickets = ProjectTicket.objects.filter(
-        #     is_active=True
-        # ).select_related('project', 'assigned_user')
+        # tickets = ProjectTicket.objects.select_related('project', 'assigned_user')
+        tickets = ProjectTicket.objects.filter(
+            is_active=True
+        ).select_related('project', 'assigned_user')
         
         # フィルター適用
         project_id = request.GET.get('project')

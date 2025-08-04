@@ -205,6 +205,7 @@ class ProjectTicket(models.Model):
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新日時")
     is_active = models.BooleanField('アクティブ', default=True)
 
+
     # 作成者・更新者フィールドを追加
     created_by = models.ForeignKey(
         'users.CustomUser',

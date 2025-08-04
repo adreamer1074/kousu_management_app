@@ -299,7 +299,7 @@ def update_workload_ajax(request):
             })
         
         # 権限チェック（本人または管理者のみ）
-        if workload.user != request.user and not request.user.is_leader:
+        if workload.user != request.user and not request.user.is_leader and not request.user.is_superuser:
             return JsonResponse({
                 'success': False,
                 'error': '編集権限がありません。'
@@ -362,9 +362,9 @@ def bulk_update_workload_ajax(request):
                 workload = Workload.objects.get(id=workload_id)
                 
                 # 権限チェック
-                if workload.user != request.user and not request.user.is_leader:
-                    errors.append(f'工数ID {workload_id}: 編集権限がありません')
-                    continue
+                # if workload.user != request.user and not request.user.is_leader:
+                #     errors.append(f'工数ID {workload_id}: 編集権限がありません')
+                #     continue
                 
                 # 値の範囲チェック
                 value = float(value) if value else 0.0

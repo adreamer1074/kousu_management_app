@@ -90,7 +90,7 @@ class ProjectTicketForm(forms.ModelForm):
         fields = [
             'ticket_no', 'project', 'title', 'description', 
             'priority', 'status', 'case_classification', 'billing_status',
-            'assigned_user', 'due_date', 'is_active'
+            'assigned_user', 'due_date'
         ]
         # フォームのウィジェット設定(見た目や振る舞い設定)
         widgets = {
@@ -113,7 +113,7 @@ class ProjectTicketForm(forms.ModelForm):
                 'class': 'form-control', 
                 'type': 'date'
             }),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            # 'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
     
     def __init__(self, *args, **kwargs):
@@ -123,7 +123,8 @@ class ProjectTicketForm(forms.ModelForm):
         
         # プロジェクトのクエリセットを有効なもののみに絞る
         self.fields['project'].queryset = Project.objects.filter(is_active=True).order_by('name')
-        
+        self.fields['assigned_user'].queryset = User.objects.filter(is_active=True)
+        self.instance.is_active = True
         # 担当者を有効なユーザーのみに絞る
         try:
             from apps.users.models import CustomUser

@@ -165,7 +165,7 @@ class WorkloadAggregationForm(forms.ModelForm):
             # 新規作成時：プロジェクト未選択のため空
             self.fields['case_name'].queryset = ProjectTicket.objects.none()
         
-        self.fields['case_name'].empty_label = "チケット（案件）を選択してください"
+        self.fields['case_name'].empty_label = "チケットを選択してください"
         
         # チケット選択肢のwidgetにproject情報を追加
         case_name_choices = []
