@@ -125,11 +125,41 @@ class ProjectDeleteView(LeaderOrSuperuserRequiredMixin, DeleteView):
     """プロジェクト削除"""
     model = Project
     template_name = 'projects/project_delete.html'
+    context_object_name = 'object'
     success_url = reverse_lazy('projects:project_list')
+
+    def get_queryset(self):
+        return Project.objects.all()
+    
+    def post(self, request, *args, **kwargs):
+        """POSTリクエストでの削除処理"""     
+        return self.delete(request, *args, **kwargs)
     
     def delete(self, request, *args, **kwargs):
-        messages.success(request, 'プロジェクトを削除しました。')
-        return super().delete(request, *args, **kwargs)
+        """論理削除を実行"""
+        self.object = self.get_object()
+        success_url = self.get_success_url()
+        
+        # 削除前の情報を保存
+        project_name = self.object.name
+        ticket_count = self.object.tickets.filter(is_active=True).count()
+        
+        # 論理削除実行
+        self.object.soft_delete()
+        # 成功メッセージ
+        if ticket_count > 0:
+            messages.success(
+                request, 
+                f'プロジェクト「{project_name}」と関連チケット{ticket_count}件を削除しました。'
+            )
+        else:
+            messages.success(
+                request, 
+                f'プロジェクト「{project_name}」を削除しました。'
+            )
+        
+        return HttpResponseRedirect(success_url)
+  
 
 class TicketListView(LeaderOrSuperuserRequiredMixin, ListView):
     """チケット一覧ビュー（プロジェクト別・全体対応）"""

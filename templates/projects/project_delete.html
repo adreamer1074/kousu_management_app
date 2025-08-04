@@ -1,0 +1,212 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}プロジェクト削除確認 | 工数管理システム{% endblock %}
+
+{% block extra_css %}
+<style>
+    .delete-warning {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .project-info-card {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #dee2e6;
+    }
+    .info-row:last-child {
+        border-bottom: none;
+    }
+    .info-label {
+        font-weight: bold;
+        color: #495057;
+        min-width: 150px;
+    }
+    .info-value {
+        color: #212529;
+        text-align: right;
+    }
+    .status-badge {
+        font-size: 0.8rem;
+        padding: 0.3rem 0.6rem;
+    }
+    .related-data {
+        background: #fff3cd;
+        border: 1px solid #ffeeba;
+        border-radius: 5px;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- ページヘッダー -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="bi bi-trash text-danger"></i> プロジェクト削除確認
+            </h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'core:home' %}">ホーム</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'projects:project_list' %}">プロジェクト一覧</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'projects:project_detail' object.pk %}">{{ object.name }}</a></li>
+                    <li class="breadcrumb-item active">削除確認</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- 削除警告 -->
+            <div class="delete-warning">
+                <div class="row align-items-center">
+                    <div class="col-md-1 text-center">
+                        <i class="bi bi-exclamation-triangle" style="font-size: 3rem;"></i>
+                    </div>
+                    <div class="col-md-11">
+                        <h4 class="mb-2">削除の確認</h4>
+                        <p class="mb-1">以下のプロジェクトを削除しようとしています。</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- プロジェクト情報 -->
+            <div class="project-info-card">
+                <h5 class="mb-3">
+                    <i class="bi bi-info-circle text-info"></i> 削除対象プロジェクトの詳細
+                </h5>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="info-row">
+                            <span class="info-label">プロジェクト名:</span>
+                            <span class="info-value"><strong>{{ object.name }}</strong></span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">説明:</span>
+                            <span class="info-value">{{ object.description|default:"-"|truncatechars:50 }}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">ステータス:</span>
+                            <span class="info-value">
+                                {% if object.is_active %}
+                                    <span class="badge bg-success status-badge">アクティブ</span>
+                                {% else %}
+                                    <span class="badge bg-secondary status-badge">非アクティブ</span>
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="info-row">
+                            <span class="info-label">作成者:</span>
+                            <span class="info-value">{{ object.created_by.username|default:"-" }}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">作成日:</span>
+                            <span class="info-value">{{ object.created_at|date:"Y年m月d日" }}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">最終更新:</span>
+                            <span class="info-value">{{ object.updated_at|date:"Y年m月d日" }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 関連データの警告 -->
+            <div class="related-data">
+                <h6 class="mb-3">
+                    <i class="bi bi-link-45deg text-warning"></i> 関連データについて
+                </h6>
+                
+                {% if object.tickets.filter|length > 0 %}
+                <div class="mb-3">
+                    <strong>関連チケット:</strong> {{ object.tickets.filter.count }}件
+                    <br>
+                    <small class="text-muted">
+                        ※ このプロジェクトに関連するチケットも同時に非表示になります
+                    </small>
+                </div>
+                {% endif %}
+                
+                <div class="mb-2">
+                    <strong>影響範囲:</strong>
+                    <ul class="mt-2 mb-0">
+                        <li>プロジェクトが一覧から非表示になります</li>
+                        <li>関連するチケットも非表示になります</li>
+                        <li>工数集計データには影響しません</li>
+                        <li>データは保持されており、開発者により復元可能です</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 削除確認フォーム -->
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-exclamation-triangle"></i> 削除の実行
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="row">
+                            <div class="col-md-8">
+                                <p class="mb-3">
+                                    <strong>本当にこのプロジェクトを削除してもよろしいですか？</strong>
+                                </p>
+                            </div>
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <a href="{% url 'projects:project_detail' object.pk %}" 
+                                   class="btn btn-secondary me-2">
+                                    <i class="bi bi-arrow-left"></i> キャンセル
+                                </a>
+                                <button type="submit" class="btn btn-danger">
+                                    <i class="bi bi-archive"></i> 削除する
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 削除確認の二重チェック
+document.querySelector('form').addEventListener('submit', function(e) {
+    const projectName = "{{ object.name|escapejs }}";
+    const confirmed = confirm(`最終確認: プロジェクト「${projectName}」を削除しますか？\n\nプロジェクトは一覧から非表示になります。`);
+    if (!confirmed) {
+        e.preventDefault();
+        return false;
+    }
+    
+    // 削除ボタンを無効化して重複送信を防ぐ
+    const deleteButton = document.querySelector('button[type="submit"]');
+    deleteButton.disabled = true;
+    deleteButton.innerHTML = '<i class="bi bi-hourglass-split"></i> 削除中...';
+    
+    return true;
+});
+
+</script>
+{% endblock %}

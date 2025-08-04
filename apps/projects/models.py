@@ -8,6 +8,11 @@ from apps.users.models import Department
 
 User = get_user_model()
 
+class ActiveProjectManager(models.Manager):
+    """アクティブ（削除されていない）プロジェクトのみを取得するマネージャー"""
+    def get_queryset(self):
+        return super().get_queryset().filter(is_active=True)
+
 class Project(models.Model):
     """プロジェクトモデル"""
     STATUS_CHOICES = [
@@ -65,9 +70,35 @@ class Project(models.Model):
         related_name='assigned_projects',
         verbose_name="マネージャー"
     )
-    is_active = models.BooleanField(default=True, verbose_name="有効")
+    is_active = models.BooleanField(default=True, verbose_name="アクティブ")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="作成日時")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新日時")
+
+    def soft_delete(self):
+        """論理削除メソッド"""
+        from django.utils import timezone
+        self.is_active = False
+        self.updated_at = timezone.now()
+        self.save(update_fields=['is_active', 'updated_at'])
+        
+        # 関連チケットも論理削除
+        self.tickets.filter(is_active=True).update(
+            is_active=False,
+            updated_at=timezone.now()
+        )
+    
+        
+    def restore(self):
+        """削除復元メソッド"""
+        self.is_active = True
+        self.updated_at = None
+        self.save(update_fields=['is_active', 'updated_at'])
+
+        # 関連チケットも復元
+        self.tickets.filter(is_active=False).update(
+            is_active=True,
+            updated_at=None
+        )
 
     class Meta:
         verbose_name = "プロジェクト"
