@@ -1,3 +1,5 @@
+
+from django.utils import timezone
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -116,6 +118,11 @@ class Project(models.Model):
             'text': self.get_status_display(),
             'color': status_colors.get(self.status, 'secondary')
         }
+    
+class ActiveTicketManager(models.Manager):
+    """アクティブ（削除されていない）チケットのみを取得するマネージャー"""
+    def get_queryset(self):
+        return super().get_queryset().filter(is_active=True)
 
 class ProjectTicket(models.Model):
     """プロジェクトチケットモデル"""
@@ -206,6 +213,7 @@ class ProjectTicket(models.Model):
     is_active = models.BooleanField('アクティブ', default=True)
 
 
+
     # 作成者・更新者フィールドを追加
     created_by = models.ForeignKey(
         'users.CustomUser',
@@ -223,6 +231,19 @@ class ProjectTicket(models.Model):
         related_name='updated_tickets',
         verbose_name="最終更新者"
     )
+
+    def soft_delete(self):
+        """論理削除メソッド"""
+        self.is_active = False
+        self.updated = timezone.now()
+        self.save(update_fields=['is_active', 'updated_at'])
+
+    def restore(self):
+        """削除復元メソッド"""
+        self.is_active = True
+        self.updated = None
+        self.save(update_fields=['is_active', 'updated_at'])
+    
 
     class Meta:
         verbose_name = "プロジェクトチケット"

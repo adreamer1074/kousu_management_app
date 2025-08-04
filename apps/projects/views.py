@@ -6,7 +6,7 @@ from django.contrib import messages
 from datetime import date
 from django.db.models import Q
 from django.contrib.auth import get_user_model
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseRedirect
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
 from django.core.paginator import Paginator
@@ -139,7 +139,6 @@ class TicketListView(LeaderOrSuperuserRequiredMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        # デバッグ用: 全チケットを確認
         all_tickets = ProjectTicket.objects.all()
         print(f"全チケット数: {all_tickets.count()}")
         for ticket in all_tickets:
@@ -335,14 +334,15 @@ class TicketDeleteView(LeaderOrSuperuserRequiredMixin, UserPassesTestMixin, Dele
     model = ProjectTicket
     template_name = 'projects/ticket_delete.html'
     context_object_name = 'ticket'
+    success_url = reverse_lazy('projects:ticket_list')
     
-    def test_func(self):
-        """削除権限チェック"""
-        ticket = self.get_object()
-        return (
-            self.request.user.is_superuser or 
-            self.request.user.is_leader
-        )
+    def get_queryset(self):
+        # アクティブなチケットのみを対象
+        return ProjectTicket.objects.all()
+    
+    def get_success_url(self):
+        """削除後は該当プロジェクトの詳細ページに戻る"""
+        return reverse_lazy('projects:project_detail', kwargs={'pk': self.object.project.pk})
     
     def handle_no_permission(self):
         """権限がない場合の処理"""
@@ -354,22 +354,30 @@ class TicketDeleteView(LeaderOrSuperuserRequiredMixin, UserPassesTestMixin, Dele
         context['project'] = self.object.project
         return context
     
+    def post(self, request, *args, **kwargs):
+        """POSTリクエストでの削除処理"""     
+        return self.delete(request, *args, **kwargs)
+    
     def delete(self, request, *args, **kwargs):
-        """削除処理（物理削除）"""
-        # """削除処理（論理削除）"""
-        ticket = self.get_object()
-        project = ticket.project
-        ticket_title = ticket.title
+        """論理削除を実行"""
+        self.object = self.get_object()
+        success_url = self.get_success_url()
         
-        # 物理削除
-        result = super().delete(request, *args, **kwargs)
-        # 論理削除
-        ticket.is_active = False
-        ticket.save()
+        # 削除前の情報を保存
+        ticket_title = self.object.title
         
-        messages.success(request, f'チケット「{ticket_title}」を削除しました。')
-        return redirect('projects:project_detail', pk=project.pk)
-        # return result
+        # 論理削除実行
+        self.object.soft_delete()
+        
+        # 成功メッセージ
+        messages.success(
+            request, 
+            f'チケット「{ticket_title}」を削除しました。'
+        )
+        
+        return HttpResponseRedirect(success_url)
+
+
 
 class ProjectTicketCreateView(LeaderOrSuperuserRequiredMixin, UserPassesTestMixin, CreateView):
     """チケット作成ビュー"""
