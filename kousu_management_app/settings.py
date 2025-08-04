@@ -20,7 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'your-secret-key'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# DEBUG = True
+DEBUG = True
 
 ALLOWED_HOSTS = []
 
@@ -153,10 +153,19 @@ FONT_PATH = os.path.join(BASE_DIR, 'apps', 'reports', 'fonts', 'ipaexg.ttf')
 
 # 静的ファイルの設定
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
+if DEBUG:
+    STATICFILES_DIRS = [
+        os.path.join(BASE_DIR, 'static'),
+    ]
+else:
+    # 本番環境用
+    STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# 静的ファイルファインダー（追加）
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
 ]
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # メディアファイル設定
 MEDIA_URL = '/media/'
