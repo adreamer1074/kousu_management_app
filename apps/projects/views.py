@@ -552,15 +552,15 @@ def get_project_tickets_api(request, project_id):
 def get_tickets_api(request):
     """全チケット一覧API"""
     try:
-        # tickets = ProjectTicket.objects.select_related('project', 'assigned_user')
         tickets = ProjectTicket.objects.filter(
             is_active=True
         ).select_related('project', 'assigned_user')
         
-        # フィルター適用
-        project_id = request.GET.get('project')
+        # フィルター適用 - パラメータ名を統一
+        project_id = request.GET.get('project_id')  # ← ここを修正：'project' から 'project_id' に変更
         if project_id:
             tickets = tickets.filter(project_id=project_id)
+            print(f"プロジェクトID {project_id} でフィルタリング: {tickets.count()}件")  # デバッグ用
         
         status = request.GET.get('status')
         if status:
@@ -585,7 +585,11 @@ def get_tickets_api(request):
                 'assigned_user': ticket.assigned_user.get_full_name() if ticket.assigned_user else '',
                 'due_date': ticket.due_date.isoformat() if ticket.due_date else None,
                 'created_at': ticket.created_at.isoformat(),
+                # 工数集計フォーム用のフィールドを追加
+                'case_classification': getattr(ticket, 'case_classification', ''),  # チケットに案件分類があれば
             })
+        
+        print(f"最終的に返すチケット数: {len(tickets_data)}件")  # デバッグ用
         
         return JsonResponse({
             'success': True,
@@ -594,6 +598,7 @@ def get_tickets_api(request):
         })
         
     except Exception as e:
+        print(f"チケット取得API エラー: {str(e)}")  # デバッグ用
         return JsonResponse({
             'success': False,
             'error': str(e)
