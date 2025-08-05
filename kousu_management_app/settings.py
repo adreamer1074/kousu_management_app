@@ -153,19 +153,20 @@ FONT_PATH = os.path.join(BASE_DIR, 'apps', 'reports', 'fonts', 'ipaexg.ttf')
 
 # 静的ファイルの設定
 STATIC_URL = '/static/'
-if DEBUG:
-    STATICFILES_DIRS = [
-        os.path.join(BASE_DIR, 'static'),
-    ]
-else:
-    # 本番環境用
-    STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+# 開発環境での静的ファイルディレクトリ
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',  # プロジェクトルートのstaticディレクトリ
+]
 
-# 静的ファイルファインダー（追加）
+# 本番環境での静的ファイル収集先
+STATIC_ROOT = BASE_DIR / 'staticfiles'  # collectstaticで収集される場所
+
+# 静的ファイルファインダー
 STATICFILES_FINDERS = [
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
 ]
+
 
 # メディアファイル設定
 MEDIA_URL = '/media/'
