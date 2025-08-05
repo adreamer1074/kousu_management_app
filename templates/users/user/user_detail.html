@@ -72,10 +72,10 @@
                                         {% endif %}
                                     </dd>
                                     
-                                    <dt class="col-sm-4">部署:</dt>
+                                    <dt class="col-sm-4">所属:</dt>
                                     <dd class="col-sm-8">
-                                        {% if user_obj.department %}
-                                            <span class="badge bg-info">{{ user_obj.department.name }}</span>
+                                        {% if user_obj.section %}
+                                            <span class="badge bg-info">{{ user_obj.department.name }} - {{ user_obj.section.name }}</span>
                                         {% else %}
                                             <span class="text-muted">未設定</span>
                                         {% endif %}
