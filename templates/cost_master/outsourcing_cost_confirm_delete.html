@@ -1,0 +1,279 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}外注費削除確認 | 工数管理システム{% endblock %}
+
+{% block extra_css %}
+<style>
+    .delete-warning {
+        background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+    
+    .info-card {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        border: 2px solid #dee2e6;
+    }
+    
+    .detail-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .detail-row:last-child {
+        border-bottom: none;
+    }
+    
+    .detail-label {
+        font-weight: 600;
+        color: #495057;
+        min-width: 150px;
+    }
+    
+    .detail-value {
+        color: #212529;
+        font-weight: 500;
+    }
+    
+    .amount-highlight {
+        font-size: 1.25rem;
+        color: #dc3545;
+        font-weight: bold;
+    }
+    
+    .btn-danger-custom {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        border: none;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+    }
+    
+    .btn-secondary-custom {
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- ページヘッダー -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="bi bi-exclamation-triangle text-danger"></i> 外注費削除確認
+            </h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'core:home' %}">ホーム</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'cost_master:outsourcing_cost_list' %}">外注費管理</a></li>
+                    <li class="breadcrumb-item active">削除確認</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- 削除警告 -->
+    <div class="delete-warning">
+        <i class="bi bi-exclamation-triangle" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+        <h4>削除の確認</h4>
+        <p class="mb-0">
+            以下の外注費データを削除しようとしています。<br>
+            <strong>この操作は取り消すことができません。</strong>
+        </p>
+    </div>
+
+    <!-- 削除対象の詳細情報 -->
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="info-card">
+                <h5 class="text-center mb-4">
+                    <i class="bi bi-info-circle text-info"></i> 削除対象の外注費情報
+                </h5>
+                
+                <div class="detail-row">
+                    <span class="detail-label">
+                        <i class="bi bi-calendar-event"></i> 対象年月:
+                    </span>
+                    <span class="detail-value">{{ object.year_month }}</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">
+                        <i class="bi bi-ticket"></i> チケット:
+                    </span>
+                    <span class="detail-value">
+                        {% if object.ticket %}
+                            {{ object.ticket.title }}
+                        {% else %}
+                            <span class="text-muted">未設定</span>
+                        {% endif %}
+                    </span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">
+                        <i class="bi bi-diagram-3"></i> プロジェクト:
+                    </span>
+                    <span class="detail-value">
+                        {% if object.project %}
+                            {{ object.project.name }}
+                        {% else %}
+                            <span class="text-muted">未設定</span>
+                        {% endif %}
+                    </span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">
+                        <i class="bi bi-building"></i> 外注先:
+                    </span>
+                    <span class="detail-value">
+                        {% if object.business_partner %}
+                            {{ object.business_partner.name }}
+                        {% else %}
+                            <span class="text-muted">未設定</span>
+                        {% endif %}
+                    </span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">
+                        <i class="bi bi-clock"></i> 作業時間:
+                    </span>
+                    <span class="detail-value">{{ object.work_hours|floatformat:1 }} 時間</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">
+                        <i class="bi bi-cash"></i> 時間単価:
+                    </span>
+                    <span class="detail-value">¥{{ object.hourly_rate|floatformat:0|default:"-" }}</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">
+                        <i class="bi bi-currency-yen"></i> 総コスト:
+                    </span>
+                    <span class="detail-value amount-highlight">¥{{ object.total_cost|floatformat:0 }}</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">
+                        <i class="bi bi-list-ul"></i> 案件分類:
+                    </span>
+                    <span class="detail-value">{{ object.get_case_classification_display }}</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">
+                        <i class="bi bi-check-circle"></i> ステータス:
+                    </span>
+                    <span class="detail-value">
+                        {% if object.status == 'draft' %}
+                            <span class="badge bg-secondary">{{ object.get_status_display }}</span>
+                        {% elif object.status == 'approved' %}
+                            <span class="badge bg-success">{{ object.get_status_display }}</span>
+                        {% elif object.status == 'rejected' %}
+                            <span class="badge bg-danger">{{ object.get_status_display }}</span>
+                        {% else %}
+                            <span class="badge bg-warning">{{ object.get_status_display }}</span>
+                        {% endif %}
+                    </span>
+                </div>
+                
+                {% if object.notes %}
+                <div class="detail-row">
+                    <span class="detail-label">
+                        <i class="bi bi-journal-text"></i> 備考:
+                    </span>
+                    <span class="detail-value">{{ object.notes|truncatewords:20 }}</span>
+                </div>
+                {% endif %}
+                
+                <div class="detail-row">
+                    <span class="detail-label">
+                        <i class="bi bi-person"></i> 作成者:
+                    </span>
+                    <span class="detail-value">
+                        {{ object.created_by.get_full_name|default:object.created_by.username }}
+                    </span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">
+                        <i class="bi bi-calendar"></i> 作成日時:
+                    </span>
+                    <span class="detail-value">{{ object.created_at|date:"Y年m月d日 H:i" }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 確認・キャンセルボタン -->
+    <div class="row">
+        <div class="col-md-6 mx-auto">
+            <div class="text-center">
+                <form method="post" class="d-inline-block me-3">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger btn-danger-custom">
+                        <i class="bi bi-trash-fill"></i> 削除実行
+                    </button>
+                </form>
+                
+                <a href="{% url 'cost_master:outsourcing_cost_list' %}" 
+                   class="btn btn-secondary btn-secondary-custom">
+                    <i class="bi bi-arrow-left"></i> キャンセル
+                </a>
+            </div>
+            
+            <div class="text-center mt-3">
+                <small class="text-muted">
+                    <i class="bi bi-info-circle"></i> 
+                    削除されたデータは論理削除され、システム管理者により復元可能です
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 削除確認のダブルチェック
+    const deleteForm = document.querySelector('form[method="post"]');
+    if (deleteForm) {
+        deleteForm.addEventListener('submit', function(e) {
+            const confirmMessage = `本当に削除してもよろしいですか？\n\n` +
+                                 `対象年月: {{ object.year_month }}\n` +
+                                 `総コスト: ¥{{ object.total_cost|floatformat:0 }}\n` +
+                                 `外注先: {% if object.business_partner %}{{ object.business_partner.name }}{% else %}未設定{% endif %}\n\n` +
+                                 `この操作は取り消すことができません。`;
+            
+            if (!confirm(confirmMessage)) {
+                e.preventDefault();
+                return false;
+            }
+        });
+    }
+    
+    // ESCキーでキャンセル
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            window.location.href = '{% url "cost_master:outsourcing_cost_list" %}';
+        }
+    });
+});
+</script>
+{% endblock %}
