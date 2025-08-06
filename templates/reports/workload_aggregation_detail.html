@@ -336,25 +336,7 @@
                         <span class="fw-bold">{{ object.remaining_workdays|floatformat:1 }}人日</span>
                     </div>
                 </div>
-                
-                <!-- 進捗バー -->
-                <div class="workload-progress">
-                    {% if object.estimated_workdays > 0 %}
-                        {% widthratio object.used_workdays object.estimated_workdays 100 as progress_percent %}
-                        <div class="workload-progress-bar {% if progress_percent > 100 %}over-budget{% endif %}" 
-                             style="width: {% if progress_percent > 100 %}100{% else %}{{ progress_percent }}{% endif %}%">
-                        </div>
-                    {% endif %}
-                </div>
-                
-                <div class="mt-2 text-center">
-                    {% if object.estimated_workdays > 0 %}
-                        {% widthratio object.used_workdays object.estimated_workdays 100 as progress_percent %}
-                        <small>進捗: {{ progress_percent }}%</small>
-                    {% else %}
-                        <small>見積工数未設定</small>
-                    {% endif %}
-                </div>
+            
             </div>
 
             <!-- 担当者情報 -->

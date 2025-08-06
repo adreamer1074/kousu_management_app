@@ -68,7 +68,8 @@ class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
         # 進行中チケット数
         active_tickets_count = WorkloadAggregation.objects.filter(
             status__in=['planning', 'in_progress'],
-            case_name__isnull=False
+            case_name__isnull=False,
+            del_flag=False
         ).count()
         
         # 期限超過チケット数

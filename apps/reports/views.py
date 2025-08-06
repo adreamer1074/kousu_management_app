@@ -61,7 +61,7 @@ class WorkloadAggregationListView(LeaderOrSuperuserRequiredMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        queryset = WorkloadAggregation.objects.select_related(
+        queryset = WorkloadAggregation.objects.filter(del_flag=False).select_related(
             'case_name', 'section', 'mub_manager', 'created_by'
         ).order_by('-order_date', '-created_at')
         

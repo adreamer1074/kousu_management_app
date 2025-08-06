@@ -27,7 +27,7 @@ class ProjectListView(LeaderOrSuperuserRequiredMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        queryset = Project.objects.select_related('assigned_section', 'assigned_section__department').filter(is_active=True)
+        queryset = Project.objects.filter(is_active=True).select_related('assigned_section', 'assigned_section__department')
         
         # 検索フィルター
         search = self.request.GET.get('search', '')
@@ -247,7 +247,7 @@ class TicketListView(LeaderOrSuperuserRequiredMixin, ListView):
         context['all_projects'] = Project.objects.filter(is_active=True).order_by('name')
         
         # 統計情報
-        tickets = self.get_queryset()
+        tickets = self.get_queryset().filter(is_active=True)
         context['total_tickets'] = tickets.count()
         
         # 今日の日付（期限判定用）
@@ -291,21 +291,6 @@ class TicketDetailView(LeaderOrSuperuserRequiredMixin, DetailView):
             project=ticket.project,
             is_active=True
         ).exclude(pk=ticket.pk).order_by('-created_at')[:5]
-        # context['related_tickets'] = ProjectTicket.objects.filter(
-        #     project=ticket.project,
-        #     is_active=True
-        # ).exclude(pk=ticket.pk).order_by('-created_at')[:5]
-        
-        # チケットの進捗率計算（ステータスベース）
-        # status_progress = {
-        #     'open': 0,
-        #     'estimate': 25,
-        #     'in_progress': 50,
-        #     'on_hold': 40,
-        #     'closed': 100,
-        # }
-        # context['progress_percentage'] = status_progress.get(ticket.status, 0)
-        
         # 編集権限チェック
         context['can_edit'] = self.request.user.is_superuser or \
                             self.request.user.is_leader or \
@@ -368,7 +353,9 @@ class TicketDeleteView(LeaderOrSuperuserRequiredMixin, UserPassesTestMixin, Dele
     
     def get_queryset(self):
         # アクティブなチケットのみを対象
-        return ProjectTicket.objects.all()
+        return ProjectTicket.objects.filter(is_active=True).select_related(
+            'project', 'assigned_user', 'project__assigned_section'
+        )
     
     def get_success_url(self):
         """削除後は該当プロジェクトの詳細ページに戻る"""

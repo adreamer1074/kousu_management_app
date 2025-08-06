@@ -59,8 +59,8 @@ class BusinessPartnerListView(LeaderOrSuperuserRequiredMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        queryset = BusinessPartner.objects.select_related().prefetch_related('projects')
-        
+        queryset = BusinessPartner.objects.filter(is_active=True).select_related().prefetch_related('projects')
+
         # 検索フィルター
         search = self.request.GET.get('search', '')
         if search:

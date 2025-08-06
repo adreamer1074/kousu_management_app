@@ -36,7 +36,8 @@ def admin_dashboard(request):
         # 進行中チケット数
         active_tickets_count = WorkloadAggregation.active_objects.filter(
             status__in=['planning', 'in_progress'],
-            case_name__isnull=False
+            case_name__isnull=False,
+            del_flag=False
         ).count()
         
         # 期限超過チケット数
@@ -324,16 +325,6 @@ def admin_dashboard(request):
         total_outsourcing_cost = 0
         gross_profit = 0
         profit_margin = 0
-    
-    # デバッグ情報をコンソールに出力
-    # print("=== ダッシュボードコンテキスト ===")
-    # print(f"総工数登録数: {total_workload_entries}")
-    # print(f"進行中チケット: {active_tickets_count}")
-    # print(f"総請求金額: ¥{total_revenue:.1f}万円")
-    # print(f"総外注費: ¥{total_outsourcing_cost:.1f}万円")
-    # print(f"粗利益: ¥{gross_profit:.1f}万円")
-    # print(f"利益率: {profit_margin:.1f}%")
-    # print(f"チケットステータス統計数: {len(ticket_status_stats)}")
     
     context = {
         'title': '管理者ダッシュボード',
