@@ -29,4 +29,9 @@ urlpatterns = [
     path('workload-aggregation/bulk-update-work-hours/', 
          views.bulk_update_work_hours, 
          name='bulk_update_work_hours'),
+    
+    # === 【追加】外注費同期専用API ===
+    path('workload-aggregation/sync-outsourcing-costs/', 
+         views.sync_outsourcing_costs, 
+         name='sync_outsourcing_costs'),
 ]

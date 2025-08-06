@@ -70,9 +70,22 @@ class OutsourcingCostAdmin(admin.ModelAdmin):
         'work_hours', 'hourly_rate_display', 'total_cost_display'
     ]
     list_filter = [
-        'year_month', 'status', 'case_classification', 
+        'is_active','year_month', 'status', 'case_classification', 
         'business_partner', 'project', 'created_at'
     ]
+    # 有効/無効の切り替えアクション
+    actions = ['make_active', 'make_inactive']
+
+    def make_active(self, request, queryset):
+        queryset.update(is_active=True)
+        self.message_user(request, f"{queryset.count()}件を有効にしました。")
+    make_active.short_description = "選択した外注費を有効にする"
+    
+    def make_inactive(self, request, queryset):
+        queryset.update(is_active=False)
+        self.message_user(request, f"{queryset.count()}件を無効にしました。")
+    make_inactive.short_description = "選択した外注費を無効にする"
+    
     search_fields = [
         'business_partner__name', 'project__name', 'ticket__title', 'notes'
     ]

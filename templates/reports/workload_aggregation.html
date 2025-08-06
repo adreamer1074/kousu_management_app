@@ -212,8 +212,8 @@
                 <i class="bi bi-table"></i> 工数集計一覧
                 <span class="badge bg-primary ms-2">{{ page_obj.paginator.count }}件</span>
                 <!-- 工数更新ボタンを追加 -->
-                <button type="button" class="btn btn-warning me-2" style="float: right;" onclick="updateAllWorkHours()">
-                    <i class="bi bi-arrow-clockwise"></i> 工数更新
+                <button type="button" class="btn btn-warning me-2" style="float: right;" onclick="updateAllData()">
+                    <i class="bi bi-arrow-clockwise"></i> 更新
                 </button>
             </h5>
         </div>
@@ -562,7 +562,6 @@ function exportProfessional(reportType) {
     document.body.removeChild(form);
 }
 
-// 工数更新機能
 function updateAllWorkHours() {
     if (!confirm('現在表示されている全ての工数集計レコードの工数を更新しますか？\nこの処理には時間がかかる場合があります。')) {
         return;
@@ -570,42 +569,261 @@ function updateAllWorkHours() {
     
     // ローディング表示
     const updateButton = document.querySelector('button[onclick="updateAllWorkHours()"]');
-    const originalText = updateButton.innerHTML;
-    updateButton.innerHTML = '<i class="bi bi-hourglass-split"></i> 更新中...';
-    updateButton.disabled = true;
+    if (updateButton) {
+        const originalText = updateButton.innerHTML;
+        updateButton.innerHTML = '<i class="bi bi-hourglass-split"></i> 更新中...';
+        updateButton.disabled = true;
+        
+        // 現在のフィルター条件を取得
+        const urlParams = new URLSearchParams(window.location.search);
+        
+        // AJAX で工数一括更新API を呼び出し
+        fetch('{% url "reports:bulk_update_work_hours" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                'action': 'update_work_hours',
+                'filter_params': Object.fromEntries(urlParams)
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 成功メッセージ
+                let message = `${data.updated_count}件の工数集計を更新しました。`;
+                if (data.error_count > 0) {
+                    message += `\n(${data.error_count}件でエラーが発生しました)`;
+                }
+                message += '\n\n計算結果を反映するためページを更新します。';
+                
+                alert(message);
+                
+                // ページリロードで確実に最新データを表示
+                console.log('工数更新完了 - ページをリロードして計算結果を反映');
+                window.location.reload();
+            } else {
+                alert('工数更新に失敗しました: ' + (data.error || '不明なエラー'));
+                // ボタンを元に戻す
+                updateButton.innerHTML = originalText;
+                updateButton.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('工数更新エラー:', error);
+            alert('工数更新中にエラーが発生しました。');
+            // ボタンを元に戻す
+            updateButton.innerHTML = originalText;
+            updateButton.disabled = false;
+        });
+    }
+}
+
+/**
+ * テーブル行のリアルタイム更新（修正版）
+ * 現在は使用しないが、将来的な拡張用として残す
+ */
+function updateTableRowsRealtime(updatedRecords) {
+    // パラメータが未定義または配列でない場合はエラー防止
+    if (!updatedRecords || !Array.isArray(updatedRecords)) {
+        console.warn('updateTableRowsRealtime: updatedRecords が未定義または配列ではありません');
+        // 代わりに工数一括更新を実行
+        updateAllWorkHours();
+        return;
+    }
     
-    // 現在のフィルター条件を含めてAPIを呼び出し
+    // 更新されたレコードでテーブルを更新
+    updatedRecords.forEach(record => {
+        const row = document.querySelector(`tr[data-id="${record.id}"]`);
+        if (row) {
+            // 使用工数合計を更新
+            const totalWorkdaysCell = row.querySelector('.total-workdays-cell');
+            if (totalWorkdaysCell) {
+                totalWorkdaysCell.textContent = record.total_used_workdays.toFixed(1);
+            }
+            
+            // 残工数を更新
+            const remainingWorkdaysCell = row.querySelector('.remaining-workdays-cell');
+            if (remainingWorkdaysCell) {
+                remainingWorkdaysCell.textContent = record.remaining_workdays.toFixed(1);
+            }
+            
+            // 利益率を更新
+            const profitRateCell = row.querySelector('.profit-rate-cell');
+            if (profitRateCell) {
+                profitRateCell.textContent = `${record.profit_rate.toFixed(1)}%`;
+            }
+            
+            // 残金額を更新
+            const remainingAmountCell = row.querySelector('.remaining-amount-cell');
+            if (remainingAmountCell) {
+                remainingAmountCell.textContent = record.remaining_amount.toLocaleString();
+            }
+            
+            // 仕掛中金額を更新
+            const wipAmountCell = row.querySelector('.wip-amount-cell');
+            if (wipAmountCell) {
+                wipAmountCell.textContent = record.wip_amount.toLocaleString();
+            }
+        }
+    });
+}
+
+/**
+ * 外注費同期専用機能
+ */
+function syncOutsourcingCosts() {
+    console.log('外注費同期開始');
+    
+    if (!confirm('現在表示されている全レコードの外注費を最新データと同期しますか？\nこの処理には時間がかかる場合があります。')) {
+        console.log('ユーザーがキャンセルしました');
+        return;
+    }
+    
+    console.log('外注費同期 - ユーザー確認完了');
+    
+    // ボタン制御
+    const syncButton = document.querySelector('button[onclick="syncOutsourcingCosts()"]');
+    if (!syncButton) {
+        console.error('外注費同期ボタンが見つかりません');
+        alert('エラー: 同期ボタンが見つかりません');
+        return;
+    }
+    
+    const originalText = syncButton.innerHTML;
+    syncButton.innerHTML = '<i class="bi bi-hourglass-split"></i> 同期中...';
+    syncButton.disabled = true;
+    
+    // 現在のフィルター条件を取得
     const urlParams = new URLSearchParams(window.location.search);
-    const queryString = urlParams.toString();
-    const apiUrl = '{% url "reports:bulk_update_work_hours" %}' + (queryString ? '?' + queryString : '');
+    const filterParams = Object.fromEntries(urlParams);
     
-    fetch(apiUrl, {
+    console.log('外注費同期API呼び出し:', '{% url "reports:sync_outsourcing_costs" %}');
+    
+    // 外注費同期API呼び出し
+    fetch('{% url "reports:sync_outsourcing_costs" %}', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': '{{ csrf_token }}'
         },
         body: JSON.stringify({
-            'action': 'update_work_hours',
-            'filter_params': Object.fromEntries(urlParams)
+            'action': 'sync_outsourcing_costs',
+            'filter_params': filterParams
         })
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('外注費同期APIレスポンス受信:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(data => {
+        console.log('外注費同期API応答データ:', data);
+        
         if (data.success) {
-            alert(`${data.updated_count}件の工数集計を更新しました。`);
-            // ページをリロードして最新データを表示
+            let message = `${data.updated_count}件の外注費を同期しました。`;
+            if (data.error_count > 0) {
+                message += `\n(${data.error_count}件でエラーが発生しました)`;
+            }
+            message += '\n\n計算結果を反映するためページを更新します。';
+            
+            alert(message);
             window.location.reload();
         } else {
-            alert('工数更新に失敗しました: ' + (data.error || '不明なエラー'));
+            console.error('外注費同期失敗:', data.error);
+            alert('外注費同期に失敗しました: ' + (data.error || '不明なエラー'));
+            
+            syncButton.innerHTML = originalText;
+            syncButton.disabled = false;
         }
     })
     .catch(error => {
-        console.error('工数更新エラー:', error);
-        alert('工数更新中にエラーが発生しました。');
+        console.error('外注費同期エラー:', error);
+        alert('外注費同期中にエラーが発生しました: ' + error.message);
+        
+        syncButton.innerHTML = originalText;
+        syncButton.disabled = false;
+    });
+}
+
+/**
+ * 一括更新機能（工数 + 外注費）
+ */
+function updateAllData() {
+    console.log('一括更新開始（工数 + 外注費）');
+    
+    if (!confirm('現在表示されている全レコードの工数と外注費を更新しますか？\n工数と外注費の両方を最新データで更新します。\nこの処理には時間がかかる場合があります。')) {
+        console.log('ユーザーがキャンセルしました');
+        return;
+    }
+    
+    console.log('一括更新 - ユーザー確認完了');
+    
+    // ボタン制御
+    const updateButton = document.querySelector('button[onclick="updateAllData()"]');
+    if (!updateButton) {
+        console.error('一括更新ボタンが見つかりません');
+        alert('エラー: 更新ボタンが見つかりません');
+        return;
+    }
+    
+    const originalText = updateButton.innerHTML;
+    updateButton.innerHTML = '<i class="bi bi-hourglass-split"></i> 更新中...';
+    updateButton.disabled = true;
+    
+    // 現在のフィルター条件を取得
+    const urlParams = new URLSearchParams(window.location.search);
+    const filterParams = Object.fromEntries(urlParams);
+    
+    console.log('一括更新API呼び出し:', '{% url "reports:bulk_update_work_hours" %}');
+    
+    // 工数一括更新API呼び出し（外注費も含む）
+    fetch('{% url "reports:bulk_update_work_hours" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+            'action': 'update_work_hours_and_outsourcing',
+            'filter_params': filterParams
+        })
     })
-    .finally(() => {
-        // ボタンを元に戻す
+    .then(response => {
+        console.log('一括更新APIレスポンス受信:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('一括更新API応答データ:', data);
+        
+        if (data.success) {
+            let message = `${data.updated_count}件のデータを一括更新しました。`;
+            if (data.error_count > 0) {
+                message += `\n(${data.error_count}件でエラーが発生しました)`;
+            }
+            message += '\n\n計算結果を反映するためページを更新します。';
+            
+            alert(message);
+            window.location.reload();
+        } else {
+            console.error('一括更新失敗:', data.error);
+            alert('一括更新に失敗しました: ' + (data.error || '不明なエラー'));
+            
+            updateButton.innerHTML = originalText;
+            updateButton.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('一括更新エラー:', error);
+        alert('一括更新中にエラーが発生しました: ' + error.message);
+        
         updateButton.innerHTML = originalText;
         updateButton.disabled = false;
     });

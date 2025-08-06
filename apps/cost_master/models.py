@@ -157,8 +157,11 @@ class OutsourcingCost(models.Model):
         null=True,
         verbose_name='作成者'
     )
+    is_active = models.BooleanField(default=True, verbose_name='有効フラグ')
+
     
     class Meta:
+        db_table = 'outsourcing_costs'
         verbose_name = '外注費'
         verbose_name_plural = '外注費'
         ordering = ['-year_month', 'business_partner__name']
@@ -168,6 +171,11 @@ class OutsourcingCost(models.Model):
     
     def __str__(self):
         return f"{self.year_month} - {self.business_partner.name} - {self.project.name}"
+    
+    def soft_delete(self):
+        """論理削除"""
+        self.is_active = False
+        self.save(update_fields=['is_active'])
     
     def save(self, *args, **kwargs):
         """保存時の自動処理"""

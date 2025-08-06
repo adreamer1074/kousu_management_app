@@ -61,7 +61,7 @@ class WorkloadAggregationListView(LeaderOrSuperuserRequiredMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        queryset = WorkloadAggregation.active_objects.select_related(
+        queryset = WorkloadAggregation.objects.select_related(
             'case_name', 'section', 'mub_manager', 'created_by'
         ).order_by('-order_date', '-created_at')
         
@@ -181,8 +181,8 @@ class WorkloadAggregationDeleteView(LeaderOrSuperuserRequiredMixin, DeleteView):
     
     def get_queryset(self):
         """削除されていないデータのみを対象"""
-        return WorkloadAggregation.active_objects.all()
-    
+        return WorkloadAggregation.objects.filter(del_flag=False)
+
     def post(self, request, *args, **kwargs):
         """POSTリクエストでの削除処理"""     
         return self.delete(request, *args, **kwargs)
@@ -234,7 +234,7 @@ def workload_export(request):
     ])
     
     # フィルター適用
-    queryset = WorkloadAggregation.active_objects.select_related(
+    queryset = WorkloadAggregation.objects.select_related(
         'case_name', 'section', 'mub_manager'
     ).order_by('-order_date')
     
@@ -500,7 +500,7 @@ def workload_export_current(request):
             filters[key] = value
     
     # データセットを取得
-    queryset = WorkloadAggregation.active_objects.select_related(
+    queryset = WorkloadAggregation.objects.select_related(
         'case_name', 'section', 'mub_manager'
     )
     
@@ -799,7 +799,7 @@ def export_report_with_history(request):
         if value:
             filters[key] = value
 
-    queryset = WorkloadAggregation.active_objects.select_related(
+    queryset = WorkloadAggregation.objects.select_related(
         'case_name', 'section', 'mub_manager'
     )
     # フィルター適用
@@ -1497,8 +1497,9 @@ def _generate_project_portfolio(queryset, styles, filters):
 @login_required
 @require_http_methods(["POST"])
 def bulk_update_work_hours(request):
-    """工数集計の一括工数更新（Workloadモデル対応版）"""
+    """工数集計の一括工数更新（Workloadモデル対応版）+ 計算項目自動更新 + 外注費同期"""
     import logging
+    from decimal import Decimal
     logger = logging.getLogger(__name__)
     
     try:
@@ -1509,11 +1510,13 @@ def bulk_update_work_hours(request):
         
         from .models import WorkloadAggregation
         from apps.workloads.models import Workload
+        # === 【修正】正しいインポートパスに変更 ===
+        from apps.cost_master.models import OutsourcingCost  # apps.projects.models から apps.cost_master.models に変更
         
         # フィルター条件を適用
-        queryset = WorkloadAggregation.active_objects.all()
+        queryset = WorkloadAggregation.objects.all()
         
-        # フィルター適用
+        # フィルター適用（既存のコード）
         if filter_params.get('project_name'):
             queryset = queryset.filter(project_name_id=filter_params['project_name'])
         
@@ -1542,18 +1545,67 @@ def bulk_update_work_hours(request):
         for aggregation_record in queryset:
             try:
                 if aggregation_record.case_name:
-                    # Workloadモデルから該当チケットの工数を取得
+                    # === 【外注費の同期処理】 ===
+                    updated_outsourcing_cost = Decimal('0.0')
+                    
+                    # 年月フィールドを取得（WorkloadAggregationに年月フィールドがある場合）
+                    if hasattr(aggregation_record, 'year_month') and aggregation_record.year_month:
+                        target_year_month = aggregation_record.year_month
+                    else:
+                        # 年月フィールドがない場合は受注日から推定
+                        if aggregation_record.order_date:
+                            target_year_month = aggregation_record.order_date.strftime('%Y-%m')
+                        else:
+                            # デフォルトは現在年月
+                            from datetime import datetime
+                            target_year_month = datetime.now().strftime('%Y-%m')
+                    
+                    try:
+                        # === 【デバッグ】外注費テーブルの確認 ===
+                        logger.debug(f"外注費取得開始: チケットID={aggregation_record.case_name.id}, "
+                                   f"チケット名={aggregation_record.case_name.title}, "
+                                   f"年月={target_year_month}")
+                        
+                        # 該当チケット・年月の外注費を取得
+                        outsourcing_costs = OutsourcingCost.objects.filter(
+                            ticket=aggregation_record.case_name,
+                            year_month=target_year_month,
+                            is_active=True  # アクティブな外注費のみ
+                        )
+                        
+                        logger.debug(f"外注費レコード数: {outsourcing_costs.count()}件")
+                        
+                        # 外注費の合計を計算
+                        for cost_record in outsourcing_costs:
+                            cost_amount = Decimal(str(cost_record.total_cost or 0))
+                            updated_outsourcing_cost += cost_amount
+                            logger.debug(f"外注費レコード: ID={cost_record.id}, "
+                                       f"金額=¥{cost_amount:,}, "
+                                       f"業者={getattr(cost_record, 'vendor', 'N/A')}")
+                        
+                        logger.info(f"外注費同期: チケット={aggregation_record.case_name.title}, "
+                                   f"年月={target_year_month}, "
+                                   f"外注費=¥{updated_outsourcing_cost:,} "
+                                   f"(レコード数: {outsourcing_costs.count()}件)")
+                        
+                    except OutsourcingCost.DoesNotExist:
+                        logger.info(f"外注費データなし: チケット={aggregation_record.case_name.title}, 年月={target_year_month}")
+                        updated_outsourcing_cost = Decimal('0.0')
+                    except Exception as outsourcing_error:
+                        logger.warning(f"外注費取得エラー (ID: {aggregation_record.id}): {outsourcing_error}")
+                        # エラーの場合は既存の外注費を維持
+                        updated_outsourcing_cost = Decimal(str(aggregation_record.outsourcing_cost_excluding_tax or 0))
+                    
+                    # === 【工数計算処理（既存のロジック）】 ===
                     workload_qs = Workload.objects.filter(
                         ticket=aggregation_record.case_name
                     )
                     
                     # 期間フィルターを適用（年月ベースで）
                     if aggregation_record.order_date and aggregation_record.actual_end_date:
-                        # 開始日と終了日から対象年月を計算
                         start_date = aggregation_record.order_date
                         end_date = aggregation_record.actual_end_date
                         
-                        # 対象年月のリストを作成
                         target_year_months = []
                         current_date = start_date.replace(day=1)
                         
@@ -1561,7 +1613,6 @@ def bulk_update_work_hours(request):
                             year_month = current_date.strftime('%Y-%m')
                             target_year_months.append(year_month)
                             
-                            # 次の月へ
                             if current_date.month == 12:
                                 current_date = current_date.replace(year=current_date.year + 1, month=1)
                             else:
@@ -1571,30 +1622,25 @@ def bulk_update_work_hours(request):
                             workload_qs = workload_qs.filter(year_month__in=target_year_months)
                     
                     # 工数を計算
-                    total_used_workdays = 0
-                    total_newbie_workdays = 0
+                    total_used_workdays = Decimal('0.0')
+                    total_newbie_workdays = Decimal('0.0')
                     
                     for workload in workload_qs:
                         try:
-                            # 期間内の日付のみを対象とする場合の詳細計算
                             if aggregation_record.order_date and aggregation_record.actual_end_date:
-                                # 該当年月の日数を計算
                                 year, month = map(int, workload.year_month.split('-'))
                                 
-                                # 期間内の開始日と終了日を計算
                                 period_start = max(
                                     aggregation_record.order_date,
                                     datetime(year, month, 1).date()
                                 )
                                 
-                                # その月の最終日を取得
                                 last_day = calendar.monthrange(year, month)[1]
                                 period_end = min(
                                     aggregation_record.actual_end_date,
                                     datetime(year, month, last_day).date()
                                 )
                                 
-                                # 期間内の日付の工数のみを合計
                                 month_hours = 0
                                 for day in range(period_start.day, period_end.day + 1):
                                     if day <= last_day:
@@ -1602,12 +1648,11 @@ def bulk_update_work_hours(request):
                                         month_hours += day_hours
                                 
                             else:
-                                # 期間指定がない場合は月全体の工数
                                 month_hours = workload.total_hours
                             
-                            workdays = month_hours / 8  # 8時間=1人日
+                            # 型をDecimalに統一
+                            workdays = Decimal(str(month_hours)) / Decimal('8.0')
                             
-                            # 新入社員判定
                             if hasattr(workload.user, 'is_newbie') and workload.user.is_newbie:
                                 total_newbie_workdays += workdays
                             else:
@@ -1617,14 +1662,35 @@ def bulk_update_work_hours(request):
                             logger.warning(f"工数計算エラー (WorkloadID: {workload.id}): {calc_error}")
                             continue
                     
-                    # 集計レコードを更新
+                    # === 【集計レコードを更新（工数+外注費）】 ===
+                    # 更新前の値を記録（比較用）
+                    old_outsourcing_cost = Decimal(str(aggregation_record.outsourcing_cost_excluding_tax or 0))
+                    
                     aggregation_record.used_workdays = total_used_workdays
                     aggregation_record.newbie_workdays = total_newbie_workdays
+                    aggregation_record.outsourcing_cost_excluding_tax = updated_outsourcing_cost
                     aggregation_record.updated_at = timezone.now()
+                    
+                    # === 【使用可能金額の自動計算・更新】 ===
+                    if hasattr(aggregation_record, 'available_amount'):
+                        try:
+                            calculated_available = aggregation_record.calculated_available_amount
+                            aggregation_record.available_amount = calculated_available
+                            logger.debug(f"使用可能金額を自動更新: {calculated_available}")
+                        except Exception as calc_error:
+                            logger.warning(f"使用可能金額計算エラー (ID: {aggregation_record.id}): {calc_error}")
+                    
+                    # 保存実行
                     aggregation_record.save()
                     
+                    # === 【更新結果をログ出力】 ===
+                    logger.info(f"更新完了: ID={aggregation_record.id}, "
+                              f"チケット={aggregation_record.case_name.title}, "
+                              f"使用工数={float(total_used_workdays):.1f}, "
+                              f"新入社員工数={float(total_newbie_workdays):.1f}, "
+                              f"外注費: ¥{float(old_outsourcing_cost):,.0f} → ¥{float(updated_outsourcing_cost):,.0f}")
+                    
                     updated_count += 1
-                    logger.info(f"更新完了: ID={aggregation_record.id}, チケット={aggregation_record.case_name.title}, 使用工数={total_used_workdays:.1f}, 新入社員工数={total_newbie_workdays:.1f}")
                     
                 else:
                     logger.warning(f"チケットが設定されていません: ID={aggregation_record.id}")
@@ -1641,12 +1707,156 @@ def bulk_update_work_hours(request):
             'success': True,
             'updated_count': updated_count,
             'error_count': error_count,
-            'message': f'{updated_count}件の工数を更新しました。' + 
-                      (f' ({error_count}件でエラーが発生)' if error_count > 0 else '')
+            'message': f'{updated_count}件の工数・外注費を更新しました。' +
+                      (f' ({error_count}件でエラーが発生)' if error_count > 0 else ''),
+            'should_reload_page': True
         })
         
     except Exception as e:
         logger.error(f"工数一括更新エラー: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })
+
+@login_required
+@require_http_methods(["POST"])
+def sync_outsourcing_costs(request):
+    """外注費の同期専用API（工数集計レコードの外注費を最新の外注費データと同期）"""
+    import logging
+    from decimal import Decimal
+    logger = logging.getLogger(__name__)
+    
+    try:
+        logger.info(f"外注費同期開始 - ユーザー: {request.user}")
+        
+        data = json.loads(request.body)
+        filter_params = data.get('filter_params', {})
+        
+        from .models import WorkloadAggregation
+        # === 【修正】正しいインポートパスに変更 ===
+        from apps.cost_master.models import OutsourcingCost
+        
+        # フィルター条件を適用
+        queryset = WorkloadAggregation.objects.all()
+        
+        # フィルター適用
+        if filter_params.get('project_name'):
+            queryset = queryset.filter(project_name_id=filter_params['project_name'])
+        
+        if filter_params.get('case_name'):
+            queryset = queryset.filter(case_name_id=filter_params['case_name'])
+        
+        if filter_params.get('status'):
+            queryset = queryset.filter(status=filter_params['status'])
+        
+        if filter_params.get('case_classification'):
+            queryset = queryset.filter(case_classification=filter_params['case_classification'])
+        
+        if filter_params.get('search'):
+            search_term = filter_params['search']
+            queryset = queryset.filter(
+                Q(project_name__name__icontains=search_term) |
+                Q(case_name__title__icontains=search_term) |
+                Q(billing_destination__icontains=search_term)
+            )
+        
+        logger.info(f"外注費同期対象レコード数: {queryset.count()}件")
+        
+        updated_count = 0
+        error_count = 0
+        
+        for aggregation_record in queryset:
+            try:
+                if aggregation_record.case_name:
+                    # 年月の決定ロジック
+                    if hasattr(aggregation_record, 'year_month') and aggregation_record.year_month:
+                        target_year_month = aggregation_record.year_month
+                    elif aggregation_record.order_date:
+                        target_year_month = aggregation_record.order_date.strftime('%Y-%m')
+                    else:
+                        from datetime import datetime
+                        target_year_month = datetime.now().strftime('%Y-%m')
+                    
+                    # 外注費の取得と合計計算
+                    try:
+                        # === 【デバッグログ追加】 ===
+                        logger.debug(f"外注費同期: チケット={aggregation_record.case_name.title}, "
+                                   f"チケットID={aggregation_record.case_name.id}, "
+                                   f"年月={target_year_month}")
+                        
+                        outsourcing_costs = OutsourcingCost.objects.filter(
+                            ticket=aggregation_record.case_name,
+                            year_month=target_year_month,
+                            is_active=True
+                        )
+                        
+                        logger.debug(f"マッチした外注費レコード数: {outsourcing_costs.count()}件")
+                        
+                        total_outsourcing_cost = Decimal('0.0')
+                        for cost_record in outsourcing_costs:
+                            amount = Decimal(str(cost_record.total_cost or 0))
+                            total_outsourcing_cost += amount
+                            logger.debug(f"外注費: ID={cost_record.id}, 金額=¥{amount:,}")
+                        
+                        # 既存の外注費と比較
+                        current_cost = Decimal(str(aggregation_record.outsourcing_cost_excluding_tax or 0))
+                        
+                        logger.info(f"外注費比較: 現在=¥{float(current_cost):,.0f}, "
+                                  f"新規=¥{float(total_outsourcing_cost):,.0f}")
+                        
+                        # 外注費が変更されている場合のみ更新
+                        if total_outsourcing_cost != current_cost:
+                            aggregation_record.outsourcing_cost_excluding_tax = total_outsourcing_cost
+                            
+                            # 使用可能金額の自動再計算
+                            if hasattr(aggregation_record, 'available_amount'):
+                                try:
+                                    calculated_available = aggregation_record.calculated_available_amount
+                                    aggregation_record.available_amount = calculated_available
+                                except Exception as calc_error:
+                                    logger.warning(f"使用可能金額計算エラー (ID: {aggregation_record.id}): {calc_error}")
+                            
+                            aggregation_record.updated_at = timezone.now()
+                            aggregation_record.save()
+                            
+                            logger.info(f"外注費同期完了: ID={aggregation_record.id}, "
+                                      f"チケット={aggregation_record.case_name.title}, "
+                                      f"年月={target_year_month}, "
+                                      f"旧外注費=¥{float(current_cost):,.0f}, "
+                                      f"新外注費=¥{float(total_outsourcing_cost):,.0f}")
+                            
+                            updated_count += 1
+                        else:
+                            logger.debug(f"外注費変更なし: ID={aggregation_record.id}, 外注費=¥{float(total_outsourcing_cost):,.0f}")
+                        
+                    except Exception as outsourcing_error:
+                        logger.error(f"外注費取得エラー (ID: {aggregation_record.id}): {outsourcing_error}")
+                        error_count += 1
+                        continue
+                        
+                else:
+                    logger.warning(f"チケットが設定されていません: ID={aggregation_record.id}")
+                    error_count += 1
+                    
+            except Exception as e:
+                logger.error(f"外注費同期エラー (ID: {aggregation_record.id}): {str(e)}")
+                error_count += 1
+                continue
+        
+        logger.info(f"外注費同期完了 - 更新: {updated_count}件, エラー: {error_count}件")
+        
+        return JsonResponse({
+            'success': True,
+            'updated_count': updated_count,
+            'error_count': error_count,
+            'message': f'{updated_count}件の外注費を同期しました。' + 
+                      (f' ({error_count}件でエラーが発生)' if error_count > 0 else ''),
+            'should_reload_page': True
+        })
+        
+    except Exception as e:
+        logger.error(f"外注費同期エラー: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': str(e)

@@ -66,20 +66,20 @@ class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
         workload_count = Workload.objects.count()
         
         # 進行中チケット数
-        active_tickets_count = WorkloadAggregation.active_objects.filter(
+        active_tickets_count = WorkloadAggregation.objects.filter(
             status__in=['planning', 'in_progress'],
             case_name__isnull=False
         ).count()
         
         # 期限超過チケット数
-        overdue_tickets_count = WorkloadAggregation.active_objects.filter(
+        overdue_tickets_count = WorkloadAggregation.objects.filter(
             planned_end_date__lt=now.date(),
             status__in=['planning', 'in_progress'],
             case_name__isnull=False
         ).count()
         
         # 収益統計
-        revenue_stats = WorkloadAggregation.active_objects.aggregate(
+        revenue_stats = WorkloadAggregation.objects.aggregate(
             total_billing=Sum('billing_amount_excluding_tax'),
             total_outsourcing=Sum('outsourcing_cost_excluding_tax')
         )
@@ -93,7 +93,7 @@ class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
         profit_margin = (gross_profit / total_revenue * 100) if total_revenue > 0 else 0
         
         # チケットステータス別統計
-        ticket_records = WorkloadAggregation.active_objects.filter(case_name__isnull=False)
+        ticket_records = WorkloadAggregation.objects.filter(case_name__isnull=False)
         status_data = ticket_records.values('status').annotate(
             count=Count('id'),
             total_amount=Sum('billing_amount_excluding_tax')*10000  
@@ -133,7 +133,7 @@ class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
             })
         
         # 今月の工数統計
-        this_month_stats = WorkloadAggregation.active_objects.filter(
+        this_month_stats = WorkloadAggregation.objects.filter(
             created_at__gte=first_day_of_month
         ).aggregate(
             total_workdays=Sum('used_workdays')
@@ -155,7 +155,7 @@ class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
         last_month_first_day = (first_day_of_month - timedelta(days=1)).replace(day=1)
         last_month_last_day = first_day_of_month - timedelta(days=1)
 
-        last_month_stats = WorkloadAggregation.active_objects.filter(
+        last_month_stats = WorkloadAggregation.objects.filter(
             created_at__gte=last_month_first_day,
             created_at__lte=last_month_last_day
         ).aggregate(
@@ -171,7 +171,7 @@ class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
         
         # 最近の登録データ取得
         recent_workload_entries = []
-        recent_aggregations = WorkloadAggregation.active_objects.select_related(
+        recent_aggregations = WorkloadAggregation.objects.select_related(
             'case_name'
         ).order_by('-created_at')[:5]
         
@@ -189,7 +189,7 @@ class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
         attention_tickets = []
         
         # 期限超過チケット
-        overdue_tickets = WorkloadAggregation.active_objects.filter(
+        overdue_tickets = WorkloadAggregation.objects.filter(
             planned_end_date__lt=now.date(),
             status__in=['planning', 'in_progress'],
             case_name__isnull=False

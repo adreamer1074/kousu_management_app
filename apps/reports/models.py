@@ -302,45 +302,230 @@ class WorkloadAggregation(models.Model):
     # 既存のpropertyメソッドはそのまま維持
     @property
     def total_used_workdays(self):
-        """使用工数合計（日）"""
-        return self.used_workdays + self.newbie_workdays
+        """使用工数合計（人日）"""
+        return (self.used_workdays or 0) + (self.newbie_workdays or 0)
     
     @property
     def remaining_workdays(self):
-        """残工数（人日）"""
-        return max(self.estimated_workdays - self.total_used_workdays, Decimal('0.0'))
+        """残工数（人日）= 見積工数 - 使用工数合計"""
+        return max((self.estimated_workdays or 0) - self.total_used_workdays, 0)
     
     @property
     def remaining_amount(self):
-        """残金額（税抜）"""
-        return max(self.available_amount - self.billing_amount_excluding_tax, Decimal('0'))
+        """残金額（税抜）= 残工数 × (請求単価/20*10000)"""
+        if not self.billing_unit_cost_per_month or self.billing_unit_cost_per_month <= 0:
+            return 0
+        
+        # JavaScriptと同じ計算式
+        daily_billing_rate = (float(self.billing_unit_cost_per_month) / 20) * 10000
+        return float(self.remaining_workdays) * daily_billing_rate
     
     @property
     def profit_rate(self):
-        """利益率"""
-        if self.billing_amount_excluding_tax > 0:
-            profit = self.billing_amount_excluding_tax - self.outsourcing_cost_excluding_tax
-            return round((profit / self.billing_amount_excluding_tax) * 100, 1)
-        return Decimal('0.0')
+        """利益率（%）= 残金額 / 請求金額 * 100"""
+        if not self.billing_amount_excluding_tax or self.billing_amount_excluding_tax <= 0:
+            return 0
+        
+        # JavaScriptと同じ計算式
+        return (self.remaining_amount / float(self.billing_amount_excluding_tax)) * 100
     
     @property
     def wip_amount(self):
-        """仕掛中金額（人日×単価）"""
-        return self.used_workdays * (self.unit_cost_per_month / 20)  # 月20日計算
+        """仕掛中金額"""
+        if self.case_classification == 'development' and self.billing_unit_cost_per_month and self.billing_unit_cost_per_month > 0:
+            # 開発案件：使用工数合計 × (請求単価/20*10000) + 外注費
+            daily_billing_rate = (float(self.billing_unit_cost_per_month) / 20) * 10000
+            wip_amount = (float(self.total_used_workdays) * daily_billing_rate) + float(self.outsourcing_cost_excluding_tax or 0)
+            return wip_amount
+        else:
+            return float(self.outsourcing_cost_excluding_tax or 0)
     
     @property
-    def wip_amount_partner(self):
-        """仕掛中合計（協力会社）"""
-        return self.newbie_workdays * (self.unit_cost_per_month / 20)
+    def calculated_available_amount(self):
+        """使用可能金額（計算値）= 請求金額 - 外注費"""
+        billing = float(self.billing_amount_excluding_tax or 0)
+        outsourcing = float(self.outsourcing_cost_excluding_tax or 0)
+        return max(billing - outsourcing, 0)
+    
+    def calculate_available_amount(self):
+        """使用可能金額の計算メソッド（bulk_update用）"""
+        return self.calculated_available_amount
+    
+    def calculate_workdays_from_workload(self):
+        """工数登録機能から工数を自動計算（開発タイプは全期間対応版）"""
+        from apps.workloads.models import Workload
+        from decimal import Decimal
+        from datetime import datetime, date
+        import calendar
+        
+        # チケットに関連する工数を取得
+        workloads = Workload.objects.filter(ticket=self.case_name)
+        
+        # チケットの分類を確認（開発タイプかどうか）
+        is_development = self.case_classification == self.CaseClassificationChoices.DEVELOPMENT
+        
+        # 開発タイプでない場合のみ期間フィルターを適用
+        if not is_development:
+            # 保守・その他のタイプの場合は従来通り期間フィルター適用
+            target_year_months = set()
+            
+            if self.order_date:
+                start_date = self.order_date
+            else:
+                # デフォルトは現在年月から6ヶ月前
+                start_date = date.today().replace(day=1)
+            
+            if self.actual_end_date:
+                end_date = self.actual_end_date
+            else:
+                # デフォルトは現在年月
+                end_date = date.today()
+            
+            # 対象年月のリストを作成
+            current_date = start_date.replace(day=1)
+            while current_date <= end_date:
+                target_year_months.add(current_date.strftime('%Y-%m'))
+                # 次の月へ
+                if current_date.month == 12:
+                    current_date = current_date.replace(year=current_date.year + 1, month=1)
+                else:
+                    current_date = current_date.replace(month=current_date.month + 1)
+            
+            # 対象年月でフィルター（保守・その他のみ）
+            if target_year_months:
+                workloads = workloads.filter(year_month__in=target_year_months)
+        
+        # 開発タイプの場合はworkloadsをそのまま使用（全期間対象）
+        
+        # 一般使用工数と新入社員工数を分離
+        regular_workdays = Decimal('0.0')
+        newbie_workdays = Decimal('0.0')
+        
+        for workload in workloads:
+            # ユーザーのemployee_levelを確認
+            is_junior = False
+            if hasattr(workload.user, 'employee_level') and workload.user.employee_level == 'junior':
+                is_junior = True
+            
+            # 各日の工数を合計
+            workload_year_month = workload.year_month
+            year, month = map(int, workload_year_month.split('-'))
+            
+            # その月の日数を取得
+            days_in_month = calendar.monthrange(year, month)[1]
+            
+            for day in range(1, days_in_month + 1):
+                # 開発タイプの場合は日付範囲チェックを完全にスキップ
+                if not is_development:
+                    # 保守・その他のタイプの場合のみ日付範囲チェック
+                    current_day = date(year, month, day)
+                    if self.order_date and current_day < self.order_date:
+                        continue
+                    if self.actual_end_date and current_day > self.actual_end_date:
+                        continue
+                
+                # その日の工数を取得
+                day_hours = workload.get_day_value(day)
+                
+                # 工数の分類
+                if is_junior:
+                    newbie_workdays += Decimal(str(day_hours))
+                else:
+                    regular_workdays += Decimal(str(day_hours))
+        
+        # 時間を人日に変換（8時間=1人日として計算）
+        self.used_workdays = regular_workdays / 8
+        self.newbie_workdays = newbie_workdays / 8
+        
+        # デバッグ情報を返す
+        all_workloads_count = Workload.objects.filter(ticket=self.case_name).count()
+        filtered_workloads_count = workloads.count()
+        
+        debug_info = {
+            'チケット分類': self.get_case_classification_display(),
+            '開発タイプ判定': is_development,
+            '期間フィルター適用': not is_development,
+            '全工数レコード数': all_workloads_count,
+            '対象工数レコード数': filtered_workloads_count,
+            '一般工数（時間）': float(regular_workdays),
+            '新入社員工数（時間）': float(newbie_workdays),
+            '一般工数（人日）': float(self.used_workdays),
+            '新入社員工数（人日）': float(self.newbie_workdays),
+        }
+        
+        if is_development:
+            debug_info['適用期間'] = "開発タイプのため全期間対象"
+            debug_info['年月フィルター'] = "なし（全期間）"
+        else:
+            if self.order_date and self.actual_end_date:
+                debug_info['適用期間'] = f"{self.order_date} ～ {self.actual_end_date}"
+            else:
+                debug_info['適用期間'] = "受注日・終了日未設定のため制限なし"
+            
+            # 対象年月をデバッグ情報に追加
+            if 'target_year_months' in locals():
+                debug_info['対象年月リスト'] = sorted(list(target_year_months))
+            else:
+                debug_info['対象年月リスト'] = "フィルターなし"
+        
+        return {
+            'used_workdays': self.used_workdays,
+            'newbie_workdays': self.newbie_workdays,
+            'total_workdays': self.used_workdays + self.newbie_workdays,
+            'debug_info': debug_info
+        }
+    
+    # 既存のpropertyメソッドはそのまま維持
+    @property
+    def total_used_workdays(self):
+        """使用工数合計（人日）"""
+        return (self.used_workdays or 0) + (self.newbie_workdays or 0)
     
     @property
-    def tax_excluded_billing_amount(self):
-        """税抜請求金額（表示用）"""
-        return self.billing_amount_excluding_tax
+    def remaining_workdays(self):
+        """残工数（人日）= 見積工数 - 使用工数合計"""
+        return max((self.estimated_workdays or 0) - self.total_used_workdays, 0)
     
-    # カスタムマネージャーを追加
-    objects = models.Manager()  # デフォルトマネージャー（削除済み含む）
-    active_objects = ActiveWorkloadManager()  # アクティブなデータのみ
+    @property
+    def remaining_amount(self):
+        """残金額（税抜）= 残工数 × (請求単価/20*10000)"""
+        if not self.billing_unit_cost_per_month or self.billing_unit_cost_per_month <= 0:
+            return 0
+        
+        # JavaScriptと同じ計算式
+        daily_billing_rate = (float(self.billing_unit_cost_per_month) / 20) * 10000
+        return float(self.remaining_workdays) * daily_billing_rate
+    
+    @property
+    def profit_rate(self):
+        """利益率（%）= 残金額 / 請求金額 * 100"""
+        if not self.billing_amount_excluding_tax or self.billing_amount_excluding_tax <= 0:
+            return 0
+        
+        # JavaScriptと同じ計算式
+        return (self.remaining_amount / float(self.billing_amount_excluding_tax)) * 100
+    
+    @property
+    def wip_amount(self):
+        """仕掛中金額"""
+        if self.case_classification == 'development' and self.billing_unit_cost_per_month and self.billing_unit_cost_per_month > 0:
+            # 開発案件：使用工数合計 × (請求単価/20*10000) + 外注費
+            daily_billing_rate = (float(self.billing_unit_cost_per_month) / 20) * 10000
+            wip_amount = (float(self.total_used_workdays) * daily_billing_rate) + float(self.outsourcing_cost_excluding_tax or 0)
+            return wip_amount
+        else:
+            return float(self.outsourcing_cost_excluding_tax or 0)
+    
+    @property
+    def calculated_available_amount(self):
+        """使用可能金額（計算値）= 請求金額 - 外注費"""
+        billing = float(self.billing_amount_excluding_tax or 0)
+        outsourcing = float(self.outsourcing_cost_excluding_tax or 0)
+        return max(billing - outsourcing, 0)
+    
+    def calculate_available_amount(self):
+        """使用可能金額の計算メソッド（bulk_update用）"""
+        return self.calculated_available_amount
     
     def soft_delete(self):
         """論理削除"""
