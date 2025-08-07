@@ -85,3 +85,9 @@ server {
 MySQL設定は settings.py のDATABASESセクションに正しく記載
 依存モジュール不足は仮想環境でインストール（pip install）
 依存パッケージは requirements.txt に管理
+
+
+
+------------------
+# Gunicorn再起動
+sudo systemctl restart gunicorn
