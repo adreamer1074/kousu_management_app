@@ -492,7 +492,6 @@ class ProjectTicketCreateView(LeaderOrSuperuserRequiredMixin, UserPassesTestMixi
             return reverse('projects:ticket_detail', kwargs={'pk': self.object.pk})
 
 @login_required
-@leader_or_superuser_required_403
 @require_http_methods(["GET"])
 def get_project_tickets_api(request, project_id):
     """プロジェクトのチケット一覧API"""

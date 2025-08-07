@@ -276,7 +276,92 @@
         border-radius: 6px;
         font-weight: 600;
     }
+    .day-header {
+        font-size: 0.85em;
+        font-weight: bold;
+        writing-mode: horizontal-tb;
+        text-orientation: mixed;
+        height: 50px; /* 高さを少し調整 */
+        line-height: 1.3;
+        padding: 6px 4px;
+        text-align: center;
+    }
     
+    /* 平日のヘッダー */
+    .day-header.weekday {
+        background-color: #f8f9fa;
+        color: #495057;
+    }
+    
+    /* 土曜日のヘッダー */
+    .day-header.saturday {
+        background-color: #e3f2fd !important;
+        color: #1565c0 !important;
+        font-weight: bold;
+    }
+    
+    /* 日曜日・祝日のヘッダー */
+    .day-header.holiday {
+        background-color: #ffebee !important;
+        color: #c62828 !important;
+        font-weight: bold;
+    }
+    
+    /* 土曜日のセル */
+    .day-cell.saturday {
+        background-color: #e3f2fd;
+    }
+    
+    .day-cell.saturday .workload-input {
+        background-color: #e3f2fd;
+        border-color: #1976d2;
+    }
+    
+    .day-cell.saturday .workload-input:focus {
+        background-color: #bbdefb;
+        border-color: #1565c0;
+    }
+    
+    .day-cell.saturday .workload-input.has-value {
+        background-color: #bbdefb;
+        color: #0d47a1;
+        font-weight: bold;
+    }
+    
+    /* 日曜日・祝日のセル */
+    .day-cell.holiday {
+        background-color: #ffebee;
+    }
+    
+    .day-cell.holiday .workload-input {
+        background-color: #ffebee;
+        border-color: #d32f2f;
+    }
+    
+    .day-cell.holiday .workload-input:focus {
+        background-color: #ffcdd2;
+        border-color: #c62828;
+    }
+    
+    .day-cell.holiday .workload-input.has-value {
+        background-color: #ffcdd2;
+        color: #b71c1c;
+        font-weight: bold;
+    }
+    
+    /* === 【修正】週末スタイルを土日祝日用に調整 === */
+    .weekend {
+        background-color: #fff5f5;
+    }
+    
+    .weekend .workload-input {
+        background-color: #ffeaea;
+    }
+    
+    .weekend.has-value .workload-input {
+        background-color: #ffdddd;
+    }
+
     /* ユーザー情報 */
     .user-info {
         overflow: hidden;
@@ -485,23 +570,27 @@
                 <th class="ticket-col sticky-header">チケット</th>
                 <th class="total-days-col sticky-header">人日</th>
                 <th class="total-hours-col sticky-header">時間</th>
+                
+                <!-- === 【修正】曜日付きの日付ヘッダー === -->
                 {% for day in day_range %}
-                    <th class="day-header day-col {% if day in holidays %}holiday{% endif %}">
-                        <div>{{ day }}</div>
-                        <small>
-                            {% with day_date=year_month|add:"-"|add:day|date:"w" %}
-                                {% if day_date == "0" %}日
-                                {% elif day_date == "1" %}月
-                                {% elif day_date == "2" %}火
-                                {% elif day_date == "3" %}水
-                                {% elif day_date == "4" %}木
-                                {% elif day_date == "5" %}金
-                                {% elif day_date == "6" %}土
+                    {% with day_info=weekday_info|default:"{}"|get_item:day %}
+                        <th class="day-header day-col {{ day_info.is_saturday|yesno:'saturday,weekday' }}{{ day_info.is_holiday|yesno:' holiday,' }}{{ day_info.is_sunday|yesno:' holiday,' }}">
+                            <div>{{ day }}</div>
+                            <small>
+                                {% if day_info.weekday == 0 %}月
+                                {% elif day_info.weekday == 1 %}火
+                                {% elif day_info.weekday == 2 %}水
+                                {% elif day_info.weekday == 3 %}木
+                                {% elif day_info.weekday == 4 %}金
+                                {% elif day_info.weekday == 5 %}土
+                                {% elif day_info.weekday == 6 %}日
+                                {% else %}{{ day_info.weekday }}
                                 {% endif %}
-                            {% endwith %}
-                        </small>
-                    </th>
+                            </small>
+                        </th>
+                    {% endwith %}
                 {% endfor %}
+                
                 <th class="action-col sticky-header">操作</th>
             </tr>
         </thead>
@@ -586,19 +675,17 @@
                     
                     <!-- 各日の工数入力 -->
                     {% for day in day_range %}
-                        {% with day_date=year|add:"-"|add:month|add:"-"|add:day|date:"Y-m-d"|date:"w" %}
-                            <td class="day-cell {% if day in holidays %}holiday{% endif %}{% if day_date == "0" or day_date == "6" %}weekend{% endif %}">
-                                <input type="number" 
-                                       class="workload-input {% if workload|get_day_value:day > 0 %}has-value{% endif %}" 
-                                       data-workload-id="{{ workload.id }}" 
-                                       data-day="{{ day }}"
-                                       value="{% if workload|get_day_value:day > 0 %}{{ workload|get_day_value:day|floatformat:1 }}{% endif %}"
-                                       min="0" 
-                                       max="24" 
-                                       title="{{ year }}/{{ month }}/{{ day }} の工数"
-                                       placeholder="">
-                            </td>
-                        {% endwith %}
+                        <td class="day-cell {{ day|get_weekday_class:weekday_info }}">
+                            <input type="number" 
+                                   class="workload-input {% if workload|get_day_value:day > 0 %}has-value{% endif %}" 
+                                   data-workload-id="{{ workload.id }}" 
+                                   data-day="{{ day }}"
+                                   value="{% if workload|get_day_value:day > 0 %}{{ workload|get_day_value:day|floatformat:1 }}{% endif %}"
+                                   min="0" 
+                                   max="24" 
+                                   title="{{ year }}/{{ month }}/{{ day }} の工数 ({% if day|is_weekend_or_holiday:weekday_info %}{% if day|get_weekday_class:weekday_info == 'saturday' %}土曜日{% else %}日曜・祝日{% endif %}{% else %}平日{% endif %})"
+                                   placeholder="">
+                        </td>
                     {% endfor %}
                     
                     <!-- 操作 -->

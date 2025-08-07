@@ -12,6 +12,8 @@ from django.urls import reverse_lazy
 from django.contrib import messages
 import json
 import calendar
+import jpholiday
+from datetime import date
 from decimal import Decimal
 
 from .models import Workload
@@ -129,6 +131,28 @@ class WorkloadCalendarView(LoginRequiredMixin, TemplateView):
         from datetime import date
         first_day = date(year, month, 1)
 
+        # 祝日と曜日情報を作成
+        _, last_day = calendar.monthrange(year, month)
+        
+        holidays = []
+        weekday_info = {}
+        
+        for day in range(1, last_day + 1):
+            target_date = date(year, month, day)
+            weekday = target_date.weekday()  # 0=月曜, 6=日曜
+            
+            # 祝日判定
+            if jpholiday.is_holiday(target_date):
+                holidays.append(day)
+            
+            # 曜日情報を保存
+            weekday_info[day] = {
+                'weekday': weekday,
+                'is_saturday': weekday == 5,
+                'is_sunday': weekday == 6,
+                'is_holiday': jpholiday.is_holiday(target_date)
+            }
+        
         context.update({
             'year_month': year_month,
             'year': year,
@@ -146,6 +170,8 @@ class WorkloadCalendarView(LoginRequiredMixin, TemplateView):
             'is_admin': user.is_leader or user.is_superuser,
             'unique_users_count': unique_users,
             'year_month_first_day': first_day.weekday(),
+            'holidays': holidays,
+            'weekday_info': weekday_info,
         })
         
         return context
