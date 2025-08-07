@@ -10,3 +10,4 @@ pytest-django
 reportlab
 django-storages
 boto3
+jpholiday>=0.0.9
