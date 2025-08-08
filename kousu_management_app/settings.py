@@ -49,6 +49,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.core.middleware.SessionTimeoutMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -181,3 +182,19 @@ AWS_STORAGE_BUCKET_NAME = ''
 AWS_S3_REGION_NAME = 'ap-northeast-1'  # 東京リージョン例
 AWS_QUERYSTRING_AUTH = False
 AWS_S3_ADDRESSING_STYLE = "virtual"
+
+# セッションの有効期限設定
+SESSION_COOKIE_AGE = 60 * 60 * 8  # 8時間
+# ブラウザを閉じたときにセッションを削除
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+# セッションの安全性設定
+SESSION_COOKIE_SECURE = False  # 開発環境では False、本番環境では True に変更
+SESSION_COOKIE_HTTPONLY = True  # JavaScriptからのアクセスを防ぐ
+SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF攻撃を防ぐ
+# セッションデータベースの定期クリーンアップ
+SESSION_SAVE_EVERY_REQUEST = True  # リクエストごとにセッションの有効期限を更新
+# CSRFトークンの設定
+CSRF_COOKIE_SECURE = False  # 開発環境では False、本番環境では True に変更
+# JavaScriptからアクセスできるように（AJAXで必要）
+CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SAMESITE = 'Lax'
