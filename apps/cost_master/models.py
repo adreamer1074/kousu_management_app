@@ -72,7 +72,7 @@ class OutsourcingCost(models.Model):
         ('in_progress', '着手'),
     ]
     
-    # 案件分類選択肢
+    # チケット分類選択肢
     CASE_CLASSIFICATION_CHOICES = [
         ('development', '開発'),
         ('maintenance', '保守'),
@@ -112,7 +112,7 @@ class OutsourcingCost(models.Model):
         default='not_started'
     )
     case_classification = models.CharField(
-        '案件分類',
+        '分類',
         max_length=20,
         choices=CASE_CLASSIFICATION_CHOICES,
         default='development'

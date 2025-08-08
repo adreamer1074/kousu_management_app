@@ -572,7 +572,7 @@ def get_tickets_api(request):
                 'due_date': ticket.due_date.isoformat() if ticket.due_date else None,
                 'created_at': ticket.created_at.isoformat(),
                 # 工数集計フォーム用のフィールドを追加
-                'case_classification': getattr(ticket, 'case_classification', ''),  # チケットに案件分類があれば
+                'case_classification': getattr(ticket, 'case_classification', ''),
             })
         
         print(f"最終的に返すチケット数: {len(tickets_data)}件")  # デバッグ用

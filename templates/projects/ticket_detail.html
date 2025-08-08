@@ -95,9 +95,9 @@
                         {% endwith %}
                     </div>
                     
-                    <!-- 案件分類 -->
+                    <!-- チケット分類 -->
                     <div class="col-md-6 mb-3">
-                        <strong>案件分類:</strong><br>
+                        <strong>チケット分類:</strong><br>
                         {% with classification_info=ticket.get_case_classification_display_with_color %}
                             <span class="badge bg-{{ classification_info.color }} fs-6">
                                 {{ classification_info.text }}

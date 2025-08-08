@@ -241,8 +241,8 @@ class OutsourcingCostFilterForm(forms.Form):
         widget=forms.Select(attrs={'class': 'form-select'})
     )
     case_classification = forms.ChoiceField(
-        label='案件分類',
-        choices=[('', '全ての案件分類')] + OutsourcingCost.CASE_CLASSIFICATION_CHOICES,
+        label='チケット分類',
+        choices=[('', '全てのチケット分類')] + OutsourcingCost.CASE_CLASSIFICATION_CHOICES,
         required=False,
         widget=forms.Select(attrs={'class': 'form-select'})
     )

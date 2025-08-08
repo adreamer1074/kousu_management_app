@@ -59,7 +59,7 @@ class WorkloadAggregation(models.Model):
         default=StatusChoices.PLANNING
     )
     case_classification = models.CharField(
-        '案件分類',
+        'チケット分類',
         max_length=20,
         choices=CaseClassificationChoices.choices,
         default=CaseClassificationChoices.DEVELOPMENT

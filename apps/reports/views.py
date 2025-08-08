@@ -227,7 +227,7 @@ def workload_export(request):
     
     writer = csv.writer(response)
     writer.writerow([
-        'プロジェクト名', 'チケット名', '部名', 'ステータス', '案件分類', '見積日', '受注日',
+        'プロジェクト名', 'チケット名', '部名', 'ステータス', 'チケット分類', '見積日', '受注日',
         '終了日（予定）', '終了日実績', '検収日', '使用可能金額（税別）', '請求金額（税別）',
         '外注費（税別）', '見積工数（人日）', '使用工数（人日）', '新入社員使用工数（人日）',
         '使用工数合計', '残工数', '残金額', '利益率', '仕掛中金額', '請求先', 'MUB担当者', '作成日時'
@@ -834,7 +834,7 @@ def export_workload_excel(queryset, export_type='excel', save_to_file=None):
     
     # ヘッダー行
     headers = [
-        'プロジェクト名', 'チケット名', '部名', 'ステータス', '案件分類',
+        'プロジェクト名', 'チケット名', '部名', 'ステータス', 'チケット分類',
         '見積日', '受注日', '終了日（予定）', '終了日実績', '検収日',
         '使用可能金額（税別）', '請求金額（税別）', '外注費（税別）',
         '見積工数（人日）', '使用工数（人日）', '新入社員使用工数（人日）',
@@ -931,7 +931,7 @@ def export_workload_csv(queryset, save_to_file=None):
     
     # ヘッダー行
     writer.writerow([
-        'プロジェクト名', 'チケット名', '部名', 'ステータス', '案件分類',
+        'プロジェクト名', 'チケット名', '部名', 'ステータス', 'チケット分類',
         '見積日', '受注日', '終了日（予定）', '終了日実績', '検収日',
         '使用可能金額（税別）', '請求金額（税別）', '外注費（税別）',
         '見積工数（人日）', '使用工数（人日）', '新入社員使用工数（人日）',
@@ -1452,8 +1452,8 @@ def _generate_project_portfolio(queryset, styles, filters):
     ).order_by('-total_amount')
     
     if classification_analysis:
-        elements.append(Paragraph("案件分類別ポートフォリオ", styles['ProSectionTitle']))
-        
+        elements.append(Paragraph("チケット分類別ポートフォリオ", styles['ProSectionTitle']))
+
         class_data = [['分類', 'プロジェクト数', '総請求額', '平均工数']]
         for item in classification_analysis:
             # 安全に分類表示名を取得

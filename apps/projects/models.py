@@ -324,7 +324,7 @@ class ProjectTicket(models.Model):
         }
     
     def get_case_classification_display_with_color(self):
-        """案件分類の色付き表示"""
+        """チケット分類の色付き表示"""
         classification_colors = {
             'development': 'primary',
             'maintenance': 'success',
@@ -363,7 +363,7 @@ class ProjectDetail(models.Model):
         ('inspection_pending', '検収待ち'),
     ]
     
-    # 案件分類選択肢
+    # チケット分類選択肢
     CASE_CLASSIFICATION_CHOICES = [
         ('development', '開発'),
         ('maintenance', '保守'),
@@ -378,7 +378,7 @@ class ProjectDetail(models.Model):
     case_name = models.CharField('チケット名', max_length=200)
     department = models.ForeignKey(Department, on_delete=models.CASCADE, verbose_name='部署')
     status = models.CharField('ステータス', max_length=20, choices=STATUS_CHOICES, default='planning')
-    case_classification = models.CharField('案件分類', max_length=20, choices=CASE_CLASSIFICATION_CHOICES, default='development')
+    case_classification = models.CharField('チケット分類', max_length=20, choices=CASE_CLASSIFICATION_CHOICES, default='development')
     
     # 日程情報
     estimate_date = models.DateField('見積日', null=True, blank=True)

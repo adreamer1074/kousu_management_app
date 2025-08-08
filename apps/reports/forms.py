@@ -271,9 +271,9 @@ class WorkloadAggregationForm(forms.ModelForm):
                 import logging
                 logger = logging.getLogger(__name__)
                 
-                # 案件分類が設定されているかチェック
+                # チケット分類が設定されているかチェック
                 if not instance.case_classification:
-                    # case_nameから案件分類を自動設定
+                    # case_nameからチケット分類を自動設定
                     if hasattr(instance.case_name, 'case_classification'):
                         instance.case_classification = instance.case_name.case_classification
                     else:
@@ -286,18 +286,6 @@ class WorkloadAggregationForm(forms.ModelForm):
                 workdays_data = instance.calculate_workdays_from_workload()
                 instance.used_workdays = workdays_data['used_workdays']
                 instance.newbie_workdays = workdays_data['newbie_workdays']
-                
-                # 計算結果をログ出力
-                logger.info(f"工数計算結果: {workdays_data['debug_info']}")
-                print(f"=== 工数計算結果 ===")
-                print(f"チケット: {instance.case_name.title}")
-                print(f"分類: {workdays_data['debug_info']['チケット分類']}")
-                print(f"開発タイプ判定: {workdays_data['debug_info']['開発タイプ判定']}")
-                print(f"対象工数レコード数: {workdays_data['debug_info']['対象工数レコード数']}")
-                print(f"一般工数（人日）: {workdays_data['debug_info']['一般工数（人日）']}")
-                print(f"新入社員工数（人日）: {workdays_data['debug_info']['新入社員工数（人日）']}")
-                print(f"適用期間: {workdays_data['debug_info']['適用期間']}")
-                print("=====================")
                 
             except Exception as e:
                 import logging
@@ -313,7 +301,7 @@ class WorkloadAggregationForm(forms.ModelForm):
 
 # フィルターフォームも更新
 class WorkloadAggregationFilterForm(forms.Form):
-    """工数集計フィルターフォーム（ProjectTicket対応版）"""
+    """工数集計フィルターフォーム（ProjectTicket）"""
     
     project_name = forms.ModelChoiceField(
         label='プロジェクト名',
@@ -343,8 +331,8 @@ class WorkloadAggregationFilterForm(forms.Form):
         widget=forms.Select(attrs={'class': 'form-select'})
     )
     case_classification = forms.ChoiceField(
-        label='案件分類',
-        choices=[('', '全ての案件分類')] + WorkloadAggregation.CaseClassificationChoices.choices,
+        label='チケット分類',
+        choices=[('', '全てのチケット分類')] + WorkloadAggregation.CaseClassificationChoices.choices,
         required=False,
         widget=forms.Select(attrs={'class': 'form-select'})
     )

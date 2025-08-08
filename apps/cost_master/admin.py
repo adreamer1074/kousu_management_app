@@ -129,7 +129,7 @@ class OutsourcingCostAdmin(admin.ModelAdmin):
     status_display.short_description = 'ステータス'
     
     def case_classification_display(self, obj):
-        """案件分類の表示"""
+        """チケット分類の表示"""
         if obj.case_classification == 'development':
             return format_html(
                 '<span style="background-color: #d1ecf1; padding: 2px 6px; border-radius: 3px;">{}</span>',
@@ -140,8 +140,8 @@ class OutsourcingCostAdmin(admin.ModelAdmin):
                 '<span style="background-color: #f8d7da; padding: 2px 6px; border-radius: 3px;">{}</span>',
                 obj.get_case_classification_display()
             )
-    case_classification_display.short_description = '案件分類'
-    
+    case_classification_display.short_description = 'チケット分類'
+
     def hourly_rate_display(self, obj):
         """単価の表示"""
         return f"¥{obj.hourly_rate:,.0f}"

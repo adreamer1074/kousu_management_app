@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 fetchOutsourcingCost(ticketId);
                 
                 if (autoCalculateCheckbox && autoCalculateCheckbox.checked) {
-                    // 案件分類を自動設定
+                    //チケットト分類を自動設定
                     const classification = selectedOption.getAttribute('data-classification');
                     if (classification && classificationSelect) {
                         classificationSelect.value = classification;
@@ -577,10 +577,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        // 案件分類の変更時も再計算
+        // チケット分類の変更時も再計算
         if (classificationSelect) {
             classificationSelect.addEventListener('change', function() {
-                // console.log('案件分類変更:', this.value);
+                // console.log(チケットト分類変更:', this.value);
                 setTimeout(() => {
                     if (!isCalculating) calculateValues();
                 }, 100);
