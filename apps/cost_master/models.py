@@ -48,6 +48,7 @@ class BusinessPartner(models.Model):
     notes = models.TextField('備考', blank=True)
     
     class Meta:
+        db_table = 'business_partner'
         verbose_name = 'ビジネスパートナー'
         verbose_name_plural = 'ビジネスパートナー'
         ordering = ['name']
@@ -109,7 +110,7 @@ class OutsourcingCost(models.Model):
         'ステータス',
         max_length=20,
         choices=STATUS_CHOICES,
-        default='not_started'
+        default='in_progress'
     )
     case_classification = models.CharField(
         '分類',
@@ -239,6 +240,7 @@ class OutsourcingCostSummary(models.Model):
     last_calculated = models.DateTimeField('最終計算日時', auto_now=True)
     
     class Meta:
+        db_table = 'outsourcing_cost_summary'
         verbose_name = '外注費月次集計'
         verbose_name_plural = '外注費月次集計'
         ordering = ['-year_month']
@@ -316,6 +318,7 @@ class CostMaster(models.Model):
     updated_at = models.DateTimeField('更新日時', auto_now=True)
     
     class Meta:
+        db_table = 'cost_master'
         verbose_name = 'コストマスター'
         verbose_name_plural = 'コストマスター'
         ordering = ['-valid_from']

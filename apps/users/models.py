@@ -48,6 +48,7 @@ class CustomUser(AbstractUser):
     )
 
     class Meta:
+        db_table = 'custom_user'
         verbose_name = "ユーザー"
         verbose_name_plural = "ユーザー"
 
@@ -101,6 +102,7 @@ class Department(models.Model):
     )
 
     class Meta:
+        db_table = 'department'
         verbose_name = "部署"
         verbose_name_plural = "部署"
         ordering = ['name']
@@ -157,6 +159,7 @@ class Section(models.Model):
     )
 
     class Meta:
+        db_table = 'section'
         verbose_name = "課"
         verbose_name_plural = "課"
         ordering = ['department', 'name']

@@ -9,5 +9,6 @@ class Department(models.Model):
         return self.name
 
     class Meta:
+        db_table = 'department'
         verbose_name = 'Department'
         verbose_name_plural = 'Departments'

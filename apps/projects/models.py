@@ -101,6 +101,7 @@ class Project(models.Model):
         )
 
     class Meta:
+        db_table = 'project'
         verbose_name = "プロジェクト"
         verbose_name_plural = "プロジェクト"
         ordering = ['-created_at']
@@ -277,6 +278,7 @@ class ProjectTicket(models.Model):
     
 
     class Meta:
+        db_table = 'project_ticket'
         verbose_name = "プロジェクトチケット"
         verbose_name_plural = "プロジェクトチケット"
         ordering = ['-created_at']
@@ -414,8 +416,9 @@ class ProjectDetail(models.Model):
     updated_at = models.DateTimeField('更新日時', auto_now=True)
     
     class Meta:
-        verbose_name = '案件詳細'
-        verbose_name_plural = '案件詳細'
+        db_table = 'project_detail'
+        verbose_name = 'プロジェクト詳細'
+        verbose_name_plural = 'プロジェクト詳細'
         ordering = ['-created_at']
     
     def __str__(self):
