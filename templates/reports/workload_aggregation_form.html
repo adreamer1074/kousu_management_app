@@ -482,37 +482,36 @@
 
 <!-- JavaScript -->
 {% block extra_js %}
-    <script>
-        // DjangoテンプレートからJavaScriptに値を渡す
-        window.formConfig = {
-            projectSelectId: '{{ form.project_name.id_for_label }}',
-            caseNameSelectId: '{{ form.case_name.id_for_label }}',
-            classificationSelectId: '{{ form.case_classification.id_for_label }}',
-            autoCalculateCheckboxId: '{{ form.auto_calculate_workdays.id_for_label }}',
-            usedWorkdaysFieldId: '{{ form.used_workdays.id_for_label }}',
-            newbieWorkdaysFieldId: '{{ form.newbie_workdays.id_for_label }}',
-            orderDateInputId: '{{ form.order_date.id_for_label }}',
-            actualEndDateInputId: '{{ form.actual_end_date.id_for_label }}',
-            billingAmountFieldId: '{{ form.billing_amount_excluding_tax.id_for_label }}',
-            outsourcingCostFieldId: '{{ form.outsourcing_cost_excluding_tax.id_for_label }}',
-            estimatedWorkdaysFieldId: '{{ form.estimated_workdays.id_for_label }}',
-            availableAmountFieldId: '{{ form.available_amount.id_for_label }}',
-            billingUnitCostFieldId: '{{ form.billing_unit_cost_per_month.id_for_label }}',
-            unitCostFieldId: '{{ form.unit_cost_per_month.id_for_label }}',
-            yearMonthFieldId: '{{ form.year_month.id_for_label|default:"" }}',
-            // API URL
-            ticketsApiUrl: '/projects/api/tickets/',
-            outsourcingCostApiUrl: '/cost-master/api/ticket-outsourcing-cost/',
-            calculateWorkdaysUrl: '/reports/calculate-workdays/',
-            calculateWorkdaysApiUrl: '/reports/api/calculate-workdays/',
-            // CSRFトークン
-            csrfToken: '{{ csrf_token }}'
-        };
-        // デバッグ用：編集時の初期値確認
-        console.log('=== 編集時デバッグ情報 ===');
-        console.log('編集モード: ID={{ form.instance.pk }}');
-        console.log('プロジェクト: {{ form.instance.project_name|default:"未設定" }}');
-        console.log('チケット: {{ form.instance.case_name|default:"未設定" }}');
-    </script>
-    <script src="{% static 'js/reports/workload_aggregation_form.js' %}"></script>
+<script>
+// DjangoテンプレートからJavaScriptに値を渡す
+window.formConfig = {
+    projectSelectId: '{{ form.project_name.id_for_label }}',
+    caseNameSelectId: '{{ form.case_name.id_for_label }}',
+    classificationSelectId: '{{ form.case_classification.id_for_label }}',
+    autoCalculateCheckboxId: '{{ form.auto_calculate_workdays.id_for_label }}',
+    usedWorkdaysFieldId: '{{ form.used_workdays.id_for_label }}',
+    newbieWorkdaysFieldId: '{{ form.newbie_workdays.id_for_label }}',
+    orderDateInputId: '{{ form.order_date.id_for_label }}',
+    actualEndDateInputId: '{{ form.actual_end_date.id_for_label }}',
+    billingAmountFieldId: '{{ form.billing_amount_excluding_tax.id_for_label }}',
+    outsourcingCostFieldId: '{{ form.outsourcing_cost_excluding_tax.id_for_label }}',
+    estimatedWorkdaysFieldId: '{{ form.estimated_workdays.id_for_label }}',
+    availableAmountFieldId: '{{ form.available_amount.id_for_label }}',
+    billingUnitCostFieldId: '{{ form.billing_unit_cost_per_month.id_for_label }}',
+    unitCostFieldId: '{{ form.unit_cost_per_month.id_for_label }}',
+    yearMonthFieldId: '{{ form.year_month.id_for_label|default:"" }}',
+    // API URL
+    ticketsApiUrl: '/projects/api/tickets/',
+    outsourcingCostApiUrl: '/cost-master/api/ticket-outsourcing-cost/',
+    calculateWorkdaysUrl: '/reports/calculate-workdays/',
+    // CSRFトークン
+    csrfToken: '{{ csrf_token }}'
+};
+// デバッグ用：編集時の初期値確認
+console.log('=== 編集時デバッグ情報 ===');
+console.log('編集モード: ID={{ form.instance.pk }}');
+console.log('プロジェクト: {{ form.instance.project_name|default:"未設定" }}');
+console.log('チケット: {{ form.instance.case_name|default:"未設定" }}');
+</script>
+<script src="{% static 'js/reports/workload_aggregation_form.js' %}"></script>
 {% endblock %}

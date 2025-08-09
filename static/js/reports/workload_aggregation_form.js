@@ -635,5 +635,5 @@ document.addEventListener('DOMContentLoaded', function() {
         calculateValues();
     }, 1000);
     
-    console.log('工数集計フォーム（デバッグ版）読み込み完了');
+    console.log('工数集計フォーム読み込み完了');
 });
