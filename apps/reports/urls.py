@@ -19,19 +19,12 @@ urlpatterns = [
     # エクスポート機能
     path('exports/', views.ReportExportListView.as_view(), name='report_export_list'), #未完了
     
-    # 工数自動計算API
-    path('api/calculate-workdays/', views.calculate_workdays_api, name='calculate_workdays_api'),
-    
-    # AJAX工数計算
+    # 工数自動計算API(AJAX)
     path('calculate-workdays/', views.calculate_workdays_ajax, name='calculate_workdays_ajax'),
 
     # 工数一括更新用URL
-    path('workload-aggregation/bulk-update-work-hours/', 
-         views.bulk_update_work_hours, 
-         name='bulk_update_work_hours'),
+    path('workload-aggregation/bulk-update-work-hours/', views.bulk_update_work_hours, name='bulk_update_work_hours'),
     
-    # === 【追加】外注費同期専用API ===
-    path('workload-aggregation/sync-outsourcing-costs/', 
-         views.sync_outsourcing_costs, 
-         name='sync_outsourcing_costs'),
+    # 外注費同期専用API
+    path('workload-aggregation/sync-outsourcing-costs/', views.sync_outsourcing_costs, name='sync_outsourcing_costs'),
 ]

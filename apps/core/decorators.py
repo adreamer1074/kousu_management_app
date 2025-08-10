@@ -1,10 +1,7 @@
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.shortcuts import redirect
-from django.contrib import messages
 from django.http import HttpResponseForbidden
-from django.template.response import TemplateResponse
-from django.urls import reverse_lazy
 
 def is_superuser(user):
     """管理者権限チェック"""
@@ -68,7 +65,7 @@ class SuperuserRequiredMixin(UserPassesTestMixin):
     
     def handle_no_permission(self):
         if not self.request.user.is_authenticated:
-            return redirect('users:login')
+            return redirect('login')
         return HttpResponseForbidden("このページは管理者のみアクセス可能です。")
 
 class LeaderOrSuperuserRequiredMixin(UserPassesTestMixin):
@@ -79,7 +76,7 @@ class LeaderOrSuperuserRequiredMixin(UserPassesTestMixin):
     
     def handle_no_permission(self):
         if not self.request.user.is_authenticated:
-            return redirect('users:login')
+            return redirect('login')
         return HttpResponseForbidden("このページにアクセスする権限がありません。")
 
 class ActiveUserRequiredMixin(UserPassesTestMixin):
@@ -90,5 +87,5 @@ class ActiveUserRequiredMixin(UserPassesTestMixin):
     
     def handle_no_permission(self):
         if not self.request.user.is_authenticated:
-            return redirect('users:login')
+            return redirect('login')
         return HttpResponseForbidden("アカウントが無効です。管理者にお問い合わせください。")

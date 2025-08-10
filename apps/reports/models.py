@@ -167,6 +167,7 @@ class WorkloadAggregation(models.Model):
     deleted_at = models.DateTimeField(null=True, blank=True, verbose_name='削除日時')
     
     class Meta:
+        db_table = 'workload_aggregation'
         verbose_name = '工数集計'
         verbose_name_plural = '工数集計'
         ordering = ['-order_date', '-created_at']
@@ -628,6 +629,7 @@ class ReportExport(models.Model):
     download_count = models.PositiveIntegerField('ダウンロード回数', default=0)
     
     class Meta:
+        db_table = 'report_export'
         verbose_name = 'レポートエクスポート'
         verbose_name_plural = 'レポートエクスポート'
         ordering = ['-requested_at']

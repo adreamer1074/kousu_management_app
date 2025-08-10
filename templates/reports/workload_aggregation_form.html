@@ -13,14 +13,20 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h1 class="h3 mb-0">
-                <i class="bi bi-{% if object %}pencil{% else %}plus-circle{% endif %}"></i> {{ title }}
+                {% if form.instance.pk %}
+                    <i class="bi bi-pencil"></i> 工数集計編集
+                {% else %}
+                    <i class="bi bi-plus-circle"></i> 工数集計新規作成
+                {% endif %}
             </h1>
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="{% url 'core:home' %}">ホーム</a></li>
                     <li class="breadcrumb-item"><a href="{% url 'reports:report_list' %}">レポート</a></li>
                     <li class="breadcrumb-item"><a href="{% url 'reports:workload_aggregation' %}">工数集計</a></li>
-                    <li class="breadcrumb-item active">{{ title }}</li>
+                    <li class="breadcrumb-item active">
+                        {% if form.instance.pk %}編集{% else %}新規作成{% endif %}
+                    </li>
                 </ol>
             </nav>
         </div>
@@ -31,17 +37,15 @@
         </div>
     </div>
 
-    <!-- 入力指示 -->
+    <!-- 編集モード時の案内 -->
+    {% if form.instance.pk %}
     <div class="alert alert-info mb-4">
         <i class="bi bi-info-circle"></i>
-        <strong>入力のご案内:</strong>
-        <ul class="mb-0 mt-2">
-            <li>必須項目（<span class="required-field">*</span>マーク）は必ず入力してください</li>
-            <li>チケット名は既に登録されているチケットのみ選択可能です</li>
-            <li>部名は案件リスト登録画面にある部名のみ選択可能です</li>
-            <li>金額は税別で入力してください</li>
-        </ul>
+        <strong>編集モード:</strong>
+        現在のプロジェクト: <strong>{{ form.instance.project_name|default:"未設定" }}</strong> | 
+        現在のチケット: <strong>{{ form.instance.case_name.title|default:"未設定" }}</strong>
     </div>
+    {% endif %}
 
     <form method="post" novalidate id="workloadForm">
         {% csrf_token %}
@@ -57,7 +61,7 @@
                         {{ form.project_name.label }} <span class="required-field">*</span>
                     </label>
                     {{ form.project_name }}
-                    <div class="help-text">プロジェクトリストから選択してください</div>
+                    <div class="help-text">プロジェクトリスト登録画面にある案件のみ選択可能</div>
                     {% if form.project_name.errors %}
                         <div class="invalid-feedback d-block">
                             {{ form.project_name.errors.0 }}
@@ -68,14 +72,22 @@
                     <label for="{{ form.case_name.id_for_label }}" class="form-label">
                         {{ form.case_name.label }} <span class="required-field">*</span>
                     </label>
-                    {{ form.case_name }}
-                    <div class="help-text">案件リスト登録画面にある案件のみ選択可能</div>
+                    <!-- === 編集時は初期値を設定、新規時は空 === -->
+                    {% if form.instance.pk and form.instance.case_name %}
+                        <select name="{{ form.case_name.name }}" id="{{ form.case_name.id_for_label }}" class="form-select" required>
+                            <option value="{{ form.instance.case_name.id }}" selected>{{ form.instance.case_name.title }}</option>
+                        </select>
+                    {% else %}
+                        {{ form.case_name }}
+                    {% endif %}
+                    <div class="help-text">チケットリスト登録画面にある案件のみ選択可能</div>
                     {% if form.case_name.errors %}
                         <div class="invalid-feedback d-block">
                             {{ form.case_name.errors.0 }}
                         </div>
                     {% endif %}
                 </div>
+                
                 <div class="col-md-4">
                     <label for="{{ form.section.id_for_label }}" class="form-label">
                         {{ form.section.label }} <span class="required-field">*</span>
@@ -472,47 +484,55 @@
                 <i class="bi bi-arrow-left"></i> キャンセル
             </a>
             <button type="submit" class="btn btn-primary">
-                <i class="bi bi-{% if object %}check{% else %}plus{% endif %}-circle"></i>
-                {% if object %}更新{% else %}登録{% endif %}
+                {% if form.instance.pk %}
+                    <i class="bi bi-check-circle"></i> 更新
+                {% else %}
+                    <i class="bi bi-plus-circle"></i> 作成
+                {% endif %}
             </button>
         </div>
     </form>
 </div>
 {% endblock %}
 
-<!-- JavaScript -->
 {% block extra_js %}
-    <script>
-        // DjangoテンプレートからJavaScriptに値を渡す
-        window.formConfig = {
-            projectSelectId: '{{ form.project_name.id_for_label }}',
-            caseNameSelectId: '{{ form.case_name.id_for_label }}',
-            classificationSelectId: '{{ form.case_classification.id_for_label }}',
-            autoCalculateCheckboxId: '{{ form.auto_calculate_workdays.id_for_label }}',
-            usedWorkdaysFieldId: '{{ form.used_workdays.id_for_label }}',
-            newbieWorkdaysFieldId: '{{ form.newbie_workdays.id_for_label }}',
-            orderDateInputId: '{{ form.order_date.id_for_label }}',
-            actualEndDateInputId: '{{ form.actual_end_date.id_for_label }}',
-            billingAmountFieldId: '{{ form.billing_amount_excluding_tax.id_for_label }}',
-            outsourcingCostFieldId: '{{ form.outsourcing_cost_excluding_tax.id_for_label }}',
-            estimatedWorkdaysFieldId: '{{ form.estimated_workdays.id_for_label }}',
-            availableAmountFieldId: '{{ form.available_amount.id_for_label }}',
-            billingUnitCostFieldId: '{{ form.billing_unit_cost_per_month.id_for_label }}',
-            unitCostFieldId: '{{ form.unit_cost_per_month.id_for_label }}',
-            yearMonthFieldId: '{{ form.year_month.id_for_label|default:"" }}',
-            // API URL
-            ticketsApiUrl: '/projects/api/tickets/',
-            outsourcingCostApiUrl: '/cost-master/api/ticket-outsourcing-cost/',
-            calculateWorkdaysUrl: '/reports/calculate-workdays/',
-            calculateWorkdaysApiUrl: '/reports/api/calculate-workdays/',
-            // CSRFトークン
-            csrfToken: '{{ csrf_token }}'
-        };
-        // デバッグ用：編集時の初期値確認
-        console.log('=== 編集時デバッグ情報 ===');
-        console.log('編集モード: ID={{ form.instance.pk }}');
-        console.log('プロジェクト: {{ form.instance.project_name|default:"未設定" }}');
-        console.log('チケット: {{ form.instance.case_name|default:"未設定" }}');
-    </script>
-    <script src="{% static 'js/reports/workload_aggregation_form.js' %}"></script>
+<script>
+window.formConfig = {
+    // 基本設定
+    projectSelectId: '{{ form.project_name.id_for_label }}',
+    caseNameSelectId: '{{ form.case_name.id_for_label }}',
+    classificationSelectId: '{{ form.case_classification.id_for_label }}',
+    autoCalculateCheckboxId: '{{ form.auto_calculate_workdays.id_for_label }}',
+    usedWorkdaysFieldId: '{{ form.used_workdays.id_for_label }}',
+    newbieWorkdaysFieldId: '{{ form.newbie_workdays.id_for_label }}',
+    orderDateInputId: '{{ form.order_date.id_for_label }}',
+    actualEndDateInputId: '{{ form.actual_end_date.id_for_label }}',
+    billingAmountFieldId: '{{ form.billing_amount_excluding_tax.id_for_label }}',
+    outsourcingCostFieldId: '{{ form.outsourcing_cost_excluding_tax.id_for_label }}',
+    estimatedWorkdaysFieldId: '{{ form.estimated_workdays.id_for_label }}',
+    availableAmountFieldId: '{{ form.available_amount.id_for_label }}',
+    billingUnitCostFieldId: '{{ form.billing_unit_cost_per_month.id_for_label }}',
+    unitCostFieldId: '{{ form.unit_cost_per_month.id_for_label }}',
+    
+    // === 編集・新規判定 ===
+    isEditMode: {% if form.instance.pk %}true{% else %}false{% endif %},
+    {% if form.instance.pk %}
+    currentProjectId: {{ form.instance.project_name.id|default:"null" }},
+    currentTicketId: {{ form.instance.case_name.id|default:"null" }},
+    currentTicketTitle: '{{ form.instance.case_name.title|escapejs|default:"" }}',
+    {% endif %}
+    
+    // API URL
+    ticketsApiUrl: '/projects/api/tickets/',
+    outsourcingCostApiUrl: '/cost-master/api/ticket-outsourcing-cost/',
+    calculateWorkdaysUrl: '/reports/calculate-workdays/',
+    
+    // CSRFトークン
+    csrfToken: '{{ csrf_token }}'
+};
+
+</script>
+
+<!-- === レポートフォームJavaScriptファイル === -->
+<script src="{% static 'js/reports/workload_aggregation_form.js' %}"></script>
 {% endblock %}

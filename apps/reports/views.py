@@ -1,10 +1,11 @@
 # 標準ライブラリ
 import os
 import json
+import logging
 import io
 import calendar
 from datetime import date, datetime, timedelta
-
+from decimal import Decimal
 # サードパーティライブラリ(レポートエクスポート用)
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill
@@ -37,9 +38,8 @@ from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 from django.contrib.auth import get_user_model
+from apps.workloads.models import Workload
 from kousu_management_app.settings import FONT_PATH
-
-
 # ローカルアプリ
 from .models import ReportExport, WorkloadAggregation
 from .forms import WorkloadAggregationForm, WorkloadAggregationFilterForm
@@ -61,10 +61,13 @@ class WorkloadAggregationListView(LeaderOrSuperuserRequiredMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self):
+        """
+        一覧に表示するクエリセットを取得。
+        del_flag=False のレコードを対象
+        """
         queryset = WorkloadAggregation.objects.filter(del_flag=False).select_related(
             'case_name', 'section', 'mub_manager', 'created_by'
-        ).order_by('-order_date', '-created_at')
-        
+        ).order_by('section', '-order_date', '-created_at')
         # フィルター処理
         form = WorkloadAggregationFilterForm(self.request.GET)
         if form.is_valid():
@@ -91,13 +94,18 @@ class WorkloadAggregationListView(LeaderOrSuperuserRequiredMixin, ListView):
         return queryset
     
     def get_context_data(self, **kwargs):
+        """
+        テンプレートに渡すコンテキストデータを構築。
+        フィルターフォームや集計情報、現在のフィルター条件を含む。
+        """
         context = super().get_context_data(**kwargs)
         
-        # フィルターフォーム
+        # 現在のフィルター入力値を保持したフォームをコンテキストに追加
         context['filter_form'] = WorkloadAggregationFilterForm(self.request.GET)
         
-        # 統計データ
+        # 表示対象クエリセットを取得
         queryset = self.get_queryset()
+        # 集計情報をコンテキストに追加（合計値を表示）
         context['total_stats'] = {
             'total_available_amount': queryset.aggregate(total=Sum('available_amount'))['total'] or 0,
             'total_billing_amount': queryset.aggregate(total=Sum('billing_amount_excluding_tax'))['total'] or 0,
@@ -107,7 +115,8 @@ class WorkloadAggregationListView(LeaderOrSuperuserRequiredMixin, ListView):
             'total_newbie_workdays': queryset.aggregate(total=Sum('newbie_workdays'))['total'] or 0,
         }
         
-        # 現在のフィルター値
+
+        # 現在のフィルター条件を辞書として渡す（テンプレート側でフォームの再表示等に利用）
         context['current_filters'] = {
             'project_name': self.request.GET.get('project_name', ''),
             'case_name_id': self.request.GET.get('case_name', ''),
@@ -121,13 +130,18 @@ class WorkloadAggregationListView(LeaderOrSuperuserRequiredMixin, ListView):
 
 class WorkloadAggregationCreateView(LeaderOrSuperuserRequiredMixin, CreateView):
     """工数集計作成画面"""
+
+    # 工数集計モデル使用
     model = WorkloadAggregation
     form_class = WorkloadAggregationForm
     template_name = 'reports/workload_aggregation_form.html'
     success_url = reverse_lazy('reports:workload_aggregation')
     
     def get_initial(self):
-        """フォームの初期値を設定"""
+        """
+        フォームの初期値を設定するメソッド。
+        単価および請求単価にデフォルト値を設定。
+        """
         initial = super().get_initial()
         initial.update({
             'unit_cost_per_month': 75.0,      # 単価のデフォルト値
@@ -136,18 +150,30 @@ class WorkloadAggregationCreateView(LeaderOrSuperuserRequiredMixin, CreateView):
         return initial
     
     def get_form_kwargs(self):
+        """
+        フォームに渡す追加のキーワード引数を設定。
+        現在のユーザーをフォームに渡す。
+        """
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         return kwargs
     
     def form_valid(self, form):
+        """
+        フォームのバリデーションが成功した場合の処理。
+        作成者として現在のユーザーを設定し、成功メッセージを表示。
+        """
         form.instance.created_by = self.request.user
         messages.success(self.request, '工数集計データが正常に登録されました。')
         return super().form_valid(form)
     
     def get_context_data(self, **kwargs):
+        """
+        テンプレートに渡すコンテキストデータを追加。
+        タイトルなどの画面表示用情報を設定。
+        """
         context = super().get_context_data(**kwargs)
-        context['title'] = '工数集計登録'
+        context['title'] = '工数集計登録'  # テンプレートで使う画面タイトル
         return context
 
 class WorkloadAggregationDetailView(LeaderOrSuperuserRequiredMixin, DetailView):
@@ -171,6 +197,13 @@ class WorkloadAggregationUpdateView(LeaderOrSuperuserRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['title'] = '工数集計編集'
+        
+        # === 編集専用コンテキスト ===
+        context.update({
+            'is_edit_mode': True,
+            'edit_record_id': self.object.pk,
+        })
+        
         return context
 
 class WorkloadAggregationDeleteView(LeaderOrSuperuserRequiredMixin, DeleteView):
@@ -216,7 +249,7 @@ def workload_export(request):
     """工数データのエクスポート"""
     import csv
     from django.http import HttpResponse
-    from datetime import datetime
+    
     
     # CSV レスポンスの作成
     response = HttpResponse(content_type='text/csv; charset=utf-8')
@@ -326,38 +359,65 @@ class ReportExportListView(LeaderOrSuperuserRequiredMixin, ListView):
 
 @login_required
 @leader_or_superuser_required_403
-@require_http_methods(["POST"])
-def calculate_workdays_api(request):
-    """工数自動計算API（Workloadモデル対応版）"""
+@require_POST
+def calculate_workdays_ajax(request):
+    """工数自動計算（AJAX版）"""
     try:
-        data = json.loads(request.body)
-        case_id = data.get('case_id')  # これはProjectTicketのID
-        order_date = data.get('order_date')
-        actual_end_date = data.get('actual_end_date')
+        # FormDataからパラメータを取得
+        ticket_id = request.POST.get('ticket_id')
+        classification = request.POST.get('classification', 'development')
+        order_date = request.POST.get('order_date')
+        actual_end_date = request.POST.get('actual_end_date')
         
-        if not case_id:
+        if not ticket_id:
             return JsonResponse({'success': False, 'error': 'チケットIDが必要です。'})
         
-        from apps.workloads.models import Workload
-        from decimal import Decimal
+        #チケットオブジェクトを取得
+        from apps.projects.models import ProjectTicket
+        try:
+            ticket = ProjectTicket.objects.get(id=ticket_id, is_active=True)
+        except ProjectTicket.DoesNotExist:
+            return JsonResponse({
+                'success': False, 
+                'error': f'指定されたチケット（ID: {ticket_id}）が見つかりません。'
+            })
         
-        # 工数データの取得（Workloadモデル）
-        workloads_query = Workload.objects.filter(ticket__id=case_id)
+        # 工数データの取得
+        workloads_query = Workload.objects.filter(ticket__id=ticket_id)
         
-        # 日付フィルター適用（年月ベースで）
+        # 日付フィルター適用
         target_year_months = set()
         
         if order_date:
-            start_date = datetime.strptime(order_date, '%Y-%m-%d').date()
+            try:
+                start_date = datetime.strptime(order_date, '%Y-%m-%d').date()
+            except ValueError:
+                return JsonResponse({
+                    'success': False, 
+                    'error': f'受注日の形式が正しくありません: {order_date}'
+                })
         else:
-            # デフォルトは現在年月から6ヶ月前
-            start_date = date.today().replace(day=1)
+            # デフォルトは6ヶ月前から
+            start_date = date.today().replace(day=1) - timedelta(days=180)
+            start_date = start_date.replace(day=1)
         
         if actual_end_date:
-            end_date = datetime.strptime(actual_end_date, '%Y-%m-%d').date()
+            try:
+                end_date = datetime.strptime(actual_end_date, '%Y-%m-%d').date()
+            except ValueError:
+                return JsonResponse({
+                    'success': False, 
+                    'error': f'終了日の形式が正しくありません: {actual_end_date}'
+                })
         else:
-            # デフォルトは現在年月
             end_date = date.today()
+        
+        # 日付検証
+        if start_date > end_date:
+            return JsonResponse({
+                'success': False, 
+                'error': '受注日は終了日より前である必要があります。'
+            })
         
         # 対象年月のリストを作成
         current_date = start_date.replace(day=1)
@@ -385,25 +445,32 @@ def calculate_workdays_api(request):
             
             # 各日の工数を合計（日付範囲内のみ）
             workload_year_month = workload.year_month
-            year, month = map(int, workload_year_month.split('-'))
+            try:
+                year, month = map(int, workload_year_month.split('-'))
+            except ValueError:
+                continue  # 無効な年月形式はスキップ
             
             # その月の日数を取得
             days_in_month = calendar.monthrange(year, month)[1]
             
             for day in range(1, days_in_month + 1):
                 # 日付範囲チェック
-                current_day = date(year, month, day)
-                if order_date:
-                    start_check = datetime.strptime(order_date, '%Y-%m-%d').date()
-                    if current_day < start_check:
-                        continue
-                if actual_end_date:
-                    end_check = datetime.strptime(actual_end_date, '%Y-%m-%d').date()
-                    if current_day > end_check:
-                        continue
+                try:
+                    current_day = date(year, month, day)
+                except ValueError:
+                    continue  # 無効な日付はスキップ
+                
+                # 指定された日付範囲外の工数は除外
+                if current_day < start_date or current_day > end_date:
+                    continue
                 
                 # その日の工数を取得
-                day_hours = workload.get_day_value(day)
+                try:
+                    day_hours = workload.get_day_value(day)
+                    if day_hours < 0:  # 負の値はスキップ
+                        continue
+                except (AttributeError, TypeError, ValueError):
+                    continue  # エラーの場合はスキップ
                 
                 # 工数の分類
                 if is_junior:
@@ -415,76 +482,37 @@ def calculate_workdays_api(request):
         used_workdays = regular_workdays / 8
         newbie_workdays_converted = newbie_workdays / 8
         
+        # === 【修正】レスポンスでticket.titleを正しく使用 ===
         return JsonResponse({
             'success': True,
             'used_workdays': float(used_workdays),
             'newbie_workdays': float(newbie_workdays_converted),
             'total_workdays': float(used_workdays + newbie_workdays_converted),
-            'ticket_name': ticket.title,
+            'ticket_name': ticket.title,  # ✅ ここでticketが正しく定義済み
+            'ticket_id': ticket.id,
+            'project_name': ticket.project.name if ticket.project else None,
             'debug_info': {
                 'workload_records': workloads_query.count(),
                 'target_months': list(target_year_months),
                 'regular_hours': float(regular_workdays),
-                'newbie_hours': float(newbie_workdays)
+                'newbie_hours': float(newbie_workdays),
+                'date_range': f'{start_date} - {end_date}',
+                'received_ticket_id': ticket_id,
+                'classification': classification
             }
         })
         
     except Exception as e:
+        import logging
+        import traceback
+        logger = logging.getLogger(__name__)
+        logger.error(f"工数計算AJAX エラー: {str(e)}")
+        logger.error(f"トレースバック: {traceback.format_exc()}")
+        
         return JsonResponse({
             'success': False, 
             'error': f'サーバーエラー: {str(e)}'
         })
-
-@login_required
-@leader_or_superuser_required_403
-@require_POST
-def calculate_workdays_ajax(request):
-    """AJAX工数計算エンドポイント"""
-    try:
-        ticket_id = request.POST.get('ticket_id')
-        classification = request.POST.get('classification', 'development')
-        
-        if not ticket_id:
-            return JsonResponse({
-                'success': False,
-                'error': 'チケットIDが指定されていません'
-            })
-        
-        # チケットを取得
-        try:
-            ticket = ProjectTicket.objects.get(id=ticket_id, is_active=True)
-        except ProjectTicket.DoesNotExist:
-            return JsonResponse({
-                'success': False,
-                'error': '指定されたチケットが見つかりません'
-            })
-        
-        # 一時的な工数集計インスタンスを作成
-        temp_aggregation = WorkloadAggregation()
-        temp_aggregation.case_name = ticket
-        temp_aggregation.case_classification = classification
-        
-        # 工数計算実行
-        result = temp_aggregation.calculate_workdays_from_workload()
-        
-        return JsonResponse({
-            'success': True,
-            'used_workdays': float(result['used_workdays']),
-            'newbie_workdays': float(result['newbie_workdays']),
-            'total_workdays': float(result['total_workdays']),
-            'debug_info': result['debug_info']
-        })
-        
-    except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"AJAX工数計算エラー: {str(e)}")
-        
-        return JsonResponse({
-            'success': False,
-            'error': f'計算エラー: {str(e)}'
-        })
-
 @login_required
 @leader_or_superuser_required_403
 def workload_export_current(request):
@@ -535,7 +563,6 @@ def workload_export_current(request):
     
     # Windows対応：一時ディレクトリとファイル名を修正
     import tempfile
-    import os
     
     timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
     
@@ -990,12 +1017,10 @@ def complete_export(report_export, local_path):
     """
     S3アップロード＆履歴登録を行う関数
     """
-    import logging
     logger = logging.getLogger(__name__)
     logger.info(f"[S3連携] complete_export開始: local_path={local_path}, file_name={report_export.file_name}")
 
     try:
-        import os
         
         # ファイル存在確認
         if not os.path.exists(local_path):
@@ -1497,9 +1522,7 @@ def _generate_project_portfolio(queryset, styles, filters):
 @login_required
 @require_http_methods(["POST"])
 def bulk_update_work_hours(request):
-    """工数集計の一括工数更新（Workloadモデル対応版）+ 計算項目自動更新 + 外注費同期"""
-    import logging
-    from decimal import Decimal
+    """工数集計の一括工数更新 (計算項目自動更新 + 外注費同期)"""
     logger = logging.getLogger(__name__)
     
     try:
@@ -1557,7 +1580,6 @@ def bulk_update_work_hours(request):
                             target_year_month = aggregation_record.order_date.strftime('%Y-%m')
                         else:
                             # デフォルトは現在年月
-                            from datetime import datetime
                             target_year_month = datetime.now().strftime('%Y-%m')
                     
                     try:
@@ -1723,8 +1745,6 @@ def bulk_update_work_hours(request):
 @require_http_methods(["POST"])
 def sync_outsourcing_costs(request):
     """外注費の同期専用API（工数集計レコードの外注費を最新の外注費データと同期）"""
-    import logging
-    from decimal import Decimal
     logger = logging.getLogger(__name__)
     
     try:
@@ -1775,7 +1795,6 @@ def sync_outsourcing_costs(request):
                     elif aggregation_record.order_date:
                         target_year_month = aggregation_record.order_date.strftime('%Y-%m')
                     else:
-                        from datetime import datetime
                         target_year_month = datetime.now().strftime('%Y-%m')
                     
                     # 外注費の取得と合計計算
