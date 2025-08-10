@@ -22,12 +22,9 @@ class CustomLoginView(LoginView):
         # ログイン成功メッセージ
         messages.success(self.request, f'お帰りなさい、{user.username}さん！')
         
-        if user.is_superuser:
+        if user.is_superuser or user.is_leader:
             # スーパーユーザー → 管理ダッシュボード
             return reverse('core:admin_dashboard')
-        elif user.is_leader:
-            # リーダー → リーダーダッシュボード
-            return reverse('core:staff_dashboard')
         else:
             # 一般ユーザー → 個人ダッシュボード
             return reverse('core:user_dashboard')
