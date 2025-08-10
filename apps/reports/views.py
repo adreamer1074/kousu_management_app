@@ -190,29 +190,19 @@ class WorkloadAggregationUpdateView(LeaderOrSuperuserRequiredMixin, UpdateView):
     success_url = reverse_lazy('reports:workload_aggregation')
 
     def get_form_kwargs(self):
-        """
-        フォームに渡す追加のキーワード引数を設定。
-        現在のログインユーザーをフォームに渡す。
-        """
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         return kwargs
     
     def get_context_data(self, **kwargs):
-        """
-        テンプレートに渡すコンテキストデータを構築。
-        タイトルなどの画面情報に加え、関連するチケットやプロジェクト情報も渡す。
-        """
         context = super().get_context_data(**kwargs)
         context['title'] = '工数集計編集'
-
-        # 編集対象の工数集計に紐づくチケットおよびプロジェクト情報をテンプレートに渡す
-        if self.object and self.object.case_name:
-            context.update({
-                'current_ticket_id': self.object.case_name.id,
-                'current_ticket_title': self.object.case_name.title,
-                'current_project_id': self.object.case_name.project.id if self.object.case_name.project else None,
-            })
+        
+        # === 編集専用コンテキスト ===
+        context.update({
+            'is_edit_mode': True,
+            'edit_record_id': self.object.pk,
+        })
         
         return context
 

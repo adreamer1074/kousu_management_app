@@ -1,12 +1,14 @@
 document.addEventListener('DOMContentLoaded', function() {
-    // テンプレートから渡された設定を使用
     const config = window.formConfig;
     if (!config) {
-        console.error('formConfigが見つかりません。テンプレートでformConfigを設定してください。');
+        console.error('formConfig が見つかりません');
         return;
     }
 
-    // DOM要素の取得（設定から動的に取得）
+    console.log('=== 統合フォームJavaScript開始 ===');
+    console.log('編集モード:', config.isEditMode);
+
+    // === DOM要素の取得（workload_aggregation_form.js から） ===
     const projectSelect = document.getElementById(config.projectSelectId);
     const caseNameSelect = document.getElementById(config.caseNameSelectId);
     const classificationSelect = document.getElementById(config.classificationSelectId);
@@ -27,164 +29,145 @@ document.addEventListener('DOMContentLoaded', function() {
     const unitCostField = document.getElementById(config.unitCostFieldId);
     const yearMonthField = config.yearMonthFieldId ? document.getElementById(config.yearMonthFieldId) : null;
 
-    // console.log('=== DOM要素の取得状況 ===');
-    // console.log('- projectSelect:', !!projectSelect, projectSelect ? projectSelect.id : 'null');
-    // console.log('- caseNameSelect:', !!caseNameSelect, caseNameSelect ? caseNameSelect.id : 'null');
-    // console.log('- classificationSelect:', !!classificationSelect, classificationSelect ? classificationSelect.id : 'null');
-    // console.log('- projectSelectId from config:', config.projectSelectId);
-    // console.log('- caseNameSelectId from config:', config.caseNameSelectId);
-    // console.log('========================');
-
     // 計算処理中フラグ（無限ループ防止）
     let isCalculating = false;
-    
-    // プロジェクト選択時にチケット一覧を更新
-    if (projectSelect && caseNameSelect) {
-        console.log('プロジェクト選択イベントリスナーを追加します');
+
+    // === 初期化処理 ===
+    function initializeUnifiedForm() {
+        console.log('=== 統合フォーム初期化 ===');
         
-        projectSelect.addEventListener('change', function() {
-            const projectId = this.value;
-            // console.log('=== プロジェクト選択イベント発生 ===');
-            // console.log('選択されたプロジェクトID:', projectId);
-            // console.log('API URL:', config.ticketsApiUrl);
-            
-            // チケット選択肢をクリア
-            caseNameSelect.innerHTML = '<option value="">チケット（案件）を選択してください</option>';
-            
-            if (projectId) {
-                const apiUrl = `${config.ticketsApiUrl}?project_id=${projectId}`;
+        // プロジェクト選択時の処理
+        if (projectSelect) {
+            projectSelect.addEventListener('change', function() {
+                const projectId = this.value;
+                console.log('プロジェクト変更:', projectId);
                 
-                // AJAX でチケット一覧を取得
-                fetch(apiUrl)
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        if (data.success) {
-                            if (data.tickets && data.tickets.length > 0) {
-                                data.tickets.forEach(ticket => {
-                                    const option = document.createElement('option');
-                                    option.value = ticket.id;
-                                    option.textContent = ticket.title;
-                                    option.setAttribute('data-classification', ticket.case_classification);
-                                    caseNameSelect.appendChild(option);
-                                });
-                            } else {
-                                const option = document.createElement('option');
-                                option.value = '';
-                                option.textContent = 'このプロジェクトにはチケットがありません';
-                                caseNameSelect.appendChild(option);
-                            }
-                        } else {
-                            console.error('チケット取得失敗:', data.error || '不明なエラー');
-                            const option = document.createElement('option');
-                            option.value = '';
-                            option.textContent = 'チケット取得に失敗しました';
-                            caseNameSelect.appendChild(option);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('チケット取得エラー:', error);
-                        const option = document.createElement('option');
-                        option.value = '';
-                        option.textContent = 'チケット取得中にエラーが発生しました';
-                        caseNameSelect.appendChild(option);
-                    });
-            } else {
+                // === 【編集時】同じプロジェクトの場合はスキップ ===
+                if (config.isEditMode && config.currentProjectId == projectId) {
+                    console.log('編集モード：同じプロジェクト選択、処理スキップ');
+                    return;
+                }
+                
+                // チケット選択をクリア
+                if (caseNameSelect) {
+                    caseNameSelect.innerHTML = '<option value="">チケット（案件）を選択してください</option>';
+                }
+                
+                if (projectId) {
+                    loadTicketsForProject(projectId);
+                }
+            });
+            
+            // === 【新規作成】初期状態でプロジェクトが選択されている場合 ===
+            if (!config.isEditMode && projectSelect.value) {
+                projectSelect.dispatchEvent(new Event('change'));
             }
-        });
+        }
+
+        // === 【編集時】初期外注費取得 ===
+        if (config.isEditMode && config.currentTicketId) {
+            console.log('編集モード：初期チケットで外注費取得:', config.currentTicketId);
+            setTimeout(() => {
+                fetchOutsourcingCost(config.currentTicketId);
+            }, 500);
+        }
+
+        // チケット選択時の処理
+        if (caseNameSelect) {
+            caseNameSelect.addEventListener('change', function() {
+                const ticketId = this.value;
+                const selectedOption = this.options[this.selectedIndex];
+                
+                if (ticketId) {
+                    console.log('チケット選択変更:', ticketId);
+                    
+                    // 外注費を取得
+                    fetchOutsourcingCost(ticketId);
+                    
+                    if (autoCalculateCheckbox && autoCalculateCheckbox.checked) {
+                        // チケット分類を自動設定
+                        const classification = selectedOption.getAttribute('data-classification');
+                        if (classification && classificationSelect) {
+                            classificationSelect.value = classification;
+                        }
+                        
+                        // 工数をリアルタイム計算
+                        calculateWorkdays(ticketId, classification);
+                    } else if (ticketId) {
+                        // 工数を取得
+                        fetchWorkHours(ticketId);
+                    }
+                } else {
+                    // チケット未選択時は外注費をリセット
+                    if (outsourcingCostField) {
+                        outsourcingCostField.value = '0';
+                        calculateValues();
+                    }
+                }
+            });
+        }
+
+        // 自動計算機能の初期化
+        setupUserModificationTracking();
+        setupCalculationTriggers();
+    }
+
+    // === チケット読み込み ===
+    function loadTicketsForProject(projectId) {
+        const apiUrl = `${config.ticketsApiUrl}?project_id=${projectId}`;
+        console.log('チケット読み込み:', apiUrl);
         
-        // 初期状態でプロジェクトが選択されている場合の処理
-        if (projectSelect.value) {
-            // トリガーイベントを発生させる
-            projectSelect.dispatchEvent(new Event('change'));
+        if (!caseNameSelect) {
+            console.error('チケット選択要素が見つかりません');
+            return;
         }
         
-    } else {
-        console.error('=== 重要なエラー ===');
-        console.error('プロジェクト選択またはチケット選択の要素が見つかりません');
-        console.error('- projectSelect element:', projectSelect);
-        console.error('- caseNameSelect element:', caseNameSelect);
-        console.error('- config.projectSelectId:', config.projectSelectId);
-        console.error('- config.caseNameSelectId:', config.caseNameSelectId);
-        console.error('==================');
+        caseNameSelect.innerHTML = '<option value="">読み込み中...</option>';
         
-        // HTML内のselectタグを確認
-        const allSelects = document.querySelectorAll('select');
-        allSelects.forEach((select, index) => {
-        });
-    }
-
-    // チケット選択時に外注費を自動取得
-    if (caseNameSelect) {
-        caseNameSelect.addEventListener('change', function() {
-            const ticketId = this.value;
-            const selectedOption = this.options[this.selectedIndex];
-            
-            if (ticketId) {
-                // 外注費を取得
-                fetchOutsourcingCost(ticketId);
-                
-                if (autoCalculateCheckbox && autoCalculateCheckbox.checked) {
-                    //チケットト分類を自動設定
-                    const classification = selectedOption.getAttribute('data-classification');
-                    if (classification && classificationSelect) {
-                        classificationSelect.value = classification;
+        fetch(apiUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    if (data.tickets && data.tickets.length > 0) {
+                        caseNameSelect.innerHTML = '<option value="">チケット（案件）を選択してください</option>';
+                        
+                        data.tickets.forEach(ticket => {
+                            const option = document.createElement('option');
+                            option.value = ticket.id;
+                            option.textContent = ticket.title;
+                            option.setAttribute('data-classification', ticket.case_classification || '');
+                            caseNameSelect.appendChild(option);
+                        });
+                        
+                        console.log('チケット読み込み完了:', data.tickets.length, '件');
+                    } else {
+                        caseNameSelect.innerHTML = '<option value="">このプロジェクトにはチケットがありません</option>';
                     }
-                    
-                    // 工数をリアルタイム計算
-                    calculateWorkdays(ticketId, classification);
-                } else if (ticketId) {
-                    // 工数を取得
-                    fetchWorkHours(ticketId);
+                } else {
+                    console.error('チケット取得失敗:', data.error || '不明なエラー');
+                    caseNameSelect.innerHTML = '<option value="">チケット取得に失敗しました</option>';
                 }
-            } else {
-                // チケット未選択時は外注費をリセット
-                if (outsourcingCostField) {
-                    outsourcingCostField.value = '0';
-                    calculateValues();
-                }
-            }
-        });
+            })
+            .catch(error => {
+                console.error('チケット取得エラー:', error);
+                caseNameSelect.innerHTML = '<option value="">チケット取得中にエラーが発生しました</option>';
+            });
     }
 
-    // デバッグ用の関数をグローバルに公開
-    // window.debugTickets = {
-    //     checkElements: function() {
-    //         console.log('=== 要素チェック ===');
-    //         console.log('projectSelect:', projectSelect);
-    //         console.log('caseNameSelect:', caseNameSelect);
-    //         console.log('config:', config);
-    //     },
-    //     testTicketFetch: function(projectId) {
-    //         const apiUrl = `${config.ticketsApiUrl}?project_id=${projectId}`;
-    //         console.log('テスト用チケット取得:', apiUrl);
-    //         fetch(apiUrl)
-    //             .then(response => response.json())
-    //             .then(data => console.log('テスト結果:', data))
-    //             .catch(error => console.error('テストエラー:', error));
-    //     },
-    //     triggerProjectChange: function() {
-    //         if (projectSelect && projectSelect.value) {
-    //             console.log('手動でプロジェクト変更イベントをトリガー');
-    //             projectSelect.dispatchEvent(new Event('change'));
-    //         } else {
-    //             console.log('プロジェクトが選択されていません');
-    //         }
-    //     }
-    // };
-
-    // 外注費取得関数
+    // === 外注費取得関数 ===
     function fetchOutsourcingCost(ticketId) {
         if (!ticketId || !outsourcingCostField) return;
+        
+        console.log('外注費取得開始:', ticketId);
         
         // 現在の年月を取得（必要に応じて変更可能）
         const currentDate = new Date();
         const yearMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-        
         
         // ローディング表示
         outsourcingCostField.style.backgroundColor = '#fff3cd';
@@ -195,17 +178,11 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    
                     // 外注費フィールドに値を設定
                     setFieldValue(outsourcingCostField, Math.round(data.total_cost));
                     setAutoCalculatedStyle(outsourcingCostField);
                     
-                    // // 詳細情報をコンソールに表示（デバッグ用）
-                    // if (data.cost_details && data.cost_details.length > 0) {
-                    //     console.log(`総件数: ${data.count}件, 総外注費: ¥${data.total_cost.toLocaleString()}`);
-                    // } else {
-                    //     console.log('このチケットには外注費の登録がありません');
-                    // }
+                    console.log('外注費取得成功:', data.total_cost);
                     
                     // 他の計算をトリガー
                     setTimeout(() => {
@@ -229,19 +206,11 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
-    // 年月変更時にも外注費を再取得
-    if (yearMonthField && caseNameSelect) {
-        yearMonthField.addEventListener('change', function() {
-            const ticketId = caseNameSelect.value;
-            if (ticketId) {
-                fetchOutsourcingCost(ticketId);
-            }
-        });
-    }
-
-    // 工数計算関数（リアルタイム用）
+    // === 工数計算関数 ===
     function calculateWorkdays(ticketId, classification) {
         if (!ticketId) return;
+        
+        console.log('工数計算開始:', ticketId, classification);
         
         // ローディング表示
         if (usedWorkdaysField) {
@@ -275,6 +244,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     newbieWorkdaysField.style.backgroundColor = '#d1edff';
                 }
                 
+                console.log('工数計算成功:', data);
+                
                 // 自動計算を実行
                 setTimeout(() => {
                     if (!isCalculating) calculateValues();
@@ -295,8 +266,8 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('AJAX エラー:', error);
         });
     }
-    
-    // 従来の工数自動取得機能（期間考慮版）
+
+    // === 工数自動取得機能 ===
     async function fetchWorkHours(caseId) {
         if (!caseId) {
             if (usedWorkdaysField) usedWorkdaysField.value = '0.0';
@@ -340,8 +311,8 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('工数取得エラー:', error);
         }
     }
-    
-    // 自動計算機能
+
+    // === 自動計算機能 ===
     function calculateValues() {
         if (isCalculating) {
             console.log('計算処理中のため、スキップします');
@@ -361,19 +332,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const unitCost = parseFloat(unitCostField?.value) || 0;
             const billingUnitCost = parseFloat(billingUnitCostField?.value) || 0;
             
-            // console.log('取得した値:', {
-            //     billingAmount, outsourcingCost, estimatedWorkdays, 
-            //     usedWorkdays, newbieWorkdays, unitCost, billingUnitCost
-            // });
-            
             // 1. 使用可能金額(税別) = 請求金額(税別) - 外注費（税別）
             const actualAvailableAmount = Math.max(billingAmount - outsourcingCost, 0);
-            // console.log('使用可能金額計算:', billingAmount, '-', outsourcingCost, '=', actualAvailableAmount);
             
             // 使用可能金額の自動設定
             if (availableAmountField && availableAmountField.dataset.userModified !== 'true') {
                 if (billingAmount > 0 || outsourcingCost > 0) {
-                    // console.log('使用可能金額を自動設定:', actualAvailableAmount);
                     setFieldValue(availableAmountField, Math.round(actualAvailableAmount));
                     setAutoCalculatedStyle(availableAmountField);
                 }
@@ -381,35 +345,15 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // 2. 見積工数（人日）のデフォルト = 使用可能金額(税別) / (請求単価/20*10000)
             if (estimatedWorkdaysField && estimatedWorkdaysField.dataset.userModified !== 'true') {
-                // console.log('見積工数の自動計算チェック:');
-                // console.log('- billingUnitCost:', billingUnitCost);
-                // console.log('- actualAvailableAmount:', actualAvailableAmount);
-                // console.log('- userModified:', estimatedWorkdaysField.dataset.userModified);
-                
                 if (billingUnitCost > 0 && actualAvailableAmount > 0) {
                     const dailyRate = (billingUnitCost / 20) * 10000; // 万円→円変換
                     const defaultEstimatedWorkdays = actualAvailableAmount / dailyRate;
                     
-                    // console.log('見積工数詳細計算:');
-                    // console.log('- billingUnitCost:', billingUnitCost, '万円/月');
-                    // console.log('- dailyRate:', dailyRate, '円/日');
-                    // console.log('- actualAvailableAmount:', actualAvailableAmount, '円');
-                    // console.log('- defaultEstimatedWorkdays:', defaultEstimatedWorkdays, '人日');
-                    
                     if (defaultEstimatedWorkdays > 0 && isFinite(defaultEstimatedWorkdays)) {
-                        // console.log('✓ 見積工数を自動設定:', defaultEstimatedWorkdays.toFixed(1), '人日');
                         setFieldValue(estimatedWorkdaysField, defaultEstimatedWorkdays.toFixed(1));
                         setAutoCalculatedStyle(estimatedWorkdaysField);
-                    } else {
-                        // console.log('✗ 見積工数の計算結果が無効:', defaultEstimatedWorkdays);
                     }
-                } else {
-                    // console.log('✗ 見積工数計算の前提条件が不足');
-                    // console.log('  - 請求単価 > 0:', billingUnitCost > 0);
-                    // console.log('  - 使用可能金額 > 0:', actualAvailableAmount > 0);
                 }
-            } else {
-                // console.log('✗ 見積工数の自動計算をスキップ（手動編集済み）');
             }
             
             // 3. 使用工数合計計算
@@ -419,7 +363,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 totalUsedWorkdaysElement.textContent = `${totalUsedWorkdays.toFixed(1)}人日`;
             }
             
-            // 4. 残工数計算（更新された見積工数を使用）
+            // 4. 残工数計算
             const currentEstimatedWorkdays = parseFloat(estimatedWorkdaysField?.value) || 0;
             const remainingWorkdays = Math.max(currentEstimatedWorkdays - totalUsedWorkdays, 0);
             const remainingWorkdaysElement = document.getElementById('remainingWorkdays');
@@ -472,16 +416,14 @@ document.addEventListener('DOMContentLoaded', function() {
             isCalculating = false;
         }
     }
-    
-    // フィールドに値を安全に設定する関数
+
+    // === ヘルパー関数 ===
     function setFieldValue(field, value) {
         if (field && field.value !== String(value)) {
             field.value = value;
-            // console.log(`フィールド値設定: ${field.id} = ${value}`);
         }
     }
     
-    // 自動計算フィールドのスタイルを設定
     function setAutoCalculatedStyle(field) {
         if (field) {
             field.style.backgroundColor = '#e6f3ff';
@@ -489,34 +431,27 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // 手動編集フィールドのスタイルを設定
     function setManualEditStyle(field) {
         if (field) {
             field.style.backgroundColor = '#fff';
             field.style.borderColor = '#ced4da';
         }
     }
-    
-    // ユーザーが手動で入力した場合のフラグ設定
+
+    // === ユーザー編集追跡機能 ===
     function setupUserModificationTracking() {
         // 見積工数フィールドの手動編集検出
         if (estimatedWorkdaysField) {
-            // 初期状態を設定
             estimatedWorkdaysField.dataset.userModified = 'false';
             
-            // フォーカス時（手動編集開始）
             estimatedWorkdaysField.addEventListener('focus', function() {
-                // console.log('見積工数フィールドにフォーカス - 手動編集モード開始');
                 this.dataset.userModified = 'true';
                 setManualEditStyle(this);
             });
             
-            // 直接入力時
             estimatedWorkdaysField.addEventListener('input', function() {
-                // console.log('見積工数が手動で入力されました:', this.value);
                 this.dataset.userModified = 'true';
                 setManualEditStyle(this);
-                // 他の計算は継続
                 setTimeout(() => {
                     if (!isCalculating) calculateValues();
                 }, 100);
@@ -525,30 +460,24 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 使用可能金額フィールドの手動編集検出
         if (availableAmountField) {
-            // 初期状態を設定
             availableAmountField.dataset.userModified = 'false';
             
-            // フォーカス時（手動編集開始）
             availableAmountField.addEventListener('focus', function() {
-                console.log('使用可能金額フィールドにフォーカス - 手動編集モード開始');
                 this.dataset.userModified = 'true';
                 setManualEditStyle(this);
             });
             
-            // 直接入力時
             availableAmountField.addEventListener('input', function() {
-                console.log('使用可能金額が手動で入力されました:', this.value);
                 this.dataset.userModified = 'true';
                 setManualEditStyle(this);
-                // 他の計算は継続
                 setTimeout(() => {
                     if (!isCalculating) calculateValues();
                 }, 100);
             });
         }
     }
-    
-    // 計算トリガーフィールドのイベントリスナー設定
+
+    // === 計算トリガー設定 ===
     function setupCalculationTriggers() {
         const triggerFields = [
             { field: billingAmountField, name: '請求金額' },
@@ -562,14 +491,12 @@ document.addEventListener('DOMContentLoaded', function() {
         triggerFields.forEach(({ field, name }) => {
             if (field) {
                 field.addEventListener('input', function() {
-                    // console.log(`${name}が変更されました: ${this.value}`);
                     setTimeout(() => {
                         if (!isCalculating) calculateValues();
                     }, 100);
                 });
                 
                 field.addEventListener('change', function() {
-                    // console.log(`${name}が確定されました: ${this.value}`);
                     setTimeout(() => {
                         if (!isCalculating) calculateValues();
                     }, 100);
@@ -580,60 +507,32 @@ document.addEventListener('DOMContentLoaded', function() {
         // チケット分類の変更時も再計算
         if (classificationSelect) {
             classificationSelect.addEventListener('change', function() {
-                // console.log(チケットト分類変更:', this.value);
                 setTimeout(() => {
                     if (!isCalculating) calculateValues();
                 }, 100);
             });
         }
     }
-    
-    // 自動計算リセット機能（デバッグ用）
-    function resetAutoCalculation() {
-        console.log('自動計算をリセットします');
-        
-        if (estimatedWorkdaysField) {
-            estimatedWorkdaysField.dataset.userModified = 'false';
-            setAutoCalculatedStyle(estimatedWorkdaysField);
-        }
-        
-        if (availableAmountField) {
-            availableAmountField.dataset.userModified = 'false';
-            setAutoCalculatedStyle(availableAmountField);
-        }
-        
-        setTimeout(() => {
-            if (!isCalculating) calculateValues();
-        }, 100);
+
+    // 年月変更時にも外注費を再取得
+    if (yearMonthField && caseNameSelect) {
+        yearMonthField.addEventListener('change', function() {
+            const ticketId = caseNameSelect.value;
+            if (ticketId) {
+                fetchOutsourcingCost(ticketId);
+            }
+        });
     }
-    
-    // デバッグ用コンソールコマンド
-    // window.debugCalculation = {
-    //     reset: resetAutoCalculation,
-    //     calculate: calculateValues,
-    //     showStatus: function() {
-    //         console.log('=== 自動計算状態 ===');
-    //         console.log('見積工数 userModified:', estimatedWorkdaysField?.dataset.userModified);
-    //         console.log('使用可能金額 userModified:', availableAmountField?.dataset.userModified);
-    //         console.log('現在の値:');
-    //         console.log('- 請求金額:', billingAmountField?.value);
-    //         console.log('- 外注費:', outsourcingCostField?.value);
-    //         console.log('- 請求単価:', billingUnitCostField?.value);
-    //         console.log('- 見積工数:', estimatedWorkdaysField?.value);
-    //         console.log('- 使用可能金額:', availableAmountField?.value);
-    //     }
-    // };
-    
-    // 初期化
-    setupUserModificationTracking();
-    setupCalculationTriggers();
-    
+
+    // === 初期化実行 ===
+    initializeUnifiedForm();
+
     // 初期計算（遅延実行）
     setTimeout(() => {
         console.log('初期自動計算を実行');
-        console.log('デバッグ用コマンド: window.debugCalculation.showStatus() で状態確認可能');
+        console.log('デバッグ用コマンド: window.debugUnifiedForm.showStatus() で状態確認可能');
         calculateValues();
     }, 1000);
-    
-    console.log('工数集計フォーム読み込み完了');
+
+    console.log('=== 統合フォームJavaScript完了 ===');
 });
