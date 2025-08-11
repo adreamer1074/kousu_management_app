@@ -150,6 +150,15 @@
                                 {% endif %}
                             </div>
                         </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.employee_level.id_for_label }}" class="form-label">
+                                社員レベル
+                            </label>
+                            {{ form.employee_level }}
+                            {% if form.employee_level.errors %}
+                                <div class="text-danger small">{{ form.employee_level.errors.0 }}</div>
+                            {% endif %}
+                        </div>
                     </div>
 
                     <!-- 権限設定セクション -->
