@@ -2,6 +2,10 @@
 
 このプロジェクトは、工数管理アプリケーションの開発を目的としています。プロジェクトメンバーの工数入力、集計、管理を効率的に行うためのWebアプリケーションです。
 
+## 🌐 デプロイ先
+Render.comでFreeプランを利用してデプロイしていますので、初期アクセス時に少し時間がかかる場合があります。
+[kousu-management-app.onrender.com](https://kousu-management-app.onrender.com)
+
 ## 📊 ダッシュボード画面
 
 ![ダッシュボード画面](dashboard-sample.png)
